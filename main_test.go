@@ -5,11 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os"
-	"os/exec"
-	"path"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -20,6 +16,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
+	"github.com/prometheus/remote-write-compliance/targets"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -99,7 +96,6 @@ func TestRemoteWrite(t *testing.T) {
 	}
 }
 
-type runner func(t *testing.T, scrapeTarget string, receiveEndpoint string)
 type validator func(t *testing.T, bs []batch)
 
 func removeLabel(ls labels.Labels, name string) labels.Labels {
@@ -111,9 +107,9 @@ func removeLabel(ls labels.Labels, name string) labels.Labels {
 	return ls
 }
 
-var runners = map[string]runner{
-	//"prometheus":    runPrometheus,
-	"otelcollector": runOtelCollector,
+var runners = map[string]targets.Target{
+	"prometheus":    targets.RunPrometheus,
+	"otelcollector": targets.RunOtelCollector,
 }
 
 func funcHandler(name string, f func() float64) http.Handler {
@@ -131,7 +127,7 @@ func staticHandler(contents []byte) http.Handler {
 	})
 }
 
-func runTest(t *testing.T, metrics http.Handler, expected validator, runner runner) {
+func runTest(t *testing.T, metrics http.Handler, expected validator, runner targets.Target) {
 	ap := appendable{}
 
 	// Start a HTTP server to expose some metrics and a receive remote write requests.
@@ -149,108 +145,14 @@ func runTest(t *testing.T, metrics http.Handler, expected validator, runner runn
 	// Run Prometheus to scrape and send metrics.
 	scrapeTarget := l.Addr().String()
 	receiveEndpoint := fmt.Sprintf("http://%s/push", l.Addr().String())
-	runner(t, scrapeTarget, receiveEndpoint)
+	require.NoError(t, runner(targets.TargetOptions{
+		ScrapeTarget:    scrapeTarget,
+		ReceiveEndpoint: receiveEndpoint,
+	}))
 
 	// Check we got some data.
 	require.True(t, len(ap.batches) > 0)
 	expected(t, ap.batches)
-}
-
-func runPrometheus(t *testing.T, scrapeTarget string, receiveEndpoint string) {
-	// Write out config file.
-	cfg := fmt.Sprintf(`
-global:
-  scrape_interval: 1s
-
-remote_write:
-  - url: '%s'
-
-scrape_configs:
-  - job_name: 'test'
-    static_configs:
-    - targets: ['%s']
-`, receiveEndpoint, scrapeTarget)
-	configFileName, err := writeTempFile(cfg, "config-*.yaml")
-	defer os.Remove(configFileName)
-
-	currDir, err := os.Getwd()
-	require.NoError(t, err)
-	pathToProm := path.Join(currDir, "prometheus")
-	err = runCommand(pathToProm, fmt.Sprintf("--config.file=%s", configFileName))
-	require.NoError(t, err)
-}
-
-func runOtelCollector(t *testing.T, scrapeTarget string, receiveEndpoint string) {
-	cfg := fmt.Sprintf(`
-receivers:
-  prometheus:
-    config:
-      scrape_configs:
-        - job_name: 'test'
-          scrape_interval: 1s
-          static_configs:
-            - targets: [ '%s' ]
-
-processors:
-  batch:
-
-exporters:
-  prometheusremotewrite:
-    endpoint: '%s'
-
-service:
-  pipelines:
-    metrics:
-      receivers: [prometheus]
-      processors: [batch]
-      exporters: [prometheusremotewrite]
-`, scrapeTarget, receiveEndpoint)
-	configFileName, err := writeTempFile(cfg, "config-*.yaml")
-	defer os.Remove(configFileName)
-
-	currDir, err := os.Getwd()
-	require.NoError(t, err)
-	pathToProm := path.Join(currDir, "otelcol_darwin_amd64")
-	err = runCommand(pathToProm, fmt.Sprintf("--config=%s", configFileName))
-	require.NoError(t, err)
-}
-
-func writeTempFile(contents, name string) (filename string, err error) {
-	f, err := os.CreateTemp("", name)
-	if err != nil {
-		return "", err
-	}
-
-	_, err = f.Write([]byte(contents))
-	if err != nil {
-		return "", err
-	}
-
-	return f.Name(), f.Close()
-}
-
-func runCommand(prog string, args ...string) error {
-	cwd, err := os.MkdirTemp("", "")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(cwd)
-
-	cmd := exec.Command(prog, args...)
-	cmd.Dir = cwd
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err = cmd.Start()
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		time.Sleep(15 * time.Second)
-		cmd.Process.Signal(syscall.SIGINT)
-	}()
-
-	return cmd.Wait()
 }
 
 type appendable struct {
