@@ -21,7 +21,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var logger = log.NewNopLogger()
+var (
+	logger  = log.NewNopLogger()
+	runners = map[string]targets.Target{
+		//"prometheus":    targets.RunPrometheus,
+		//"otelcollector": targets.RunOtelCollector,
+		"telegraf": targets.RunTelegraf,
+	}
+)
 
 func TestRemoteWrite(t *testing.T) {
 	for _, tc := range []struct {
@@ -105,11 +112,6 @@ func removeLabel(ls labels.Labels, name string) labels.Labels {
 		}
 	}
 	return ls
-}
-
-var runners = map[string]targets.Target{
-	"prometheus":    targets.RunPrometheus,
-	"otelcollector": targets.RunOtelCollector,
 }
 
 func funcHandler(name string, f func() float64) http.Handler {
