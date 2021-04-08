@@ -22,6 +22,7 @@ var (
 		"otelcollector": targets.RunOtelCollector,
 		"telegraf":      targets.RunTelegraf,
 		"grafana":       targets.RunGrafanaAgent,
+		// "vmagent": targets.RunVMAgent, // No download for Mac yet.
 	}
 	tests = []func() cases.Test{
 		cases.BasicTest,
