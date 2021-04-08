@@ -11,22 +11,22 @@ import (
 // NB we looks for samples with labels that are a subset of the required labels,
 // and we fail if we find samples with those labels but different values.
 func countMetricWithValue(t *testing.T, bs []Batch, ls labels.Labels, value float64) int {
-	return countMetricWithValueFn(bs, ls, func(_ int64, v float64) {
+	return countMetricWithValueFn(bs, ls, func(_ int64, v float64) bool {
 		require.Equal(t, value, v)
+		return true
 	})
 }
 
 // countMetricWithValueFn counts all samples with the given labels.
 // NB we looks for samples with labels that are a subset of the required labels,
 // and we pass the timestamp and value to a function for checking.
-func countMetricWithValueFn(bs []Batch, ls labels.Labels, valueFn func(int64, float64)) int {
+func countMetricWithValueFn(bs []Batch, ls labels.Labels, valueFn func(int64, float64) bool) int {
 	count := 0
 
 	for _, b := range bs {
 		for _, s := range b.samples {
-			if labelsContain(s.l, ls) {
+			if labelsContain(s.l, ls) && valueFn(s.t, s.v) {
 				count++
-				valueFn(s.t, s.v)
 			}
 		}
 	}

@@ -23,16 +23,18 @@ var (
 		"telegraf":      targets.RunTelegraf,
 		"grafana":       targets.RunGrafanaAgent,
 	}
-	tests = []cases.Test{
+	tests = []func() cases.Test{
 		cases.BasicTest,
 		cases.InvalidTest,
+		cases.StalenessTest,
 	}
 )
 
 func TestRemoteWrite(t *testing.T) {
 	for name, runner := range runners {
 		t.Run(name, func(t *testing.T) {
-			for _, tc := range tests {
+			for _, fn := range tests {
+				tc := fn()
 				t.Run(tc.Name, func(t *testing.T) {
 					runTest(t, tc, runner)
 				})
