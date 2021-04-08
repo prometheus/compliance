@@ -24,10 +24,10 @@ import (
 var (
 	logger  = log.NewNopLogger()
 	runners = map[string]targets.Target{
-		//"prometheus":    targets.RunPrometheus,
-		//"otelcollector": targets.RunOtelCollector,
-		//"telegraf": targets.RunTelegraf,
-		"grafana": targets.RunGrafanaAgent,
+		"prometheus":    targets.RunPrometheus,
+		"otelcollector": targets.RunOtelCollector,
+		"telegraf":      targets.RunTelegraf,
+		"grafana":       targets.RunGrafanaAgent,
 	}
 )
 
@@ -151,6 +151,7 @@ func runTest(t *testing.T, metrics http.Handler, expected validator, runner targ
 	require.NoError(t, runner(targets.TargetOptions{
 		ScrapeTarget:    scrapeTarget,
 		ReceiveEndpoint: receiveEndpoint,
+		Timeout:         15 * time.Second,
 	}))
 
 	// Check we got some data.
