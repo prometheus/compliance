@@ -19,6 +19,10 @@ func RunTelegraf(opts TargetOptions) error {
 	urls = ["http://%s/metrics"]
 	metric_version = 2
 
+[[processors.override]]
+	[processors.override.tags]
+		job = "test"
+
 [[outputs.http]]
 	url = "%s"
 	data_format = "prometheusremotewrite"
