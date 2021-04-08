@@ -26,7 +26,8 @@ var (
 	runners = map[string]targets.Target{
 		//"prometheus":    targets.RunPrometheus,
 		//"otelcollector": targets.RunOtelCollector,
-		"telegraf": targets.RunTelegraf,
+		//"telegraf": targets.RunTelegraf,
+		"grafana": targets.RunGrafanaAgent,
 	}
 )
 

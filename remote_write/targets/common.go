@@ -2,6 +2,7 @@ package targets
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"fmt"
@@ -46,9 +47,14 @@ func downloadBinary(pattern string, optFilename string) (string, error) {
 	}
 
 	filename := path.Join(cwd, "bin", path.Base(parsed.Path))
-	decompress := strings.HasSuffix(filename, ".tar.gz")
-	if decompress {
+	decompressTgz := strings.HasSuffix(filename, ".tar.gz")
+	if decompressTgz {
 		filename = strings.TrimSuffix(filename, ".tar.gz")
+	}
+
+	decompressZip := strings.HasSuffix(filename, ".zip")
+	if decompressZip {
+		filename = strings.TrimSuffix(filename, ".zip")
 	}
 
 	// If we've already downloaded it, then skip.
@@ -65,8 +71,12 @@ func downloadBinary(pattern string, optFilename string) (string, error) {
 		return "", nil
 	}
 
-	if decompress {
-		if err := uncompress(tempfile, optFilename, filename); err != nil {
+	if decompressTgz {
+		if err := extractTarGz(tempfile, optFilename, filename); err != nil {
+			return "", err
+		}
+	} else if decompressZip {
+		if err := extractZip(tempfile, optFilename, filename); err != nil {
 			return "", err
 		}
 	} else {
@@ -106,7 +116,42 @@ func downloadURL(url string) (filename string, err error) {
 	return tempfile.Name(), nil
 }
 
-func uncompress(srcFile, filename, destFile string) error {
+func extractZip(srcFile, filename, destFile string) error {
+	fmt.Println("Decompressing", srcFile)
+
+	r, err := zip.OpenReader(srcFile)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		if path.Base(f.Name) != filename {
+			continue
+		}
+
+		fmt.Println("Extracting", f.Name)
+
+		src, err := f.Open()
+		if err != nil {
+			return err
+		}
+		defer src.Close()
+
+		dest, err := os.Create(destFile)
+		if err != nil {
+			return err
+		}
+		defer dest.Close()
+
+		_, err = io.Copy(dest, src)
+		return err
+	}
+
+	return fmt.Errorf("did not find binary in .zip: %s", filename)
+}
+
+func extractTarGz(srcFile, filename, destFile string) error {
 	fmt.Println("Decompressing", srcFile)
 
 	f, err := os.Open(srcFile)
@@ -145,7 +190,7 @@ func uncompress(srcFile, filename, destFile string) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer dest.Close()
 
 		if _, err := io.Copy(dest, tarReader); err != nil {
 			return err
