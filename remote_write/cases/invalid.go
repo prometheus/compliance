@@ -17,6 +17,6 @@ var InvalidTest = Test{
 `)),
 	Expected: func(t *testing.T, bs []Batch) {
 		ups := countMetricWithValue(t, bs, labels.FromStrings("__name__", "up", "job", "test"), 0)
-		require.True(t, ups > 0)
+		require.True(t, ups > 0, `found zero samples for up{job="test"}`)
 	},
 }
