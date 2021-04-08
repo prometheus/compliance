@@ -33,5 +33,5 @@ func RunTelegraf(opts TargetOptions) error {
 	}
 	defer os.Remove(configFileName)
 
-	return runCommand(binary, fmt.Sprintf("--config=%s", configFileName))
+	return runCommand(binary, opts.Timeout, fmt.Sprintf("--config=%s", configFileName))
 }

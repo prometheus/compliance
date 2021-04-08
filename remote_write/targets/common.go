@@ -24,6 +24,7 @@ type Target func(TargetOptions) error
 type TargetOptions struct {
 	ScrapeTarget    string
 	ReceiveEndpoint string
+	Timeout         time.Duration
 }
 
 func downloadBinary(pattern string, optFilename string) (string, error) {
@@ -216,7 +217,11 @@ func writeTempFile(contents, name string) (filename string, err error) {
 	return f.Name(), f.Close()
 }
 
-func runCommand(prog string, args ...string) error {
+// runCommand runs the given command with the given args in a temporary working
+// directory and connecting that processes stdin/stdout to stdin/stdout.
+// After timeout seconds, it send SIGINT to the process to shut it down and
+// returns an error if the process exits with non-zero status code.
+func runCommand(prog string, timeout time.Duration, args ...string) error {
 	cwd, err := os.MkdirTemp("", "")
 	if err != nil {
 		return err
@@ -233,7 +238,7 @@ func runCommand(prog string, args ...string) error {
 	}
 
 	go func() {
-		time.Sleep(15 * time.Second)
+		time.Sleep(timeout)
 		cmd.Process.Signal(syscall.SIGINT)
 	}()
 

@@ -34,5 +34,5 @@ prometheus:
 	}
 	defer os.Remove(configFileName)
 
-	return runCommand(binary, fmt.Sprintf("--config.file=%s", configFileName))
+	return runCommand(binary, opts.Timeout, fmt.Sprintf("--config.file=%s", configFileName))
 }
