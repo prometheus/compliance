@@ -33,6 +33,7 @@ var (
 		cases.SortedLabelsTest,
 		cases.JobLabelTest,
 		cases.RepeatedLabelsTest,
+		cases.EmptyLabelsTest,
 		// TODO:
 		// - Test for instance label.
 		// - Test for ordering correctness.

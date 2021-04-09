@@ -59,3 +59,26 @@ test{a="1",a="1"} 1.0
 		},
 	}
 }
+
+// EmptyLabelsTests exports a single, constant metric with an empty labels
+// and checks that we receive the metrics without said label.
+func EmptyLabelsTest() Test {
+	return Test{
+		Name: "EmptyLabels",
+		Metrics: staticHandler([]byte(`
+# HELP test A gauge
+# TYPE test gauge
+test{a=""} 1.0
+`)),
+		Expected: func(t *testing.T, bs []Batch) {
+			forAllSamples(bs, func(s sample) {
+				for i := range s.l {
+					require.NotEmpty(t, s.l[i].Value, "'%s' contains empty labels", s.l.String())
+				}
+			})
+
+			tests := countMetricWithValue(t, bs, labels.FromStrings("__name__", "test"), 1.0)
+			require.True(t, tests > 0, `found zero samples for {"__name__"="test"}`)
+		},
+	}
+}
