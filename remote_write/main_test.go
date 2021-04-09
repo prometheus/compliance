@@ -40,6 +40,7 @@ var (
 		// - Test for ordering correctness.
 		// - Test for timestamps being reasonable.
 		// - Test for correct headers.
+		// - Test labels have valid characters.
 	}
 )
 
@@ -77,7 +78,7 @@ func runTest(t *testing.T, tc cases.Test, runner targets.Target) {
 	require.NoError(t, runner(targets.TargetOptions{
 		ScrapeTarget:    scrapeTarget,
 		ReceiveEndpoint: receiveEndpoint,
-		Timeout:         15 * time.Second,
+		Timeout:         10 * time.Second,
 	}))
 
 	// Check we got some data.
