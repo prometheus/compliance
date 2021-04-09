@@ -15,6 +15,8 @@ func RunGrafanaAgent(opts TargetOptions) error {
 
 	// Write out config file.
 	cfg := fmt.Sprintf(`
+server:
+  http_listen_port: 8000
 prometheus:
   wal_directory: ./
   global:
