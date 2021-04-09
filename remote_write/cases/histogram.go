@@ -22,17 +22,17 @@ func HistogramTest() Test {
 		Name:    "Histogram",
 		Metrics: metricHandler(hist),
 		Expected: func(t *testing.T, bs []Batch) {
-			le1 := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_bucket", "job", "test", "le", "1"), 1.0)
-			le2 := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_bucket", "job", "test", "le", "2"), 2.0)
-			inf := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_bucket", "job", "test", "le", "+Inf"), 2.0)
-			sum := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_sum", "job", "test"), 3.0)
-			count := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_count", "job", "test"), 2.0)
+			le1 := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_bucket", "le", "1"), 1.0)
+			le2 := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_bucket", "le", "2"), 2.0)
+			inf := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_bucket", "le", "+Inf"), 2.0)
+			sum := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_sum"), 3.0)
+			count := countMetricWithValue(t, bs, labels.FromStrings("__name__", "histogram_count"), 2.0)
 
 			require.Equal(t, count, le1)
 			require.Equal(t, count, le2)
 			require.Equal(t, count, inf)
 			require.Equal(t, count, sum)
-			require.True(t, count > 0, `found zero samples for histogram_count{job="test"}`)
+			require.True(t, count > 0, `found zero samples for {__name__="histogram_count"}`)
 		},
 	}
 }

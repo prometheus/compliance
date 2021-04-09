@@ -30,6 +30,8 @@ var (
 		cases.InvalidTest,
 		cases.StalenessTest,
 		cases.HistogramTest,
+		cases.SortedLabelsTest,
+		cases.JobLabelTest,
 	}
 )
 

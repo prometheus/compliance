@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,16 +15,18 @@ import (
 func BasicTest() Test {
 	return Test{
 		Name: "Basic",
-		Metrics: funcHandler("now", func() float64 {
+		Metrics: metricHandler(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: "now",
+		}, func() float64 {
 			return float64(time.Now().Unix() * 1000)
-		}),
+		})),
 		Expected: func(t *testing.T, bs []Batch) {
-			nows := countMetricWithValueFn(bs, labels.FromStrings("__name__", "now", "job", "test"),
+			nows := countMetricWithValueFn(bs, labels.FromStrings("__name__", "now"),
 				func(ts int64, v float64) bool {
 					assert.InEpsilon(t, float64(ts), v, 0.01)
 					return true
 				})
-			require.True(t, nows > 0, `found zero samples for now{job="test"}`)
+			require.True(t, nows > 0, `found zero samples for {__name__="now"}`)
 		},
 	}
 }

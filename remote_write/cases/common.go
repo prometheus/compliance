@@ -19,15 +19,6 @@ type Test struct {
 	Expected Validator
 }
 
-func funcHandler(name string, f func() float64) http.Handler {
-	gauge := prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Name: name,
-	}, f)
-	r := prometheus.NewPedanticRegistry()
-	r.Register(gauge)
-	return promhttp.HandlerFor(r, promhttp.HandlerOpts{})
-}
-
 func metricHandler(c prometheus.Collector) http.Handler {
 	r := prometheus.NewPedanticRegistry()
 	r.Register(c)
