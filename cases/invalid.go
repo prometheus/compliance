@@ -11,7 +11,7 @@ import (
 // an up == 0 metric for that job.
 func InvalidTest() Test {
 	return Test{
-		Name: "Invalid Scrape",
+		Name: "Invalid",
 		Metrics: staticHandler([]byte(`
 # this is not valid prometheus
 1234notvali}{ 444

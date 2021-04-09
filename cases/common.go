@@ -28,6 +28,12 @@ func funcHandler(name string, f func() float64) http.Handler {
 	return promhttp.HandlerFor(r, promhttp.HandlerOpts{})
 }
 
+func metricHandler(c prometheus.Collector) http.Handler {
+	r := prometheus.NewPedanticRegistry()
+	r.Register(c)
+	return promhttp.HandlerFor(r, promhttp.HandlerOpts{})
+}
+
 func staticHandler(contents []byte) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write(contents)
