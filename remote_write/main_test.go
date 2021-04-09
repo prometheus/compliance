@@ -22,7 +22,7 @@ var (
 		"otelcollector": targets.RunOtelCollector,
 		"telegraf":      targets.RunTelegraf,
 		"grafana":       targets.RunGrafanaAgent,
-		// "vmagent": targets.RunVMAgent, // No download for Mac yet.
+		//"vmagent":       targets.RunVMAgent, // No download for Mac yet.
 	}
 	tests = []func() cases.Test{
 		cases.BasicTest,
@@ -32,6 +32,13 @@ var (
 		cases.HistogramTest,
 		cases.SortedLabelsTest,
 		cases.JobLabelTest,
+		cases.RepeatedLabelsTest,
+		// TODO:
+		// - Test for instance label.
+		// - Test for ordering correctness.
+		// - Test for timestamps being reasonable.
+		// - Test for correct headers.
+		// - Test there are no empty labels, and must have a name label.
 	}
 )
 
