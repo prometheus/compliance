@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// BasicTest exports a single metric - the current time - and checks that we receive
+// GaugeTest exports a single metric - the current time - and checks that we receive
 // that metric via remote write, and that it has the correct value.
-func BasicTest() Test {
+func GaugeTest() Test {
 	return Test{
 		Name: "Basic",
 		Metrics: metricHandler(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
