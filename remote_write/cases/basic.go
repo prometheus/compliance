@@ -13,7 +13,7 @@ import (
 // that metric via remote write, and that it has the correct value.
 func BasicTest() Test {
 	return Test{
-		Name: "Basic Test",
+		Name: "Basic",
 		Metrics: funcHandler("now", func() float64 {
 			return float64(time.Now().Unix() * 1000)
 		}),

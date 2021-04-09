@@ -26,8 +26,10 @@ var (
 	}
 	tests = []func() cases.Test{
 		cases.BasicTest,
+		cases.UpTest,
 		cases.InvalidTest,
 		cases.StalenessTest,
+		cases.HistogramTest,
 	}
 )
 
