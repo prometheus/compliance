@@ -22,16 +22,21 @@ func countMetricWithValue(t *testing.T, bs []Batch, ls labels.Labels, value floa
 // and we pass the timestamp and value to a function for checking.
 func countMetricWithValueFn(bs []Batch, ls labels.Labels, valueFn func(int64, float64) bool) int {
 	count := 0
+	forAllSamples(bs, func(s sample) {
+		if labelsContain(s.l, ls) && valueFn(s.t, s.v) {
+			count++
+		}
+	})
+	return count
+}
 
+// forAllSamples calls f on all samples in bs.
+func forAllSamples(bs []Batch, f func(s sample)) {
 	for _, b := range bs {
 		for _, s := range b.samples {
-			if labelsContain(s.l, ls) && valueFn(s.t, s.v) {
-				count++
-			}
+			f(s)
 		}
 	}
-
-	return count
 }
 
 // labelsContain returns true if inner is a subset of outer.

@@ -36,7 +36,7 @@ func StalenessTest() Test {
 			}
 		}),
 		Expected: func(t *testing.T, bs []Batch) {
-			stalenessMarkers := countMetricWithValueFn(bs, labels.FromStrings("__name__", "stale", "job", "test"),
+			stalenessMarkers := countMetricWithValueFn(bs, labels.FromStrings("__name__", "stale"),
 				func(_ int64, v float64) bool {
 					return value.IsStaleNaN(v)
 				})
