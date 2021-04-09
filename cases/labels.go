@@ -34,7 +34,7 @@ test{b="2",a="1"} 1.0
 }
 
 // RepeatedLabelsTest exports a single, constant metric with repeated labels
-// and checks that we receive the metrics without repeated labels (and get up=0 instead).
+// and checks that we don't receive metrics with repeated labels (and get up=0 instead).
 func RepeatedLabelsTest() Test {
 	return Test{
 		Name: "RepeatedLabels",
@@ -79,6 +79,33 @@ test{a=""} 1.0
 
 			tests := countMetricWithValue(t, bs, labels.FromStrings("__name__", "test"), 1.0)
 			require.True(t, tests > 0, `found zero samples for {"__name__"="test"}`)
+		},
+	}
+}
+
+// NameLabelTests exports a single, constant metric with no name label
+// and checks that we don't receive metrics without a name label (and get up=0 instead).
+func NameLabelTest() Test {
+	return Test{
+		Name: "NameLabel",
+		Metrics: staticHandler([]byte(`
+# HELP test A gauge
+# TYPE test gauge
+{label="value"} 1.0
+`)),
+		Expected: func(t *testing.T, bs []Batch) {
+			forAllSamples(bs, func(s sample) {
+				for i := range s.l {
+					if s.l[i].Name == "__name__" {
+						return
+					}
+				}
+
+				require.True(t, false, "metric '%s' is missing name label", s.l.String())
+			})
+
+			ups := countMetricWithValue(t, bs, labels.FromStrings("__name__", "up", "job", "test"), 0.0)
+			require.True(t, ups > 0, `found zero samples for up{job="test"} = 0`)
 		},
 	}
 }

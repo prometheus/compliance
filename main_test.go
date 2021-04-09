@@ -34,12 +34,12 @@ var (
 		cases.JobLabelTest,
 		cases.RepeatedLabelsTest,
 		cases.EmptyLabelsTest,
+		cases.NameLabelTest,
 		// TODO:
 		// - Test for instance label.
 		// - Test for ordering correctness.
 		// - Test for timestamps being reasonable.
 		// - Test for correct headers.
-		// - Test there are no empty labels, and must have a name label.
 	}
 )
 
