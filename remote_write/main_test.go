@@ -25,7 +25,7 @@ var (
 		//"vmagent":       targets.RunVMAgent, // No download for Mac yet.
 	}
 	tests = []func() cases.Test{
-		cases.BasicTest,
+		cases.GaugeTest,
 		cases.UpTest,
 		cases.InvalidTest,
 		cases.StalenessTest,
@@ -35,6 +35,7 @@ var (
 		cases.RepeatedLabelsTest,
 		cases.EmptyLabelsTest,
 		cases.NameLabelTest,
+		cases.TimestampTest,
 		// TODO:
 		// - Test for instance label.
 		// - Test for ordering correctness.
