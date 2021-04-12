@@ -51,6 +51,7 @@ func TestRemoteWrite(t *testing.T) {
 			for _, fn := range tests {
 				tc := fn()
 				t.Run(tc.Name, func(t *testing.T) {
+					t.Parallel()
 					runTest(t, tc, runner)
 				})
 			}

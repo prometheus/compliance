@@ -34,5 +34,5 @@ prometheus:
 	}
 	defer os.Remove(configFileName)
 
-	return runCommand(binary, opts.Timeout, fmt.Sprintf("--config.file=%s", configFileName))
+	return runCommand(binary, opts.Timeout, "-server.http-listen-port=0", "-server.grpc-listen-port=0", fmt.Sprintf("--config.file=%s", configFileName))
 }

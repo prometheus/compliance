@@ -228,10 +228,22 @@ func runCommand(prog string, timeout time.Duration, args ...string) error {
 	}
 	defer os.RemoveAll(cwd)
 
+	var log *os.File
+	if true {
+		log, err = os.CreateTemp("", "")
+		if err != nil {
+			return err
+		}
+		defer log.Close()
+		defer os.Remove(log.Name())
+	} else {
+		log = os.Stdout
+	}
+
 	cmd := exec.Command(prog, args...)
 	cmd.Dir = cwd
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = log
+	cmd.Stderr = log
 	err = cmd.Start()
 	if err != nil {
 		return err
