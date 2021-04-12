@@ -32,5 +32,5 @@ scrape_configs:
 	}
 	defer os.Remove(configFileName)
 
-	return runCommand(binary, opts.Timeout, fmt.Sprintf("--config.file=%s", configFileName))
+	return runCommand(binary, opts.Timeout, `--web.listen-address=0.0.0.0:0`, fmt.Sprintf("--config.file=%s", configFileName))
 }

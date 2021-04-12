@@ -14,7 +14,7 @@ import (
 // that metric via remote write, and that it has the correct value.
 func GaugeTest() Test {
 	return Test{
-		Name: "Basic",
+		Name: "Gauge",
 		Metrics: metricHandler(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 			Name: "now",
 		}, func() float64 {

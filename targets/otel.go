@@ -43,5 +43,5 @@ service:
 	}
 	defer os.Remove(configFileName)
 
-	return runCommand(binary, opts.Timeout, fmt.Sprintf("--config=%s", configFileName))
+	return runCommand(binary, opts.Timeout, `--metrics-addr=:0`, fmt.Sprintf("--config=%s", configFileName))
 }
