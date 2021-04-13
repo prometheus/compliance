@@ -22,7 +22,7 @@ var (
 		"otelcollector": targets.RunOtelCollector,
 		"prometheus":    targets.RunPrometheus,
 		"telegraf":      targets.RunTelegraf,
-		//"vmagent":       targets.RunVMAgent, // No download for Mac yet.
+		"vmagent":       targets.RunVMAgent,
 	}
 	tests = []func() cases.Test{
 		cases.CounterTest,
