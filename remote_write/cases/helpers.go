@@ -7,6 +7,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// labelMustMatch checks that a given label matches a given pattern
+// on every sample.
+func labelMustMatch(t *testing.T, bs []Batch, label, pattern string) {
+	forAllSamples(bs, func(s sample) {
+		for i := range s.l {
+			if s.l[i].Name != label {
+				continue
+			}
+			require.Regexp(t, pattern, s.l[i].Value)
+			return
+		}
+		require.True(t, false, "label '%s' not found", label)
+	})
+}
+
 // countMetricWithValue counts all samples with the given labels and value.
 // NB we looks for samples with labels that are a subset of the required labels,
 // and we fail if we find samples with those labels but different values.

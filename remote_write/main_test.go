@@ -25,21 +25,28 @@ var (
 		//"vmagent":       targets.RunVMAgent, // No download for Mac yet.
 	}
 	tests = []func() cases.Test{
+		cases.CounterTest,
 		cases.GaugeTest,
+		cases.HistogramTest,
+
+		// Test Up metrics.
 		cases.UpTest,
 		cases.InvalidTest,
-		cases.StalenessTest,
-		cases.HistogramTest,
-		cases.SortedLabelsTest,
+
+		// Test for various labels
 		cases.JobLabelTest,
+		cases.InstanceLabelTest,
+		cases.SortedLabelsTest,
 		cases.RepeatedLabelsTest,
 		cases.EmptyLabelsTest,
 		cases.NameLabelTest,
+
+		// Other misc tests.
+		cases.StalenessTest,
 		cases.TimestampTest,
+
 		// TODO:
-		// - Test for instance label.
 		// - Test for ordering correctness.
-		// - Test for timestamps being reasonable.
 		// - Test for correct headers.
 		// - Test labels have valid characters.
 	}
