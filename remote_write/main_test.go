@@ -18,10 +18,10 @@ import (
 var (
 	logger  = log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	runners = map[string]targets.Target{
-		"prometheus":    targets.RunPrometheus,
-		"otelcollector": targets.RunOtelCollector,
-		"telegraf":      targets.RunTelegraf,
 		"grafana":       targets.RunGrafanaAgent,
+		"otelcollector": targets.RunOtelCollector,
+		"prometheus":    targets.RunPrometheus,
+		"telegraf":      targets.RunTelegraf,
 		//"vmagent":       targets.RunVMAgent, // No download for Mac yet.
 	}
 	tests = []func() cases.Test{
