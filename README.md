@@ -23,7 +23,7 @@ To run a single test across all the targets:
 
 ```sh
 $ go test -run "TestRemoteWrite/.+/Counter" -v ./
-``
+```
 
 ## Remote Write Senders
 
