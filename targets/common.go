@@ -27,17 +27,18 @@ type TargetOptions struct {
 	Timeout         time.Duration
 }
 
-func downloadBinary(pattern string, optFilename string) (string, error) {
-	t := template.Must(template.New("url").Parse(pattern))
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, map[string]interface{}{
-		"OS":   runtime.GOOS,
-		"Arch": runtime.GOARCH,
-	}); err != nil {
-		return "", err
+func downloadBinary(urlPattern string, filenameInArchivePattern string) (string, error) {
+	urlToDownload, err := instantiateTemplate(urlPattern)
+	if err != nil {
+		return "", nil
 	}
 
-	parsed, err := url.Parse(buf.String())
+	filenameInArchive, err := instantiateTemplate(filenameInArchivePattern)
+	if err != nil {
+		return "", nil
+	}
+
+	parsed, err := url.Parse(urlToDownload)
 	if err != nil {
 		return "", nil
 	}
@@ -63,7 +64,7 @@ func downloadBinary(pattern string, optFilename string) (string, error) {
 		return filename, nil
 	}
 
-	tempfile, err := downloadURL(buf.String())
+	tempfile, err := downloadURL(urlToDownload)
 	if err != nil {
 		return "", nil
 	}
@@ -73,11 +74,11 @@ func downloadBinary(pattern string, optFilename string) (string, error) {
 	}
 
 	if decompressTgz {
-		if err := extractTarGz(tempfile, optFilename, filename); err != nil {
+		if err := extractTarGz(tempfile, filenameInArchive, filename); err != nil {
 			return "", err
 		}
 	} else if decompressZip {
-		if err := extractZip(tempfile, optFilename, filename); err != nil {
+		if err := extractZip(tempfile, filenameInArchive, filename); err != nil {
 			return "", err
 		}
 	} else {
@@ -89,6 +90,16 @@ func downloadBinary(pattern string, optFilename string) (string, error) {
 	}
 
 	return filename, nil
+}
+
+func instantiateTemplate(pattern string) (string, error) {
+	t := template.Must(template.New("url").Parse(pattern))
+	var buf bytes.Buffer
+	err := t.Execute(&buf, map[string]interface{}{
+		"OS":   runtime.GOOS,
+		"Arch": runtime.GOARCH,
+	})
+	return buf.String(), err
 }
 
 func downloadURL(url string) (filename string, err error) {
