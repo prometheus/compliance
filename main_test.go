@@ -22,6 +22,7 @@ var (
 		"otelcollector": targets.RunOtelCollector,
 		"prometheus":    targets.RunPrometheus,
 		"telegraf":      targets.RunTelegraf,
+		"vector":        targets.RunVector,
 		"vmagent":       targets.RunVMAgent,
 	}
 	tests = []func() cases.Test{
