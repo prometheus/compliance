@@ -8,7 +8,7 @@ import (
 const grafanaAgentDownloadURL = "https://github.com/grafana/agent/releases/download/v0.13.1/agent-{{.OS}}-{{.Arch}}.zip"
 
 func RunGrafanaAgent(opts TargetOptions) error {
-	binary, err := downloadBinary(grafanaAgentDownloadURL, "agent-darwin-amd64")
+	binary, err := downloadBinary(grafanaAgentDownloadURL, "agent-{{.OS}}-{{.Arch}}")
 	if err != nil {
 		return err
 	}
