@@ -23,9 +23,16 @@ func TimestampTest() Test {
 		})),
 		Expected: func(t *testing.T, bs []Batch) {
 			end := timestampMs(time.Now())
+			var ts int64
+
 			forAllSamples(bs, func(s sample) {
+				// Check the timestamp is "in bounds" for the test.
 				require.Greater(t, s.t, start)
 				require.Less(t, s.t, end)
+
+				// Check the timestamps are increasing.
+				require.GreaterOrEqual(t, s.t, ts)
+				ts = s.t
 			})
 
 			ups := countMetricWithValue(t, bs, labels.FromStrings("__name__", "gauge"), 42.0)

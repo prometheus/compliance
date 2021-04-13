@@ -7,11 +7,23 @@ The test suit than examines the received requests for compliance.
 
 ## Running the test
 
-The test is a vanilla Golang unit test, and can be run as such:
+The test is a vanilla Golang unit test, and can be run as such.  To run all the tests:
 
 ```sh
 $ go test -v ./
 ```
+
+To run all the tests for a single target:
+
+```sh
+$ go test -run "TestRemoteWrite/prometheus/.+" -v ./
+```
+
+To run a single test across all the targets:
+
+```sh
+$ go test -run "TestRemoteWrite/.+/Counter" -v ./
+``
 
 ## Remote Write Senders
 
