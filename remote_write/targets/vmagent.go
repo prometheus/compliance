@@ -3,13 +3,21 @@ package targets
 import (
 	"fmt"
 	"os"
-	"path"
+	"runtime"
 )
 
-// need mac builds https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1042!
+const vmagentURL = "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v1.58.0/vmutils-{{.Arch}}-v1.58.0.tar.gz"
+
 func RunVMAgent(opts TargetOptions) error {
-	cwd, _ := os.Getwd()
-	binary := path.Join(cwd, "bin", "vmagent-darwin-amd64")
+	// need mac builds https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1042!
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("cannot run vmagent tests on non-linux: no builds are published")
+	}
+
+	binary, err := downloadBinary(vmagentURL, "vmagent-prod")
+	if err != nil {
+		return err
+	}
 
 	cfg := fmt.Sprintf(`
 global:
@@ -27,6 +35,7 @@ scrape_configs:
 	defer os.Remove(configFileName)
 
 	return runCommand(binary, opts.Timeout,
+		`-httpListenAddr=:0`, `-influxListenAddr=:0`,
 		fmt.Sprintf("-promscrape.config=%s", configFileName),
 		fmt.Sprintf("-remoteWrite.url=%s", opts.ReceiveEndpoint))
 }
