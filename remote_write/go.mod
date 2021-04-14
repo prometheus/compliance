@@ -1,4 +1,4 @@
-module github.com/prometheus/remote-write-compliance
+module github.com/prometheus/compliance/remote_write
 
 go 1.16
 
