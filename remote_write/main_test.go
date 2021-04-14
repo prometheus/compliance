@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
+	"github.com/prometheus/compliance/remote_write/cases"
+	"github.com/prometheus/compliance/remote_write/targets"
 	"github.com/prometheus/prometheus/storage/remote"
-	"github.com/prometheus/remote-write-compliance/cases"
-	"github.com/prometheus/remote-write-compliance/targets"
 	"github.com/stretchr/testify/require"
 )
 
