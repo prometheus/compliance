@@ -7,8 +7,8 @@ import (
 	"path"
 
 	"github.com/pkg/errors"
-	"github.com/promlabs/promql-compliance-tester/comparer"
-	"github.com/promlabs/promql-compliance-tester/config"
+	"github.com/prometheus/compliance/promql/comparer"
+	"github.com/prometheus/compliance/promql/config"
 )
 
 var funcMap = map[string]interface{}{

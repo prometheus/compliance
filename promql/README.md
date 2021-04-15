@@ -1,8 +1,5 @@
 # PromQL Compliance Tester
 
-[![CircleCI](https://circleci.com/gh/promlabs/promql-compliance-tester/tree/master.svg?style=shield)](https://circleci.com/gh/promlabs/promql-compliance-tester)
-[![Go Report Card](https://goreportcard.com/badge/github.com/promlabs/promql-compliance-tester)](https://goreportcard.com/report/github.com/promlabs/promql-compliance-tester)
-
 The PromQL Compliance Tester is a tool for running comparison tests between native Prometheus and vendor PromQL API implementations.
 
 The tool was first published and described in https://promlabs.com/blog/2020/08/06/comparing-promql-correctness-across-vendors, and some test results have been published at https://promlabs.com/promql-compliance-tests.
@@ -50,9 +47,9 @@ It's still early days for the PromQL Compliance Tester. In particular, we would 
 * Add more variation and configurability to input timestamps.
 * Flesh out a more comprehensive (and less overlapping) set of input test queries.
 * Automate and integrate data loading into different systems.
-* Test more vendor implementations of PromQL (for example, Sysdig and New Relic).
+* Test more vendor implementations of PromQL.
 * Version test results and make pretty output presentations easier.
 
 **Note:** Many people will be interested in benchmarking performance differences between PromQL implementations. While this is important as well, the PromQL Compliance Tester focuses solely on correctness testing.
 
-If you would like to help flesh out the tester, please [file issues](https://github.com/promlabs/promql-compliance-tester/issues) or [pull requests](https://github.com/promlabs/promql-compliance-tester/pulls).
+If you would like to help flesh out the tester, please [file issues](https://github.com/prometheus/compliance/issues) or [pull requests](https://github.com/prometheus/compliance/pulls).

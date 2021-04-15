@@ -2,8 +2,9 @@ package output
 
 import (
 	"fmt"
-	"github.com/promlabs/promql-compliance-tester/comparer"
-	"github.com/promlabs/promql-compliance-tester/config"
+
+	"github.com/prometheus/compliance/promql/comparer"
+	"github.com/prometheus/compliance/promql/config"
 )
 
 // TSV produces tab separated values output for a number of query results.

@@ -12,10 +12,10 @@ import (
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/log"
-	"github.com/promlabs/promql-compliance-tester/comparer"
-	"github.com/promlabs/promql-compliance-tester/config"
-	"github.com/promlabs/promql-compliance-tester/output"
-	"github.com/promlabs/promql-compliance-tester/testcases"
+	"github.com/prometheus/compliance/promql/comparer"
+	"github.com/prometheus/compliance/promql/config"
+	"github.com/prometheus/compliance/promql/output"
+	"github.com/prometheus/compliance/promql/testcases"
 )
 
 func newPromAPI(targetConfig config.TargetConfig) (v1.API, error) {

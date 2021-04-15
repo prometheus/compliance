@@ -1,4 +1,4 @@
-module github.com/promlabs/promql-compliance-tester
+module github.com/prometheus/compliance/promql
 
 go 1.13
 

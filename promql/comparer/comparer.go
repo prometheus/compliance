@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
-	"github.com/promlabs/promql-compliance-tester/config"
+	"github.com/prometheus/compliance/promql/config"
 )
 
 const (
