@@ -1,0 +1,60 @@
+<html>
+	<head>
+		<style type="text/css" media="screen">
+			body {
+				padding: 20px;
+				font-family: arial,sans-serif;;
+			}
+			table {
+				border-collapse: collapse;
+			}
+			table, th, td {
+			  border: 1px solid grey;
+			}
+			th, td {
+				padding: 8px;
+			}
+			.comparison-result-row.pass .comparison-result-outcome {
+				background-color: lightgreen;
+			}
+			.comparison-result-row.fail .comparison-result-outcome {
+				background-color: rgb(255, 141, 141);
+			}
+			.comparison-result-details-row {
+				background-color: #f8f8f8;
+			}
+			.comparison-result-query, .comparison-result-diff {
+				font-family: 'Courier New', Courier, monospace;
+			}
+		</style>
+	</head>
+	<body>
+		<p>Passed: {{ numPassed .Results }} / {{ numResults .Results }} ({{ printf "%.2f" (percent (numPassed .Results) (numResults .Results)) }}%)</p>
+		<table class="comparison-table">
+			<tr class="comparison-header-row">
+				<th>Query</th>
+				<th>Outcome</th>
+				<!-- <th>Diff</th> -->
+			</tr>
+			{{ $includePassing := .includePassing }}
+			{{ range .Results }}
+				{{ if include $includePassing . }}
+					<tr class="comparison-result-row {{ if .Success }}pass{{ else }}fail{{ end }}">
+						<td class="comparison-result-query"><pre><code>{{ .TestCase.Query }}</code></pre></td>
+						<td class="comparison-result-outcome">{{ if .Success }}PASS{{ else }}FAIL{{ end }}</td>
+						<!-- <td class="comparison-result-diff"><pre><code>{{ .Diff }}</code></pre></td> -->
+					</tr>
+					{{ if .UnexpectedFailure }}
+						<tr class="comparison-result-details-row"><td colspan="2" class="comparison-result-explanation">The query failed to run against the test target: {{ .UnexpectedFailure }}</td></tr>
+					{{ end }}
+					{{ if .UnexpectedSuccess }}
+						<tr class="comparison-result-details-row"><td colspan="2" class="comparison-result-explanation">The query ran successfully against the test target, but should have failed.</td></tr>
+					{{ end }}
+					{{ if .Diff }}
+						<tr class="comparison-result-details-row"><td colspan="2" class="comparison-result-diff"><pre><code>{{ .Diff }}</code></pre></td></tr>
+					{{ end }}
+				{{ end }}
+			{{ end }}
+		</table>
+	</body>
+</html>

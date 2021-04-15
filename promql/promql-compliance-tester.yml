@@ -1,0 +1,314 @@
+reference_target_config:
+  query_url: 'http://localhost:9090'
+
+test_target_config:
+  # UNCOMMENT FOR GRAFANA CLOUD:
+  # query_url: 'https://<instance-name>.grafana.net/api/prom'
+  # basic_auth_user: <user-id>
+  # basic_auth_pass: '<password>'
+  #
+  # UNCOMMENT FOR CHRONOSPHERE:
+  # query_url: 'https://<instance-name>.chronosphere.io/data/metrics'
+  # headers:
+  #   Authorization: 'Bearer <bearer-token>'
+  #
+  # UNCOMMENT FOR CORTEX:
+  # query_url: 'http://localhost:9009/api/prom'
+  #
+  # UNCOMMENT FOR VICTORIAMETRICS:
+  # query_url: 'http://localhost:8428'
+  #
+  # UNCOMMENT FOR TIMESCALEDB:
+  # query_url: 'http://localhost:9201'
+  #
+  # UNCOMMENT FOR THANOS:
+  # query_url: 'http://localhost:20902'
+  #
+  # UNCOMMENT FOR NEW RELIC:
+  # query_url: https://prometheus-api.newrelic.com
+  # headers:
+  #  X-Query-Key: <query-key>
+  #
+  # UNCOMMENT FOR M3:
+  # query_url: http://localhost:7201
+  #
+  # UNCOMMENT FOR METRICFIRE:
+  # query_url: https://www.hostedgraphite.com/<account-id>/v2/prometheus/query
+  # headers:
+  #   accept-language: 'en-US,en'
+  #   accept: 'application/json'
+  #   accept-encoding: 'br'
+  #   Cookie: 'sessionid=<session-id>;'
+
+query_tweaks:
+  # UNCOMMENT FOR GRAFANA CLOUD:
+  # - note: 'Grafana Cloud aligns incoming query timestamps to a multiple of the query resolution step to enable caching.'
+  #   truncate_timestamps_to_ms: 10000
+  #
+  # UNCOMMENT FOR THANOS:
+  # - note: 'Thanos requires adding "external_labels" to distinguish Prometheus servers, leading to extra labels in query results that need to be stripped before comparing results.'
+  #   no_bug: true
+  #   drop_result_labels:
+  #   - prometheus
+  #
+  # UNCOMMENT FOR VICTORIAMETRICS:
+  # - note: 'VictoriaMetrics aligns incoming query timestamps to a multiple of the query resolution step.'
+  #   align_timestamps_to_step: true
+  #
+  # UNCOMMENT FOR NEW RELIC:
+  # - note: 'New Relic is sometimes off by 1ms when parsing floating point start/end timestamps.'
+  #   truncate_timestamps_to_ms: 1000
+  # - note: 'New Relic adds a "prometheus_server" label to distinguish Prometheus servers, leading to extra labels in query results. These need to be stripped before comparisons.'
+  #   no_bug: true
+  #   drop_result_labels:
+  #     - prometheus_server
+  # - note: 'New Relic omits the first resolution step in the output.'
+  #   ignore_first_step: true
+  #
+  # UNCOMMENT FOR METRICFIRE:
+  # - note: 'MetricFire is sometimes off by 1ms when parsing floating point start/end timestamps. See underlying Cortex issue https://github.com/cortexproject/cortex/issues/2932, which still needs to be rolled out in MetricFire.'
+  #   truncate_timestamps_to_ms: 1000
+  #
+  # UNCOMMENT FOR CHRONOSPHERE:
+  # - note: 'Chronosphere rounds incoming query timestamps to a full second.'
+  #   truncate_timestamps_to_ms: 1000
+
+# This set of example queries expects data from the following Prometheus configuration file  to have
+# been ingested into both a vanilla Prometheus server and the third-party system for several hours,
+# so that the tester can compare query results from both systems over a range of time:
+#
+# ----------- prometheus.yml -----------
+# global:
+#   scrape_interval: 5s
+#
+# scrape_configs:
+# - job_name: 'demo'
+#   static_configs:
+#     - targets:
+#       - 'demo.promlabs.com:10000'
+#       - 'demo.promlabs.com:10001'
+#       - 'demo.promlabs.com:10002'
+# --------------------------------------
+#
+# You will have to add a "remote_write" section to this configuration to ingest data into the third-party
+# system, or in the case of Thanos, add a Thanos sidecar to the Prometheus running with this configuration.
+# See https://promlabs.com/blog/2020/08/06/comparing-promql-correctness-across-vendors#first-comparisons for
+# more background information.
+#
+# The demo service instances expose a predictable set of synthetic metrics and are hosted on a best-effort
+# basis by PromLabs. If you want to run your own demo service instances instead, you can do so via:
+#
+#   docker run -p 10000:10000 julius/prometheus-demo-service:latest -listen-address=:10000
+#   docker run -p 10001:10001 julius/prometheus-demo-service:latest -listen-address=:10001
+#   docker run -p 10002:10002 julius/prometheus-demo-service:latest -listen-address=:10002
+#
+# You will then also need to replace the host "demo.promlabs.com" in the test queries below with whatever
+# host you are running the instances on.
+test_cases:
+  # Scalar literals.
+  - query: '42'
+  - query: '1.234'
+  - query: '.123'
+  - query: '1.23e-3'
+  - query: '0x3d'
+  - query: 'Inf'
+  - query: '+Inf'
+  - query: '-Inf'
+  - query: 'NaN'
+
+  # Vector selectors.
+  # TODO: Add tests for staleness support.
+  - query: 'demo_memory_usage_bytes'
+  - query: '{__name__="demo_memory_usage_bytes"}'
+  - query: 'demo_memory_usage_bytes{type="free"}'
+  - query: 'demo_memory_usage_bytes{type!="free"}'
+  - query: 'demo_memory_usage_bytes{instance=~"demo.promlabs.com:.*"}'
+  - query: 'demo_memory_usage_bytes{instance=~"host"}'
+  - query: 'demo_memory_usage_bytes{instance!~".*:10000"}'
+  - query: 'demo_memory_usage_bytes{type="free", instance!="demo.promlabs.com:10000"}'
+  - query: '{type="free", instance!="demo.promlabs.com:10000"}'
+  - query: '{__name__=~".*"}'
+    should_fail: true
+  - query: "nonexistent_metric_name"
+  - query: 'demo_memory_usage_bytes offset {{.offset}}'
+    variant_args: ['offset']
+  - query: 'demo_memory_usage_bytes offset -{{.offset}}'
+    variant_args: ['offset']
+    should_fail: true
+  # Test staleness handling.
+  - query: demo_intermittent_metric
+
+  # Aggregation operators.
+  - query: '{{.simpleAggrOp}}(demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}}(nonexistent_metric_name)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}} by() (demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}} by(instance) (demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}} by(instance, type) (demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}} by(nonexistent) (demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}} without() (demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}} without(instance) (demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}} without(instance, type) (demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.simpleAggrOp}} without(nonexistent) (demo_memory_usage_bytes)'
+    variant_args: ['simpleAggrOp']
+  - query: '{{.topBottomOp}} (3, demo_memory_usage_bytes)'
+    variant_args: ['topBottomOp']
+  - query: '{{.topBottomOp}} by(instance) (2, demo_memory_usage_bytes)'
+    variant_args: ['topBottomOp']
+  - query: '{{.topBottomOp}} without(instance) (2, demo_memory_usage_bytes)'
+    variant_args: ['topBottomOp']
+  - query: '{{.topBottomOp}} without() (2, demo_memory_usage_bytes)'
+    variant_args: ['topBottomOp']
+  - query: 'quantile({{.quantile}}, demo_memory_usage_bytes)'
+    variant_args: ['quantile']
+  - query: 'avg(max by(type) (demo_memory_usage_bytes))'
+
+  # Binary operators.
+  - query: '1 * 2 + 4 / 6 - 10 % 2 ^ 2'
+  - query: 'demo_num_cpus + (1 {{.compBinOp}} bool 2)'
+    variant_args: ['compBinOp']
+  - query: 'demo_memory_usage_bytes {{.binOp}} 1.2345'
+    variant_args: ['binOp']
+  - query: 'demo_memory_usage_bytes {{.compBinOp}} bool 1.2345'
+    variant_args: ['compBinOp']
+  - query: '1.2345 {{.compBinOp}} bool demo_memory_usage_bytes'
+    variant_args: ['compBinOp']
+  - query: '0.12345 {{.binOp}} demo_memory_usage_bytes'
+    variant_args: ['binOp']
+  - query: '(1 * 2 + 4 / 6 - (10%7)^2) {{.binOp}} demo_memory_usage_bytes'
+    variant_args: ['binOp']
+  - query: 'demo_memory_usage_bytes {{.binOp}} (1 * 2 + 4 / 6 - 10)'
+    variant_args: ['binOp']
+    # Check that vector-scalar binops set output timestamps correctly.
+  - query: 'timestamp(demo_memory_usage_bytes * 1)'
+    # Check that unary minus sets timestamps correctly.
+    # TODO: Check this more systematically for every node type?
+  - query: 'timestamp(-demo_memory_usage_bytes)'
+  - query: 'demo_memory_usage_bytes {{.binOp}} on(instance, job, type) demo_memory_usage_bytes'
+    variant_args: ['binOp']
+  - query: 'sum by(instance, type) (demo_memory_usage_bytes) {{.binOp}} on(instance, type) group_left(job) demo_memory_usage_bytes'
+    variant_args: ['binOp']
+  - query: 'demo_memory_usage_bytes {{.compBinOp}} bool on(instance, job, type) demo_memory_usage_bytes'
+    variant_args: ['compBinOp']
+    # Check that __name__ is always dropped, even if it's part of the matching labels.
+  - query: 'demo_memory_usage_bytes / on(instance, job, type, __name__) demo_memory_usage_bytes'
+  - query: 'sum without(job) (demo_memory_usage_bytes) / on(instance, type) demo_memory_usage_bytes'
+  - query: 'sum without(job) (demo_memory_usage_bytes) / on(instance, type) group_left demo_memory_usage_bytes'
+  - query: 'sum without(job) (demo_memory_usage_bytes) / on(instance, type) group_left(job) demo_memory_usage_bytes'
+  - query: 'demo_memory_usage_bytes / on(instance, job) group_left demo_num_cpus'
+  - query: 'demo_memory_usage_bytes / on(instance, type, job, non_existent) demo_memory_usage_bytes'
+  # TODO: Add non-explicit many-to-one / one-to-many that errors.
+  # TODO: Add many-to-many match that errors.
+
+  # NaN/Inf/-Inf support.
+  - query: 'demo_num_cpus * Inf'
+  - query: 'demo_num_cpus * -Inf'
+  - query: 'demo_num_cpus * NaN'
+
+  # Unary expressions.
+  - query: 'demo_memory_usage_bytes + -(1)'
+  - query: '-demo_memory_usage_bytes'
+    # Check precedence.
+  - query: -1 ^ 2
+
+  # Binops involving non-const scalars.
+  - query: '1 {{.arithBinOp}} time()'
+    variant_args: ['arithBinOp']
+  - query: 'time() {{.arithBinOp}} 1'
+    variant_args: ['arithBinOp']
+  - query: 'time() {{.compBinOp}} bool 1'
+    variant_args: ['compBinOp']
+  - query: '1 {{.compBinOp}} bool time()'
+    variant_args: ['compBinOp']
+  - query: 'time() {{.arithBinOp}} time()'
+    variant_args: ['arithBinOp']
+  - query: 'time() {{.compBinOp}} bool time()'
+    variant_args: ['compBinOp']
+  - query: 'time() {{.binOp}} demo_memory_usage_bytes'
+    variant_args: ['binOp']
+  - query: 'demo_memory_usage_bytes {{.binOp}} time()'
+    variant_args: ['binOp']
+
+  # Functions.
+  - query: '{{.simpleAggrOp}}_over_time(demo_memory_usage_bytes[{{.range}}])'
+    variant_args: ['simpleAggrOp', 'range']
+  - query: 'quantile_over_time({{.quantile}}, demo_memory_usage_bytes[{{.range}}])'
+    variant_args: ['quantile', 'range']
+  - query: 'timestamp(demo_num_cpus)'
+  - query: 'timestamp(timestamp(demo_num_cpus))'
+  - query: '{{.simpleMathFunc}}(demo_memory_usage_bytes)'
+    variant_args: ['simpleMathFunc']
+  - query: '{{.simpleMathFunc}}(-demo_memory_usage_bytes)'
+    variant_args: ['simpleMathFunc']
+  - query: '{{.extrapolatedRateFunc}}(nonexistent_metric[5m])'
+    variant_args: ['extrapolatedRateFunc']
+  - query: '{{.extrapolatedRateFunc}}(demo_cpu_usage_seconds_total[{{.range}}])'
+    variant_args: ['extrapolatedRateFunc', 'range']
+  - query: 'deriv(demo_disk_usage_bytes[{{.range}}])'
+    variant_args: ['range']
+  - query: 'predict_linear(demo_disk_usage_bytes[{{.range}}], 600)'
+    variant_args: ['range']
+  - query: 'time()'
+    # label_replace does a full-string match and replace.
+  - query: 'label_replace(demo_num_cpus, "job", "destination-value-$1", "instance", "demo.promlabs.com:(.*)")'
+    # label_replace does not do a sub-string match.
+  - query: 'label_replace(demo_num_cpus, "job", "destination-value-$1", "instance", "host:(.*)")'
+    # label_replace works with multiple capture groups.
+  - query: 'label_replace(demo_num_cpus, "job", "$1-$2", "instance", "local(.*):(.*)")'
+    # label_replace does not overwrite the destination label if the source label does not exist.
+  - query: 'label_replace(demo_num_cpus, "job", "value-$1", "nonexistent-src", "source-value-(.*)")'
+    # label_replace overwrites the destination label if the source label is empty, but matched.
+  - query: 'label_replace(demo_num_cpus, "job", "value-$1", "nonexistent-src", "(.*)")'
+    # label_replace does not overwrite the destination label if the source label is not matched.
+  - query: 'label_replace(demo_num_cpus, "job", "value-$1", "instance", "non-matching-regex")'
+    # label_replace drops labels that are set to empty values.
+  - query: 'label_replace(demo_num_cpus, "job", "", "dst", ".*")'
+    # label_replace fails when the regex is invalid.
+  - query: 'label_replace(demo_num_cpus, "job", "value-$1", "src", "(.*")'
+    should_fail: true
+    # label_replace fails when the destination label name is not a valid Prometheus label name.
+  - query: 'label_replace(demo_num_cpus, "~invalid", "", "src", "(.*)")'
+    should_fail: true
+    # label_replace fails when there would be duplicated identical output label sets.
+  - query: 'label_replace(demo_num_cpus, "instance", "", "", "")'
+    should_fail: true
+  - query: 'label_join(demo_num_cpus, "new_label", "-", "instance", "job")'
+  - query: 'label_join(demo_num_cpus, "job", "-", "instance", "job")'
+  - query: 'label_join(demo_num_cpus, "job", "-", "instance")'
+  - query: 'label_join(demo_num_cpus, "~invalid", "-", "instance")'
+    should_fail: true
+  - query: '{{.dateFunc}}()'
+    variant_args: ['dateFunc']
+  - query: '{{.dateFunc}}(demo_batch_last_success_timestamp_seconds offset {{.offset}})'
+    variant_args: ['dateFunc', 'offset']
+  - query: '{{.instantRateFunc}}(demo_cpu_usage_seconds_total[{{.range}}])'
+    variant_args: ['instantRateFunc', 'range']
+  - query: '{{.clampFunc}}(demo_memory_usage_bytes, 2)'
+    variant_args: ['clampFunc']
+  - query: 'resets(demo_cpu_usage_seconds_total[{{.range}}])'
+    variant_args: ['range']
+  - query: 'changes(demo_batch_last_success_timestamp_seconds[{{.range}}])'
+    variant_args: ['range']
+  - query: 'vector(1.23)'
+  - query: 'vector(time())'
+  - query: 'histogram_quantile({{.quantile}}, rate(demo_api_request_duration_seconds_bucket[1m]))'
+    variant_args: ['quantile']
+  - query: 'histogram_quantile(0.9, nonexistent_metric)'
+  - # Missing "le" label.
+    query: 'histogram_quantile(0.9, demo_memory_usage_bytes)'
+  - # Missing "le" label only in some series of the same grouping.
+    query: 'histogram_quantile(0.9, {__name__=~"demo_api_request_duration_seconds_.+"})'
+  - query: 'holt_winters(demo_disk_usage_bytes[10m], {{.smoothingFactor}}, {{.trendFactor}})'
+    variant_args: ['smoothingFactor', 'trendFactor']
+
+  # Subqueries.
+  - query: 'max_over_time((time() - max(demo_batch_last_success_timestamp_seconds) < 1000)[5m:10s] offset 5m)'
+  - query: 'avg_over_time(rate(demo_cpu_usage_seconds_total[1m])[2m:10s])'
