@@ -21,23 +21,16 @@ type Test struct {
 
 func metricHandler(c prometheus.Collector) http.Handler {
 	r := prometheus.NewPedanticRegistry()
-	r.Register(c)
+	r.MustRegister(c)
 	return promhttp.HandlerFor(r, promhttp.HandlerOpts{})
 }
 
 func staticHandler(contents []byte) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(contents)
-	})
-}
-
-func removeLabel(ls labels.Labels, name string) labels.Labels {
-	for i := 0; i < len(ls); i++ {
-		if ls[i].Name == name {
-			return ls[:i+copy(ls[i:], ls[i+1:])]
+		if _, err := w.Write(contents); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-	}
-	return ls
+	})
 }
 
 type Validator func(t *testing.T, bs []Batch)

@@ -10,19 +10,19 @@ The test suit than examines the received requests for compliance.
 The test is a vanilla Golang unit test, and can be run as such.  To run all the tests:
 
 ```sh
-$ go test -v ./
+$ go test --tags=compliance -v ./
 ```
 
 To run all the tests for a single target:
 
 ```sh
-$ go test -run "TestRemoteWrite/prometheus/.+" -v ./
+$ go test --tags=compliance -run "TestRemoteWrite/prometheus/.+" -v ./
 ```
 
 To run a single test across all the targets:
 
 ```sh
-$ go test -run "TestRemoteWrite/.+/Counter" -v ./
+$ go test --tags=compliance -run "TestRemoteWrite/.+/Counter" -v ./
 ```
 
 ## Remote Write Senders

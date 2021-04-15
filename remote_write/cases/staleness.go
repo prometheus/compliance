@@ -23,7 +23,7 @@ func StalenessTest() Test {
 		handler = promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 	)
 
-	reg.Register(gauge)
+	reg.MustRegister(gauge)
 
 	return Test{
 		Name: "Staleness",

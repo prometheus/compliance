@@ -1,3 +1,5 @@
+// +build compliance
+
 package main
 
 import (
