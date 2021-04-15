@@ -22,7 +22,7 @@ jobs:
     parameters:
       dir:
         type: string
-    working_directory: ~/project/<< params.dir >>
+    working_directory: ~/repo
     docker:
       - image: cimg/go:1.16.3
     steps:
