@@ -1,2 +1,3 @@
-/promql @juliusv
 /remote_write @tomwilkie
+/openmetrics @richih
+/promql @juliusv
