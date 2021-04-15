@@ -22,53 +22,55 @@ jobs:
     parameters:
       dir:
         type: string
-    working_directory: ~/repo
+    working_directory: ~/project/<< parameters.dir >>
     docker:
       - image: cimg/go:1.16.3
     steps:
-      - checkout
+      - checkout:
+          path: ~/project/
       - restore_cache:
           keys:
-            - go-mod-v4-{{ checksum "<< parameters.dir >>/go.sum" }}
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run:
           name: Install Dependencies
-          command: cd << parameters.dir >> && go mod download
+          command: go mod download
       - save_cache:
-          key: go-mod-v4-{{ checksum "<< parameters.dir >>/go.sum" }}
+          key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "/go/pkg/mod"
       - run:
           name: Run tests
           command: |
             mkdir -p /tmp/test-reports
-            cd << parameters.dir >> && gotestsum --junitfile /tmp/test-reports/unit-tests.xml
+            gotestsum --junitfile /tmp/test-reports/unit-tests.xml
       - store_test_results:
           path: /tmp/test-reports
   lint:
     parameters:
       dir:
         type: string
-    working_directory: ~/repo
+    working_directory: ~/project/<< parameters.dir >>
     docker:
       - image: cimg/go:1.16.3
     steps:
-      - checkout
+      - checkout:
+          path: ~/project/
       - restore_cache:
           keys:
-            - go-mod-v4-{{ checksum "<< parameters.dir >>/go.sum" }}
+            - go-mod-v4-{{ checksum "go.sum" }}
       - run:
           name: Install Dependencies
-          command: cd << parameters.dir >> && go mod download
+          command: go mod download
       - save_cache:
-          key: go-mod-v4-{{ checksum "<< parameters.dir >>/go.sum" }}
+          key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
             - "/go/pkg/mod"
       - run:
           name: Install golangci-lint
           command: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.39.0
       - run:
-          name: Run tests
+          name: Run lint
           command: |
-            cd << parameters.dir >> && golangci-lint run ./...
+            golangci-lint run ./...
       - store_test_results:
           path: /tmp/test-reports
