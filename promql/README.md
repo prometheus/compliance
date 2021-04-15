@@ -50,6 +50,6 @@ It's still early days for the PromQL Compliance Tester. In particular, we would 
 * Test more vendor implementations of PromQL.
 * Version test results and make pretty output presentations easier.
 
-**Note:** Many people will be interested in benchmarking performance differences between PromQL implementations. While this is important as well, the PromQL Compliance Tester focuses solely on correctness testing. Please contact the [maintainers](../MAINTAINERS.md) if you want work on performance testing.
+**Note:** Many people will be interested in benchmarking performance differences between PromQL implementations. While this is important as well, the PromQL Compliance Tester focuses solely on correctness testing. Please contact the [maintainers](../MAINTAINERS.md) if you want to work on performance testing.
 
 If you would like to help flesh out the tester, please [file issues](https://github.com/prometheus/compliance/issues) or [pull requests](https://github.com/prometheus/compliance/pulls).
