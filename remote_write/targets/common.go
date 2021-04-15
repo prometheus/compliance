@@ -7,6 +7,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -82,7 +83,9 @@ func downloadBinary(urlPattern string, filenameInArchivePattern string) (string,
 			return "", err
 		}
 	} else {
-		os.Rename(tempfile, filename)
+		if err := os.Rename(tempfile, filename); err != nil {
+			return "", err
+		}
 	}
 
 	if err := os.Chmod(filename, 0o744); err != nil {
@@ -239,22 +242,22 @@ func runCommand(prog string, timeout time.Duration, args ...string) error {
 	}
 	defer os.RemoveAll(cwd)
 
-	var log *os.File
+	var output *os.File
 	if true {
-		log, err = os.CreateTemp("", "")
+		output, err = os.CreateTemp("", "")
 		if err != nil {
 			return err
 		}
-		defer log.Close()
-		defer os.Remove(log.Name())
+		defer output.Close()
+		defer os.Remove(output.Name())
 	} else {
-		log = os.Stdout
+		output = os.Stdout
 	}
 
 	cmd := exec.Command(prog, args...)
 	cmd.Dir = cwd
-	cmd.Stdout = log
-	cmd.Stderr = log
+	cmd.Stdout = output
+	cmd.Stderr = output
 	err = cmd.Start()
 	if err != nil {
 		return err
@@ -262,7 +265,9 @@ func runCommand(prog string, timeout time.Duration, args ...string) error {
 
 	go func() {
 		time.Sleep(timeout)
-		cmd.Process.Signal(syscall.SIGINT)
+		if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+			log.Fatalf("failed to send signal: %v", err)
+		}
 	}()
 
 	return cmd.Wait()
