@@ -32,5 +32,6 @@ The repo tests the following remote write senders:
 - The [Grafana Agent](https://github.com/grafana/agent).
 - [InfluxData's Telegraf](https://github.com/influxdata/telegraf).
 - The [OpenTelemetry Collector](https://github.com/open-telemetry/opentelemetry-collector).
+- The [VictoriaMetrics Agent](https://github.com/VictoriaMetrics/VictoriaMetrics/tree/master/app/vmagent), unless you're on [Mac OS X](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1042).
 
 If you want to add another sender, see the examples in [the targets director](targets/) and recreate that pattern in a PR.
