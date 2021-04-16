@@ -30,6 +30,7 @@ var (
 		cases.CounterTest,
 		cases.GaugeTest,
 		cases.HistogramTest,
+		cases.SummaryTest,
 
 		// Test Up metrics.
 		cases.UpTest,
