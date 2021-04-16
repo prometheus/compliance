@@ -17,6 +17,9 @@ type Test struct {
 	Name     string
 	Metrics  http.Handler
 	Expected Validator
+
+	// Optional "middleware" to intercept the write requests.
+	Writes func(http.Handler) http.Handler
 }
 
 func metricHandler(c prometheus.Collector) http.Handler {
