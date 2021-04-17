@@ -47,10 +47,10 @@ var (
 		// Other misc tests.
 		cases.StalenessTest,
 		cases.TimestampTest,
+		cases.HeadersTest,
 
 		// TODO:
 		// - Test for ordering correctness.
-		// - Test for correct headers.
 		// - Test labels have valid characters.
 	}
 )
@@ -71,11 +71,15 @@ func TestRemoteWrite(t *testing.T) {
 
 func runTest(t *testing.T, tc cases.Test, runner targets.Target) {
 	ap := cases.Appendable{}
+	writeHandler := remote.NewWriteHandler(logger, &ap)
+	if tc.Writes != nil {
+		writeHandler = tc.Writes(writeHandler)
+	}
 
 	// Start a HTTP server to expose some metrics and a receive remote write requests.
 	m := http.NewServeMux()
 	m.Handle("/metrics", tc.Metrics)
-	m.Handle("/push", remote.NewWriteHandler(logger, &ap))
+	m.Handle("/push", writeHandler)
 	s := http.Server{
 		Handler: m,
 	}
