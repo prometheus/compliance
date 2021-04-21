@@ -27,6 +27,7 @@ var (
 		"vmagent":       targets.RunVMAgent,
 	}
 	tests = []func() cases.Test{
+		// Test each type.
 		cases.CounterTest,
 		cases.GaugeTest,
 		cases.HistogramTest,
@@ -49,9 +50,9 @@ var (
 		cases.StalenessTest,
 		cases.TimestampTest,
 		cases.HeadersTest,
+		cases.OrderingTest,
 
 		// TODO:
-		// - Test for ordering correctness.
 		// - Test labels have valid characters.
 		// - retry behaviour & status codes.
 	}
