@@ -34,7 +34,7 @@ test{b="2",a="1"} 1.0
 }
 
 // RepeatedLabelsTest exports a single, constant metric with repeated labels
-// and checks that we don't receive metrics with repeated labels (and get up=0 instead).
+// and checks that we don't receive metrics any metrics - the scrape should fail.
 func RepeatedLabelsTest() Test {
 	return Test{
 		Name: "RepeatedLabels",
@@ -54,8 +54,8 @@ test{a="1",a="1"} 1.0
 				}
 			})
 
-			ups := countMetricWithValue(t, bs, labels.FromStrings("__name__", "up", "job", "test"), 0.0)
-			require.True(t, ups > 0, `found zero samples for up{job="test"} = 0`)
+			tests := countMetricWithValue(t, bs, labels.FromStrings("__name__", "test", "a", "1"), 1.0)
+			require.True(t, tests == 0, `found samples for test{a="1"}, none expected`)
 		},
 	}
 }
@@ -84,7 +84,7 @@ test{a=""} 1.0
 }
 
 // NameLabelTests exports a single, constant metric with no name label
-// and checks that we don't receive metrics without a name label (and get up=0 instead).
+// and checks that we don't receive metrics without a name label - the scape should fail.
 func NameLabelTest() Test {
 	return Test{
 		Name: "NameLabel",
@@ -104,8 +104,8 @@ func NameLabelTest() Test {
 				require.True(t, false, "metric '%s' is missing name label", s.l.String())
 			})
 
-			ups := countMetricWithValue(t, bs, labels.FromStrings("__name__", "up", "job", "test"), 0.0)
-			require.True(t, ups > 0, `found zero samples for up{job="test"} = 0`)
+			samples := countMetricWithValue(t, bs, labels.FromStrings("label", "value"), 1.0)
+			require.True(t, samples == 0, `found non-zero samples for {label="value"} = 1.0`)
 		},
 	}
 }
