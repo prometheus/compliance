@@ -18,10 +18,17 @@ func RunTelegraf(opts TargetOptions) error {
 	## An array of urls to scrape metrics from.
 	urls = ["http://%s/metrics"]
 	metric_version = 2
+	url_tag = "instance"
 
 [[processors.override]]
 	[processors.override.tags]
 		job = "test"
+
+[[processors.regex]]
+	[[processors.regex.tags]]
+	    key = "instance"
+	    pattern = "http://([^/]+)/metrics"
+	    replacement = "${1}"
 
 [[outputs.http]]
 	url = "%s"
