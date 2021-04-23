@@ -15,6 +15,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"text/template"
 	"time"
@@ -28,7 +29,15 @@ type TargetOptions struct {
 	Timeout         time.Duration
 }
 
+var downloadMtx sync.Mutex
+
 func downloadBinary(urlPattern string, filenameInArchivePattern string) (string, error) {
+	downloadMtx.Lock()
+	defer downloadMtx.Unlock()
+	return downloadBinaryUnlocked(urlPattern, filenameInArchivePattern)
+}
+
+func downloadBinaryUnlocked(urlPattern string, filenameInArchivePattern string) (string, error) {
 	urlToDownload, err := instantiateTemplate(urlPattern)
 	if err != nil {
 		return "", nil
