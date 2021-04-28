@@ -43,6 +43,7 @@ var (
 		cases.RepeatedLabelsTest,
 		cases.EmptyLabelsTest,
 		cases.NameLabelTest,
+		cases.HonorLabelsTest,
 
 		// Other misc tests.
 		cases.StalenessTest,
@@ -52,6 +53,7 @@ var (
 		// TODO:
 		// - Test for ordering correctness.
 		// - Test labels have valid characters.
+		// - retry behaviour & status codes.
 	}
 )
 
