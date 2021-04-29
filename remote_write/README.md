@@ -1,6 +1,6 @@
 # Prometheus Remote Write Compliance Test
 
-This repo contains a set of tests to check compliance with the Prometheus Remote Write specification.
+This repo contains a set of tests to check compliance with the [Prometheus Remote Write specification](https://docs.google.com/document/d/1LPhVRSFkGNSuU1fBd81ulhsCPR4hkSZyyBj1SZ8fWOM/).
 
 The test suit works by forking an instance of the sender with some config to scrape the test running itself and send remote write requests to the test suite for a fixed period of time.
 The test suit than examines the received requests for compliance.
