@@ -109,3 +109,20 @@ func NameLabelTest() Test {
 		},
 	}
 }
+
+// HonorLabels exports a single, constant metric with a job label
+// and checks that we receive metrics a exported_job label.
+func HonorLabelsTest() Test {
+	return Test{
+		Name: "HonorLabels",
+		Metrics: staticHandler([]byte(`
+# HELP test A gauge
+# TYPE test gauge
+test{job="original", instance="foo"} 1.0
+`)),
+		Expected: func(t *testing.T, bs []Batch) {
+			samples := countMetricWithValue(t, bs, labels.FromStrings("__name__", "test", "exported_job", "original", "exported_instance", "foo"), 1.0)
+			require.Greater(t, samples, 0, `found zero samples for test{exported_job="original"} = 1.0`)
+		},
+	}
+}
