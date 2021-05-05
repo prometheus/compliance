@@ -3,12 +3,25 @@ package targets
 import (
 	"fmt"
 	"os"
+	"runtime"
 )
 
-const vectorDownloadURL = "https://github.com/timberio/vector/releases/download/v0.12.2/vector-0.12.2-x86_64-apple-darwin.tar.gz"
+func getVectorDownloadURL() string {
+	var version string = "0.13.1"
+	switch runtime.GOOS {
+	case "darwin":
+		return "https://github.com/timberio/vector/releases/download/v" + version + "/vector-" + version + "-x86_64-apple-darwin.tar.gz"
+	case "linux":
+		return "https://github.com/timberio/vector/releases/download/v" + version + "/vector-" + version + "-x86_64-unknown-linux-gnu.tar.gz"
+	case "windows":
+		return "https://github.com/timberio/vector/releases/download/v" + version + "/vector-" + version + "-x86_64-pc-windows-msvc.zip"
+	default:
+		panic("unsupported OS")
+	}
+}
 
 func RunVector(opts TargetOptions) error {
-	binary, err := downloadBinary(vectorDownloadURL, "vector")
+	binary, err := downloadBinary(getVectorDownloadURL(), "vector")
 	if err != nil {
 		return err
 	}
