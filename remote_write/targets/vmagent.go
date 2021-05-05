@@ -3,14 +3,19 @@ package targets
 import (
 	"fmt"
 	"os"
+
+        "github.com/prometheus/compliance/remote_write/latest"
 )
 
-const vmagentURL = "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v1.59.0/vmutils-{{.Arch}}-v1.59.0.tar.gz"
+func getVMAgentDownloadURL() string {
+        version := latest.GetLatestVersion("VictoriaMetrics/VictoriaMetrics")
+	return "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v" + version + "/vmutils-{{.Arch}}-v1.58.0.tar.gz"
+}
 
 func RunVMAgent(opts TargetOptions) error {
 	// NB this won't work on a Mac - need mac builds https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1042!
 	// If you build it yourself and stick it in the bin/ directory, the tests will work.
-	binary, err := downloadBinary(vmagentURL, "vmagent-prod")
+	binary, err := downloadBinary(getVMAgentDownloadURL(), "vmagent-prod")
 	if err != nil {
 		return err
 	}

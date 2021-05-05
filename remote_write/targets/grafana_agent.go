@@ -3,12 +3,17 @@ package targets
 import (
 	"fmt"
 	"os"
+
+	"github.com/prometheus/compliance/remote_write/latest"
 )
 
-const grafanaAgentDownloadURL = "https://github.com/grafana/agent/releases/download/v0.13.1/agent-{{.OS}}-{{.Arch}}.zip"
+func getGrafanaDownloadURL() string {
+	version := latest.GetLatestVersion("grafana/agent")
+	return "https://github.com/grafana/agent/releases/download/" + version + "/agent-{{.OS}}-{{.Arch}}.zip"
+}
 
 func RunGrafanaAgent(opts TargetOptions) error {
-	binary, err := downloadBinary(grafanaAgentDownloadURL, "agent-{{.OS}}-{{.Arch}}")
+	binary, err := downloadBinary(getGrafanaDownloadURL(), "agent-{{.OS}}-{{.Arch}}")
 	if err != nil {
 		return err
 	}

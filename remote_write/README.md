@@ -33,6 +33,7 @@ The repo tests the following remote write senders:
 - [InfluxData's Telegraf](https://github.com/influxdata/telegraf).
 - The [OpenTelemetry Collector](https://github.com/open-telemetry/opentelemetry-collector).
 - The [VictoriaMetrics Agent](https://github.com/VictoriaMetrics/VictoriaMetrics/tree/master/app/vmagent), unless you're on [Mac OS X](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1042).
+- [Timber.io Vector](https://github.com/timberio/vector).
 
 If you want to test a dev version of your sender, simply put your binary in `bin/`.
 

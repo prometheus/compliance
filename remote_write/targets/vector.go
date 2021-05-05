@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+
+	"github.com/prometheus/compliance/remote_write/latest"
 )
 
+
 func getVectorDownloadURL() string {
-	var version string = "0.13.1"
+	version := latest.GetLatestVersion("timberio/vector")
 	switch runtime.GOOS {
 	case "darwin":
 		return "https://github.com/timberio/vector/releases/download/v" + version + "/vector-" + version + "-x86_64-apple-darwin.tar.gz"
