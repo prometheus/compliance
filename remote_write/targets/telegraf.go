@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const telegrafURL = "https://dl.influxdata.com/telegraf/releases/telegraf-1.18.0_{{.OS}}_{{.Arch}}.tar.gz"
+const telegrafURL = "https://dl.influxdata.com/telegraf/releases/telegraf-1.18.2_{{.OS}}_{{.Arch}}.tar.gz"
 
 func RunTelegraf(opts TargetOptions) error {
 	binary, err := downloadBinary(telegrafURL, "telegraf")
