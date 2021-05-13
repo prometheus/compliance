@@ -3,12 +3,12 @@ package targets
 import (
 	"fmt"
 	"os"
+
+        "github.com/prometheus/compliance/remote_write/latest"
 )
 
-const prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v2.26.0/prometheus-2.26.0.{{.OS}}-{{.Arch}}.tar.gz"
-
 func RunPrometheus(opts TargetOptions) error {
-	binary, err := downloadBinary(prometheusDownloadURL, "prometheus")
+	binary, err := downloadBinary(latest.GetDownloadURL("https://github.com/prometheus/prometheus/releases/download/vVERSION/prometheus-VERSION.{{.OS}}-{{.Arch}}.tar.gz"), "prometheus")
 	if err != nil {
 		return err
 	}

@@ -3,12 +3,14 @@ package targets
 import (
 	"fmt"
 	"os"
+
+        "github.com/prometheus/compliance/remote_write/latest"
 )
 
-const telegrafURL = "https://dl.influxdata.com/telegraf/releases/telegraf-1.18.2_{{.OS}}_{{.Arch}}.tar.gz"
-
 func RunTelegraf(opts TargetOptions) error {
-	binary, err := downloadBinary(telegrafURL, "telegraf")
+	version := "1.18.2"
+	binary, err := downloadBinary(latest.GetDownloadURL("https://dl.influxdata.com/telegraf/releases/telegraf-" + version + "_{{.OS}}_{{.Arch}}.tar.gz"), "telegraf")
+	fmt.Println("Telegraf version needs to be updated by hand, for now")
 	if err != nil {
 		return err
 	}

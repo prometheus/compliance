@@ -3,12 +3,13 @@ package targets
 import (
 	"fmt"
 	"os"
+
+        "github.com/prometheus/compliance/remote_write/latest"
 )
 
-const otelDownloadURL = "https://github.com/open-telemetry/opentelemetry-collector/releases/download/v0.26.0/otelcol_{{.OS}}_{{.Arch}}"
-
 func RunOtelCollector(opts TargetOptions) error {
-	binary, err := downloadBinary(otelDownloadURL, "")
+	binary, err := downloadBinary(latest.GetDownloadURL("https://github.com/open-telemetry/opentelemetry-collector/releases/download/vVERSION/otelcol_{{.OS}}_{{.Arch}}"), "")
+
 	if err != nil {
 		return err
 	}
