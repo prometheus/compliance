@@ -8,23 +8,21 @@ import (
 	"github.com/prometheus/compliance/remote_write/latest"
 )
 
-
 func getVectorDownloadURL() string {
-	version := latest.GetLatestVersion("timberio/vector")
 	switch runtime.GOOS {
 	case "darwin":
-		return "https://github.com/timberio/vector/releases/download/v" + version + "/vector-" + version + "-x86_64-apple-darwin.tar.gz"
+		return "https://github.com/timberio/vector/releases/download/vVERSION/vector-VERSION-x86_64-apple-darwin.tar.gz"
 	case "linux":
-		return "https://github.com/timberio/vector/releases/download/v" + version + "/vector-" + version + "-x86_64-unknown-linux-gnu.tar.gz"
+		return "https://github.com/timberio/vector/releases/download/vVERSION/vector-VERSION-x86_64-unknown-linux-gnu.tar.gz"
 	case "windows":
-		return "https://github.com/timberio/vector/releases/download/v" + version + "/vector-" + version + "-x86_64-pc-windows-msvc.zip"
+		return "https://github.com/timberio/vector/releases/download/vVERSION/vector-VERSION-x86_64-pc-windows-msvc.zip"
 	default:
 		panic("unsupported OS")
 	}
 }
 
 func RunVector(opts TargetOptions) error {
-	binary, err := downloadBinary(getVectorDownloadURL(), "vector")
+	binary, err := downloadBinary(latest.GetDownloadURL(getVectorDownloadURL()), "vector")
 	if err != nil {
 		return err
 	}

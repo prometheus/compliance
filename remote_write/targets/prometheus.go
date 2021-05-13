@@ -6,13 +6,9 @@ import (
 
         "github.com/prometheus/compliance/remote_write/latest"
 )
-func getPrometheusDownloadURL() string {
-        version := latest.GetLatestVersion("prometheus/prometheus")
-	return "https://github.com/prometheus/prometheus/releases/download/v" + version + "/prometheus-" + version + ".{{.OS}}-{{.Arch}}.tar.gz"
-}
 
 func RunPrometheus(opts TargetOptions) error {
-	binary, err := downloadBinary(getPrometheusDownloadURL(), "prometheus")
+	binary, err := downloadBinary(latest.GetDownloadURL("https://github.com/prometheus/prometheus/releases/download/vVERSION/prometheus-VERSION.{{.OS}}-{{.Arch}}.tar.gz"), "prometheus")
 	if err != nil {
 		return err
 	}

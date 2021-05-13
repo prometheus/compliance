@@ -7,13 +7,9 @@ import (
         "github.com/prometheus/compliance/remote_write/latest"
 )
 
-func getOtelDownloadURL() string {
-        version := latest.GetLatestVersion("open-telemetry/opentelemetry-collector")
-	return "https://github.com/open-telemetry/opentelemetry-collector/releases/download/v" + version + "/otelcol_{{.OS}}_{{.Arch}}"
-}
-
 func RunOtelCollector(opts TargetOptions) error {
-	binary, err := downloadBinary(getOtelDownloadURL(), "")
+	binary, err := downloadBinary(latest.GetDownloadURL("https://github.com/open-telemetry/opentelemetry-collector/releases/download/vVERSION/otelcol_{{.OS}}_{{.Arch}}"), "")
+
 	if err != nil {
 		return err
 	}

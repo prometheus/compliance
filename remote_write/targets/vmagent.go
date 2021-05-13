@@ -7,15 +7,10 @@ import (
         "github.com/prometheus/compliance/remote_write/latest"
 )
 
-func getVMAgentDownloadURL() string {
-        version := latest.GetLatestVersion("VictoriaMetrics/VictoriaMetrics")
-	return "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v" + version + "/vmutils-{{.Arch}}-v1.58.0.tar.gz"
-}
-
 func RunVMAgent(opts TargetOptions) error {
 	// NB this won't work on a Mac - need mac builds https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1042!
 	// If you build it yourself and stick it in the bin/ directory, the tests will work.
-	binary, err := downloadBinary(getVMAgentDownloadURL(), "vmagent-prod")
+	binary, err := downloadBinary(latest.GetDownloadURL("https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/vVERSION/vmutils-{{.Arch}}-vVERSION.tar.gz"), "vmagent-prod")
 	if err != nil {
 		return err
 	}

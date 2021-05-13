@@ -2,10 +2,10 @@ package latest
 
 import (
         "encoding/json"
-        "fmt"
         "io/ioutil"
         "log"
         "net/http"
+	"regexp"
         "strings"
         "time"
 )
@@ -52,7 +52,18 @@ func GetLatestVersion(repo string) string {
         }
 
         version := strings.Trim(packageInfo.TagName, "v")
-        fmt.Println("repository: " + repo + " - version: " + version)
+//        fmt.Println("repository: " + repo + " - version: " + version)
 
         return version
+}
+
+func GetDownloadURL(url string) string {
+	re := regexp.MustCompile("https://github.com/(.+?/.+?)/.*")
+	repo := re.ReplaceAllString(url, "$1")
+        version := GetLatestVersion(repo)
+
+	re2 := regexp.MustCompile("(.*)VERSION(.*)")
+	url = re2.ReplaceAllString(url, "${1}" + version + "${2}")
+
+        return url
 }
