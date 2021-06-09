@@ -52,10 +52,11 @@ var (
 		cases.TimestampTest,
 		cases.HeadersTest,
 		cases.OrderingTest,
+		cases.Retries500Test,
+		cases.Retries400Test,
 
 		// TODO:
 		// - Test labels have valid characters.
-		// - retry behaviour & status codes.
 	}
 )
 
