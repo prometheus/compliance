@@ -39,12 +39,12 @@ An alert in JSON MUST follow the following format:
     "alertname": "<alertname>",
     "label1": "value1",
     "label2": "value2",
-    ...
+    "..."
   },
   "annotations": {
     "label1": "value1",
     "label2": "value2",
-    ...
+    "..."
   },
   "startsAt": "<RFC3339Millis time>",
   "endsAt": "<RFC3339Millis time>",
@@ -305,12 +305,12 @@ An example for a custom field here that is used by Prometheus is `”file”: �
   "labels": {
     "label1": "value1",
     "label2": "value2",
-    ...
+    "..."
   },
   "annotations": {
     "label1": "value1",
     "label2": "value2",
-    ...
+    "..."
   },
   "lastEvaluation": "<RFC3339Millis time>",
   "evaluationTime": <float>,
@@ -343,12 +343,12 @@ An example for a custom field here that is used by Prometheus is `”file”: �
   "labels": {
     "label1": "value1",
     "label2": "value2",
-    ...
+    "..."
   },
   "annotations": {
     "label1": "value1",
     "label2": "value2",
-    ...
+    "..."
   }
 }
 ```
@@ -381,12 +381,12 @@ This API returns the union of all alerts across all the rules as seen in `GET /a
   "labels": {
     "label1": "value1",
     "label2": "value2",
-    ...
+    "..."
   },
   "annotations": {
     "label1": "value1",
     "label2": "value2",
-    ...
+    "..."
   }
 }
 ```
