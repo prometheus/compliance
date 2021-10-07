@@ -56,7 +56,7 @@ An alert in JSON MUST follow the following format:
 * `annotations`: MUST be present IF the alert has annotations. Annotations provide additional details about the alert which can change over time for the same alert.
 * `startsAt`: SHOULD be present. It is the time when the alert was triggered.
 * `endsAt`: SHOULD be present. It is the time when the alert MUST be considered `inactive`. Note that future alert updates MAY change this value.
-* `generatorURL`: MAY be present. It is a URL that takes the user to the query page for the source expression of the alert.
+* `generatorURL`: SHOULD be present. It is a URL that takes the user to the query page for the source expression of the alert.
 
 ## Alerting Rules
 
@@ -120,13 +120,13 @@ groups:
     expr: job:request_latency_seconds:mean5m{job="myjob"} > 1
 ```
 ### Constraints
-1. 
-2. Results of a rule evaluation MUST be available for any subsequent rules in the group during the same evaluation cycle and the order of rules MUST be the same as provided in the config.
-3. Labels and annotations in alerting rules MUST support all template variables and functions as described in the [v2.30 template reference](https://prometheus.io/docs/prometheus/2.30/configuration/template_reference/) for the values except `graphLink` and `tableLink`. `graphLink` and `tableLink` MAY be supported if the sample querier supports having a UI link for graph and table respectively.
+
+1. Results of a rule evaluation MUST be available for any subsequent rules in the group during the same evaluation cycle that depend on these results. The order of rules MUST be the same as provided in the config.
+2. Labels and annotations in alerting rules MUST support all template variables and functions as described in the [v2.30 template reference](https://prometheus.io/docs/prometheus/2.30/configuration/template_reference/) for the values except `graphLink` and `tableLink`. `graphLink` and `tableLink` MAY be supported if the sample querier supports having a UI link for graph and table respectively. The config MUST NOT be rejected if it contains the optional template functions `graphLink` and `tableLink`; those functions MUST result in an empty string if not supported.
 
 ## Executing an Alerting Rule
 
-The PromQL expression `expr` of the alerting rule MUST be executed against the Sample Querier as an instant query for the current time (called the “evaluation time” or the “group evaluation time”). This MUST be done at regular intervals and the interval MUST be the `interval` from the parent `<rule_group>` of this alerting rule.
+The PromQL expression `expr` of the alerting rule MUST be executed against the Sample Querier as an instant query for the current time (called the “evaluation time” or the “group evaluation time”). This MUST be done at regular intervals and the interval MUST be the `interval` from the parent `<rule_group>` of this alerting rule, which MUST default to 1 minute if not specified in the config.
 
 ### Processing Instant Query Result
 
@@ -180,7 +180,7 @@ If it was the first time the alert was created (i.e. no existing `pending` state
 
 For a zero `for` duration, the alert MUST directly go into `firing` state the first time the alert was created and skip the initial `pending` state. This evaluation time when the alert is first created is referred to as `ActiveAt`.
 
-For a non-zero `for` duration that is less than the group evaluation interval, the alert MUST go into `firing` state during the next evaluation after it went into `pending` state and not in between evaluations.
+For a non-zero `for` duration that is less than the group evaluation interval, the alert MUST go into `firing` state during the next evaluation after it went into `pending` state and not in between evaluations if the alert does not become `inactive` in the next evaluation.
 
 If the annotation values change at any evaluation, the latest annotations MUST be updated to the alert immediately.
 
@@ -192,7 +192,8 @@ Any alerts in future evaluations with the same labels as an `inactive` alert MUS
 
 ### Time Series to Create
 
-After every evaluation of the rules, for each active alert (i.e. `pending` and `firing` state alerts), the alert-generator MUST produce the following time series with a sample value of 1 and a timestamp matching the evaluation time and send it over to the sample receiver:
+At the end of a single alerting rule evaluation, for each active alert (i.e. `pending` and `firing` state alerts), the alert-generator MUST produce the following time series with a sample value of 1 and a timestamp matching the evaluation time and send it over to the sample receiver.
+The sample MUST be immediately available via the sample querier for the evaluation of subsequent rules in the parent rule group during the same evaluation cycle.
 
 Series labels (sorted) MUST have these labels only.
 ```
@@ -202,7 +203,6 @@ Series labels (sorted) MUST have these labels only.
   <all labels from the alert including "alertname">
 }
 ```
-
 
 The `alertstate` MUST be `”pending”` for a `pending` state alert and MUST be `”firing”` for a `firing` state alert.
 
@@ -231,7 +231,7 @@ The `ResendDelay` used for resending the alert SHOULD be configurable and MUST d
 
 This implies that the `firing` alert MUST be sent continuously with a fixed interval until it becomes inactive.
 
-`ResendDelay` acts as a minimum delay while the actual delay MUST be the first multiple of the group interval that is more than or equal to `ResendDelay`. This is the same for an `inactive` alert.
+`ResendDelay` acts as a minimum interval while the actual interval MUST be the first >0 multiple of the group interval that is more than or equal to `ResendDelay`.
 
 ### Conditions for Sending `inactive` Alerts
 
@@ -240,8 +240,10 @@ This implies that the `firing` alert MUST be sent continuously with a fixed inte
 1. When it first went into `inactive` state.
 2. The difference between current evaluation time and the last time the `inactive` alert was sent to the Alertmanager is more than `ResendDelay` _AND_ the difference between current evaluation time and `ResolvedAt` is less than 15 minutes _AND_ there is no new active alert (`pending` or `firing` state alert) with the same labels.
 
-This implies that the `inactive` alert MUST be sent continuously with a fixed interval until  
-15 minutes after the `ResolvedAt` of the alert, or until a new alert is created with the same labels.
+This implies that the `inactive` alert MUST be sent continuously with a fixed interval until 15 minutes after the `ResolvedAt` of the alert, or until a new alert is created with the same labels.
+
+`ResendDelay` acts as a minimum interval while the actual interval MUST be the first >0 multiple of the group interval that is more than or equal to `ResendDelay`.
+
 ### Payload Format to Send Alerts to Alertmanager
 The alerts MUST be sent in the following JSON format to the alertmanager
 
@@ -324,7 +326,7 @@ An example for a custom field here that is used by Prometheus is `”file”: �
 * `name`, `query`, `labels`, `annotations` are exactly the same as present in the alerting rule config.
 * `duration` is the same as `for` period in float seconds.
 * `lastEvaluation` is the timestamp of the last time the rule was evaluated.
-* `evaluationTime` is the time taken to completely evaluate the rule.
+* `evaluationTime` is the time taken to completely evaluate the rule in float seconds.
 * `health` is the health of rule evaluation. It MUST be one of `"ok"`, `"err"`, `"unknown"`.
 * `state` must be one of these under following scenarios
     * `"pending"`: at least 1 alert in the rule in `pending` state and no other alert in `firing` state.
