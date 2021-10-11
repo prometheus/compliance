@@ -1,7 +1,7 @@
 reference_target_config:
-  query_url: 'http://<reference-server>/'
+  query_url: 'http://34.214.212.96:9090/'
 
 test_target_config:
   query_url: https://tracing.wavefront.com/
   headers:
-    Authorization: 'Bearer <bearer-token>'
+    Authorization: 'Bearer 2146a811-2153-4ee7-ad81-0d0c52ed1954'

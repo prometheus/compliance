@@ -4,4 +4,4 @@ reference_target_config:
 test_target_config:
   query_url: https://eu1.app.sysdig.com/prometheus
   headers:
-    Authorization: 'Bearer <bearer-token>'
+    Authorization: 'Bearer cd382f6f-12e7-4195-be8e-15e1ee47d786'
