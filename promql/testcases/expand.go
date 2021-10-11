@@ -42,11 +42,11 @@ import (
 )
 
 var testVariantArgs = map[string][]string{
-	"range":  {"1s", "15s", "1m", "5m", "15m", "1h"},
-	"offset": {"1m", "5m", "10m"},
-	// TODO: Add "group" aggregator and new duration formats, but it is so new that vendor implementations need time to catch up first.
-	"simpleAggrOp": {"sum", "avg", "max", "min", "count", "stddev", "stdvar"},
-	"topBottomOp":  {"topk", "bottomk"},
+	"range":            {"1s", "15s", "1m", "5m", "15m", "1h", "1h5m15s"},
+	"offset":           {"1m", "5m", "10m", "10m15s"},
+	"simpleAggrOp":     {"sum", "avg", "max", "min", "count", "stddev", "stdvar", "group"},
+	"simpleTimeAggrOp": {"sum", "avg", "max", "min", "count", "stddev", "stdvar", "absent", "last"},
+	"topBottomOp":      {"topk", "bottomk"},
 	"quantile": {
 		"-0.5",
 		"0.1",
@@ -61,7 +61,7 @@ var testVariantArgs = map[string][]string{
 	"arithBinOp":           {"+", "-", "*", "/", "%", "^"},
 	"compBinOp":            {"==", "!=", "<", ">", "<=", ">="},
 	"binOp":                {"+", "-", "*", "/", "%", "^", "==", "!=", "<", ">", "<=", ">="},
-	"simpleMathFunc":       {"abs", "ceil", "floor", "exp", "sqrt", "ln", "log2", "log10", "round"},
+	"simpleMathFunc":       {"abs", "ceil", "floor", "exp", "sqrt", "ln", "log2", "log10", "round", "sgn"},
 	"extrapolatedRateFunc": {"delta", "rate", "increase"},
 	"clampFunc":            {"clamp_min", "clamp_max"},
 	"instantRateFunc":      {"idelta", "irate"},

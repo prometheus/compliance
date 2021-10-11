@@ -163,8 +163,8 @@ test_cases:
     variant_args: ['binOp']
 
   # Functions.
-  - query: '{{.simpleAggrOp}}_over_time(demo_memory_usage_bytes[{{.range}}])'
-    variant_args: ['simpleAggrOp', 'range']
+  - query: '{{.simpleTimeAggrOp}}_over_time(demo_memory_usage_bytes[{{.range}}])'
+    variant_args: ['simpleTimeAggrOp', 'range']
   - query: 'quantile_over_time({{.quantile}}, demo_memory_usage_bytes[{{.range}}])'
     variant_args: ['quantile', 'range']
   - query: 'timestamp(demo_num_cpus)'
@@ -218,6 +218,10 @@ test_cases:
     variant_args: ['instantRateFunc', 'range']
   - query: '{{.clampFunc}}(demo_memory_usage_bytes, 2)'
     variant_args: ['clampFunc']
+  - query: 'clamp(demo_memory_usage_bytes, 0, 1)'
+  - query: 'clamp(demo_memory_usage_bytes, 0, 1000000000000)'
+  - query: 'clamp(demo_memory_usage_bytes, 1000000000000, 0)'
+  - query: 'clamp(demo_memory_usage_bytes, 1000000000000, 1000000000000)'
   - query: 'resets(demo_cpu_usage_seconds_total[{{.range}}])'
     variant_args: ['range']
   - query: 'changes(demo_batch_last_success_timestamp_seconds[{{.range}}])'
@@ -233,6 +237,9 @@ test_cases:
     query: 'histogram_quantile(0.9, {__name__=~"demo_api_request_duration_seconds_.+"})'
   - query: 'holt_winters(demo_disk_usage_bytes[10m], {{.smoothingFactor}}, {{.trendFactor}})'
     variant_args: ['smoothingFactor', 'trendFactor']
+  - query: 'count_values("value", demo_api_request_duration_seconds_bucket)'
+  - query: 'absent(demo_memory_usage_bytes)'
+  - query: 'absent(nonexistent_metric_name)'
 
   # Subqueries.
   - query: 'max_over_time((time() - max(demo_batch_last_success_timestamp_seconds) < 1000)[5m:10s] offset 5m)'
