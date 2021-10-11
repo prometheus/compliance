@@ -52,8 +52,20 @@ func (rt roundTripperWithSettings) RoundTrip(req *http.Request) (*http.Response,
 	return http.DefaultTransport.RoundTrip(req)
 }
 
+type arrayFlags []string
+
+func (i *arrayFlags) String() string {
+	return "my string representation"
+}
+
+func (i *arrayFlags) Set(value string) error {
+	*i = append(*i, value)
+	return nil
+}
+
 func main() {
-	configFile := flag.String("config-file", "promql-compliance-tester.yml", "The path to the configuration file.")
+	var configFiles arrayFlags
+	flag.Var(&configFiles, "config-file", "The path to the configuration file. If repeated, the specified files will be concatenated before YAML parsing.")
 	outputFormat := flag.String("output-format", "text", "The comparison output format. Valid values: [text, html, json]")
 	outputHTMLTemplate := flag.String("output-html-template", "./output/example-output.html", "The HTML template to use when using HTML as the output format.")
 	outputPassing := flag.Bool("output-passing", false, "Whether to also include passing test cases in the output.")
@@ -77,7 +89,7 @@ func main() {
 		log.Fatalf("Invalid output format %q", *outputFormat)
 	}
 
-	cfg, err := config.LoadFromFile(*configFile)
+	cfg, err := config.LoadFromFiles(configFiles)
 	if err != nil {
 		log.Fatalf("Error loading configuration file: %v", err)
 	}

@@ -1,0 +1,9 @@
+reference_target_config:
+  query_url: 'http://localhost:9090'
+
+test_target_config:
+  query_url: 'http://localhost:8428'
+
+query_tweaks:
+  - note: 'VictoriaMetrics aligns incoming query timestamps to a multiple of the query resolution step.'
+    align_timestamps_to_step: true

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"io/ioutil"
 
 	"github.com/pkg/errors"
@@ -56,15 +57,21 @@ type TestCase struct {
 	ShouldFail     bool     `yaml:"should_fail,omitempty"`
 }
 
-// LoadFromFile parses the given YAML file into a Config.
-func LoadFromFile(filename string) (*Config, error) {
-	content, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
+// LoadFromFiles parses the given YAML files into a Config.
+func LoadFromFiles(filenames []string) (*Config, error) {
+	var buf bytes.Buffer
+	for _, f := range filenames {
+		content, err := ioutil.ReadFile(f)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := buf.Write(content); err != nil {
+			return nil, err
+		}
 	}
-	cfg, err := Load(content)
+	cfg, err := Load(buf.Bytes())
 	if err != nil {
-		return nil, errors.Wrapf(err, "parsing YAML file %s", filename)
+		return nil, errors.Wrapf(err, "parsing YAML files %s", filenames)
 	}
 	return cfg, nil
 }
