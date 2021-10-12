@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/cheggaaa/pb/v3"
@@ -57,6 +58,7 @@ func main() {
 	outputFormat := flag.String("output-format", "text", "The comparison output format. Valid values: [text, html, json]")
 	outputHTMLTemplate := flag.String("output-html-template", "./output/example-output.html", "The HTML template to use when using HTML as the output format.")
 	outputPassing := flag.Bool("output-passing", false, "Whether to also include passing test cases in the output.")
+	queryParallelism := flag.Int("query-parallelism", 20, "Maximum number of comparison queries to run in parallel.")
 	flag.Parse()
 
 	var outp output.Outputter
@@ -99,16 +101,29 @@ func main() {
 		cfg.QueryTimeParameters.ResolutionInSeconds, 10*time.Second)
 	expandedTestCases := testcases.ExpandTestCases(cfg.TestCases, cfg.QueryTweaks, start, end, resolution)
 
-	progressBar := pb.StartNew(len(expandedTestCases))
-	results := make([]*comparer.Result, 0, len(cfg.TestCases))
-	for _, tc := range expandedTestCases {
-		res, err := comp.Compare(tc)
-		if err != nil {
-			log.Fatalf("Error running comparison: %v", err)
-		}
-		progressBar.Increment()
-		results = append(results, res)
+	var wg sync.WaitGroup
+	results := make([]*comparer.Result, len(expandedTestCases))
+	progressBar := pb.StartNew(len(results))
+	wg.Add(len(results))
+
+	workCh := make(chan struct{}, *queryParallelism)
+
+	for i, tc := range expandedTestCases {
+		workCh <- struct{}{}
+
+		go func(i int, tc *comparer.TestCase) {
+			res, err := comp.Compare(tc)
+			if err != nil {
+				log.Fatalf("Error running comparison: %v", err)
+			}
+			results[i] = res
+			progressBar.Increment()
+			<-workCh
+			wg.Done()
+		}(i, tc)
 	}
+
+	wg.Wait()
 	progressBar.Finish()
 
 	outp(results, *outputPassing, cfg.QueryTweaks)
