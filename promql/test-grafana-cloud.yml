@@ -2,9 +2,9 @@ reference_target_config:
   query_url: 'http://localhost:9090'
 
 test_target_config:
-  query_url: 'https://<instance-name>.grafana.net/api/prom'
-  basic_auth_user: '<user-id>'
-  basic_auth_pass: '<password>'
+  query_url: 'https://prometheus-prod-01-eu-west-0.grafana.net/api/prom'
+  basic_auth_user: '224695'
+  basic_auth_pass: 'eyJrIjoiNzE0ZmNkYzAxZjM3NGE1MDY0N2U4YmY2ZWI3YTU3NjNiMTVjNDBjYiIsIm4iOiJwcm9tcWx0ZXN0IiwiaWQiOjQzODkxNH0='
 
 query_tweaks:
   - note: 'Grafana Cloud aligns incoming query timestamps to a multiple of the query resolution step to enable caching.'

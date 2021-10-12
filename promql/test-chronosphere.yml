@@ -2,12 +2,12 @@ reference_target_config:
   query_url: 'http://localhost:9090'
 
 test_target_config:
-  query_url: 'https://rc-10.chronosphere.io/data/metrics'
+  query_url: 'https://rc-12.chronosphere.io/data/metrics'
   headers:
-    Authorization: 'Bearer 368e807ed5ebdf2cf6b56c59e97fa0a7de1174f0ec27fef17c9b4f59492e96bd'
+    Authorization: 'Bearer 995b15ac06c458b3d9a08f8b9d19b7899df7f5a81fbf5c08c6e21142fa58b04c'
 
-query_tweaks:
-  - note: 'Chronosphere adds a "__chronosphere_tenant" label to distinguish tenants, leading to extra labels in query results. These need to be stripped before comparisons.'
-    no_bug: true
-    drop_result_labels:
-    - __chronosphere_tenant
+# query_tweaks:
+#   - note: 'Chronosphere adds a "__chronosphere_tenant" label to distinguish tenants, leading to extra labels in query results. These need to be stripped before comparisons.'
+#     no_bug: true
+#     drop_result_labels:
+#     - __chronosphere_tenant
