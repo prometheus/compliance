@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const otelDownloadURL = "https://github.com/open-telemetry/opentelemetry-collector/releases/download/v0.30.0/otelcol_{{.OS}}_{{.Arch}}"
+const otelDownloadURL = "https://github.com/open-telemetry/opentelemetry-collector/releases/download/v0.37.0/otelcol_{{.OS}}_{{.Arch}}"
 
 func RunOtelCollector(opts TargetOptions) error {
 	binary, err := downloadBinary(otelDownloadURL, "")

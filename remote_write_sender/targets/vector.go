@@ -7,7 +7,7 @@ import (
 )
 
 func getVectorDownloadURL() string {
-	var version string = "0.14.0"
+	var version string = "0.16.1"
 	switch runtime.GOOS {
 	case "darwin":
 		return "https://github.com/timberio/vector/releases/download/v" + version + "/vector-" + version + "-x86_64-apple-darwin.tar.gz"

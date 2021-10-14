@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const vmagentURL = "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v1.60.0/vmutils-{{.Arch}}-v1.60.0.tar.gz"
+const vmagentURL = "https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v1.67.0/vmutils-{{.Arch}}-v1.67.0.tar.gz"
 
 func RunVMAgent(opts TargetOptions) error {
 	// NB this won't work on a Mac - need mac builds https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1042!
