@@ -5,3 +5,7 @@ test_target_config:
   query_url: https://tracing.wavefront.com/
   headers:
     Authorization: 'Bearer 2146a811-2153-4ee7-ad81-0d0c52ed1954'
+
+query_tweaks:
+  - note: 'Wavefront is sometimes off by 1ms when parsing floating point start/end timestamps.'
+    truncate_timestamps_to_ms: 1000

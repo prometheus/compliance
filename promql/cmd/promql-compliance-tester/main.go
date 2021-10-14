@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,7 +49,11 @@ func (rt roundTripperWithSettings) RoundTrip(req *http.Request) (*http.Response,
 	}
 
 	for key, value := range rt.headers {
-		req.Header.Add(key, value)
+		if strings.ToLower(key) == "host" {
+			req.Host = value
+		} else {
+			req.Header.Add(key, value)
+		}
 	}
 	return http.DefaultTransport.RoundTrip(req)
 }
