@@ -4,11 +4,21 @@ The PromQL Compliance Tester is a tool for running comparison tests between nati
 
 The tool was [first published and described](https://promlabs.com/blog/2020/08/06/comparing-promql-correctness-across-vendors) in August 2020. [Test results have been published](https://promlabs.com/promql-compliance-tests) on 2020-08-06 and 2020-12-01.
 
-## Build Requirements
+## Building via Docker
+
+If you have docker installed, you can build the tool using docker.
+
+```bash
+make docker
+```
+
+## Build from source
+
+### Requirements
 
 This tool is written in Go and requires a working Go setup to build. Library dependencies are handled via [Go Modules](https://blog.golang.org/using-go-modules).
 
-## Building
+### Building
 
 To build the tool:
 
@@ -16,9 +26,9 @@ To build the tool:
 go build ./cmd/promql-compliance-tester
 ```
 
-## Available flags
+## Executing
 
-To list available flags:
+Tool allows setting following flags:
 
 ```
 $ ./promql-compliance-tester -h
@@ -34,6 +44,18 @@ Usage of ./promql-compliance-tester:
   -query-parallelism int
     	Maximum number of comparison queries to run in parallel. (default 20)
 ```
+
+Running the tool will execute all test cases in `-config-file` and compare results between reference and target provided in the same file.
+
+At the end of run, the output is provided in form or number of executed tests and errors if any. Example output can be seen here:
+
+```bash
+./promql-compliance-tester -config-file config.yaml -config-file ./promql-test-queries.yml
+529 / 529 [-----------------------------------------------------------------------------------------------------------] 100.00% 278 p/s
+Total: 529 / 529 (100.00%) passed, 0 unsupported
+```
+
+If all tests were executed correctly and passing the tool returns 0 code, otherwise it returns 1.
 
 ## Configuration
 
@@ -64,7 +86,7 @@ If the tool reports a test score of 100% without any cross-cutting query tweaks,
 
 ## Contributing
 
-It's still early days for the PromQL Compliance Tester. In particular, we would love to add and improve the following points:
+Help wanted to improve the PromQL Compliance Tester. In particular, we would love to add and improve the following points:
 
 * Test instant queries in addition to range queries.
 * Add more variation and configurability to input timestamps.

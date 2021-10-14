@@ -1,6 +1,10 @@
 build:
 	go build ./cmd/alert_generator_compliance_tester/
 
+.PHONY: docker
+docker:
+	docker build . -t alert_generator_compliance_tester:latest
+
 run: build
 	./alert_generator_compliance_tester -config-file=$(CONFIG)
 

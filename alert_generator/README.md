@@ -43,7 +43,15 @@ Feel free to modify the example config itself. Config for some softwares are pro
 
 If you are running your software in a local environment, you can set the alertmanager URL to `http://<host>:<port>` with port being the one set in the test suite config. For example `http://localhost:8080`.
 
-If you are testing a cloud offering, or if the local software setup cannot access the test suite's network, here is an alternative:
+If you are testing a cloud offering, or if the local software setup cannot access the test suite's network, there are two alternatives:
+
+##### Step 4a
+
+You can run `./cmd/alert_generator_compliance_tester` in docker and run it inside your infrastructure as a batch job. To do so, build image with `make docker` and instead of step 6, simply run `alert_generator_compliance_tester:latest` with `-config-file=<config file you have done in step 3>`.
+
+See example [here](https://github.com/thanos-io/thanos/blob/89077c9df109dac8dbe6c979ebc181071c5e0db8/test/e2e/compatibility_test.go#L132) 
+
+##### Step 4b
 
 1. Open https://webhook.site/. It will give a unique link to use as a webhook. Let's take https://webhook.site/12345 as an example.
 2. Set https://webhook.site/12345 to be the alertmanager URL in your software - hence all alerts will be set to this webhook.
