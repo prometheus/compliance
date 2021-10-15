@@ -1,0 +1,15 @@
+reference_target_config:
+  query_url: 'http://localhost:9090'
+
+test_target_config:
+  query_url: 'https://monitoring.googleapis.com/v1/projects/promql-testing/location/global/prometheus'
+  headers:
+    Authorization: 'Bearer <bearer-token>'
+    X-Goog-User-Project: promql-testing
+
+query_tweaks:
+  - note: 'GMP requires adding "external_labels" for the location and project ID that need to be stripped before comparing results.'
+    no_bug: true
+    drop_result_labels:
+      - location
+      - project_id
