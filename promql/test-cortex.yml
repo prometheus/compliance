@@ -1,0 +1,5 @@
+reference_target_config:
+  query_url: 'http://localhost:9090'
+
+test_target_config:
+  query_url: 'http://localhost:9009/api/prom'

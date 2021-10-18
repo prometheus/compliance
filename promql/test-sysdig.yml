@@ -1,0 +1,15 @@
+reference_target_config:
+  query_url: 'http://localhost:9090'
+
+test_target_config:
+  query_url: https://<region>.app.sysdig.com/prometheus
+  headers:
+    Authorization: 'Bearer <bearer-token>'
+
+query_tweaks:
+  - note: 'All samples and queries are aligned to a 10-second grid in Sysdig.'
+    align_timestamps_to_step: true
+  - note: 'Sysdig adds a "remote_write" label to data coming from Prometheus, which needs to be stripped before comparing results.'
+    no_bug: true
+    drop_result_labels:
+     - remote_write

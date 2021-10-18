@@ -1,0 +1,17 @@
+reference_target_config:
+  query_url: 'http://localhost:9090'
+
+test_target_config:
+  query_url: https://prometheus-api.<region>.newrelic.com
+  headers:
+   X-Query-Key: <insights-query-key>
+
+query_tweaks:
+  - note: 'New Relic is sometimes off by 1ms when parsing floating point start/end timestamps.'
+    truncate_timestamps_to_ms: 1000
+  - note: 'New Relic adds a "prometheus_server" label to distinguish Prometheus servers, leading to extra labels in query results. These need to be stripped before comparisons.'
+    no_bug: true
+    drop_result_labels:
+      - prometheus_server
+  - note: 'New Relic omits the first resolution step in the output.'
+    ignore_first_step: true
