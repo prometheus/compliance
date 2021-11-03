@@ -23,21 +23,29 @@ To list available flags:
 ```
 $ ./promql-compliance-tester -h
 Usage of ./promql-compliance-tester:
-  -config-file string
-    	The path to the configuration file. (default "promql-compliance-tester.yml")
+  -config-file value
+    	The path to the configuration file. If repeated, the specified files will be concatenated before YAML parsing.
   -output-format string
     	The comparison output format. Valid values: [text, html, json] (default "text")
   -output-html-template string
     	The HTML template to use when using HTML as the output format. (default "./output/example-output.html")
   -output-passing
     	Whether to also include passing test cases in the output.
+  -query-parallelism int
+    	Maximum number of comparison queries to run in parallel. (default 20)
 ```
 
 ## Configuration
 
-The test cases, query tweaks, and PromQL API endpoints to use are specified in a configuration file.
+A standard suite of test cases is defined in the [`promql-test-queries.yml`](./promql-test-queries.yml) file, while separate `test-<vendor>.yml` config files specify test target configurations and query tweaks for a number of individual projects and vendors. To run the tester tool, you need to specify both the test suite config file as well as a config file for a single vendor.
 
-An example configuration file with settings for Thanos, Cortex, TimescaleDB, and VictoriaMetrics is included.
+For example, to run the tester against Cortex:
+
+```bash
+./promql-compliance-tester -config-file=promql-test-queries.yml -config-file=test-cortex.yml
+```
+
+Note that some of the vendor-specific configuration files require you to replace certain placeholder values for endpoints and credentials before using them.
 
 ## Contributing
 
