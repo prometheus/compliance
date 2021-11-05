@@ -4,6 +4,8 @@ This repo contains code to test compliance with various Prometheus standards. An
 
 If you are reading this as someone testing their own implementation or considering to do so: There is a _LOT_ of work that's planned but not executed yet. If you have time or headcount to invest in uplifting everyone's compliance, [please talk to us](https://prometheus.io/community/).
 
+There are several [software categories](https://docs.google.com/document/d/1VGMme9RgpclqF4CF2woNmgFqq0J7nqHn-l72uNmAxhA/) something can be tested in. If something does not seem to fit existing categories, please also talk to us.
+
 ## Alert Generator
 
 The [alert_generator](alert_generator/README.md) directory contains a shim at the moment. It will test correct generation and emitting of alerts towards Alertmanager.
