@@ -9,13 +9,13 @@ workflows:
             parameters:
               dir:
                 - promql
-                - remote_write
+                - remote_write_sender
       - test:
           matrix:
             parameters:
               dir:
                 - promql
-                - remote_write
+                - remote_write_sender
 
 jobs:
   test:
