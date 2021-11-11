@@ -176,8 +176,6 @@ If the annotation values change at any evaluation, the latest annotations MUST b
 
 If the difference between the current evaluation time and `ActiveAt` is _greater than or equal_ to the `for` duration (as specified by the alerting rule), the alert MUST go into `firing` state immediately. This evaluation time when it first went into `firing` state is referred to as `FiredAt`.
 
-If it was the first time the alert was created (i.e. no existing `pending` state alert exists for the labels), and if the `for` duration of the alerting rule is 0, then the alert MUST directly go into `firing` state immediately and skip the `pending` state. This evaluation time when the alert is first created is referred to as `ActiveAt`, even in this case.
-
 For a zero `for` duration, the alert MUST directly go into `firing` state the first time the alert was created and skip the initial `pending` state. This evaluation time when the alert is first created is referred to as `ActiveAt`.
 
 For a non-zero `for` duration that is less than the group evaluation interval, the alert MUST go into `firing` state during the next evaluation after it went into `pending` state and not in between evaluations if the alert does not become `inactive` in the next evaluation.
