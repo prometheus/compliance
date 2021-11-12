@@ -9,8 +9,11 @@ import (
 
 // TestCase defines a single test case for the alert generator.
 type TestCase interface {
+	// Describe returns the test case title and description.
+	Describe() (title string, description string)
+
 	// RuleGroup returns the alerting rule group that this test case is testing.
-	RuleGroup() rulefmt.RuleGroup
+	RuleGroup() (rulefmt.RuleGroup, error)
 
 	// SamplesToRemoteWrite gives all the samples that needs to be remote-written at their
 	// respective timestamps.
@@ -37,46 +40,30 @@ type TestCase interface {
 }
 
 // testCase implements TestCase.
+// All variables must be initialised.
 type testCase struct {
-	ruleGroup            func() rulefmt.RuleGroup
+	describe             func() (title string, description string)
+	ruleGroup            func() (rulefmt.RuleGroup, error)
 	samplesToRemoteWrite func() []prompb.TimeSeries
 	init                 func(zeroTime int64)
 	checkAlerts          func(ts int64, alerts []v1.Alert) (ok bool, expected []v1.Alert)
 	checkMetrics         func(ts int64, metrics string) (ok bool, expected string)
 }
 
-func (tc *testCase) RuleGroup() rulefmt.RuleGroup {
-	if tc.ruleGroup != nil {
-		return tc.ruleGroup()
-	}
-	return rulefmt.RuleGroup{}
-}
+func (tc *testCase) Describe() (title string, description string) { return tc.describe() }
 
-func (tc *testCase) SamplesToRemoteWrite() []prompb.TimeSeries {
-	if tc.samplesToRemoteWrite != nil {
-		return tc.samplesToRemoteWrite()
-	}
-	return nil
-}
+func (tc *testCase) RuleGroup() (rulefmt.RuleGroup, error) { return tc.ruleGroup() }
 
-func (tc *testCase) Init(zeroTime int64) {
-	if tc.init != nil {
-		tc.init(zeroTime)
-	}
-}
+func (tc *testCase) SamplesToRemoteWrite() []prompb.TimeSeries { return tc.samplesToRemoteWrite() }
+
+func (tc *testCase) Init(zeroTime int64) { tc.init(zeroTime) }
 
 func (tc *testCase) CheckAlerts(ts int64, alerts []v1.Alert) (ok bool, expected []v1.Alert) {
-	if tc.checkAlerts != nil {
-		return tc.checkAlerts(ts, alerts)
-	}
-	return false, nil
+	return tc.checkAlerts(ts, alerts)
 }
 
 func (tc *testCase) CheckMetrics(ts int64, metrics string) (ok bool, expected string) {
-	if tc.checkMetrics != nil {
-		return tc.checkMetrics(ts, metrics)
-	}
-	return false, ""
+	return tc.checkMetrics(ts, metrics)
 }
 
 const sourceTimeSeriesName = "alert_generator_test_suite"

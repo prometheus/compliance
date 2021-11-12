@@ -1,0 +1,11 @@
+groups:
+    - name: PendingAndFiringAndResolved
+      interval: 30s
+      rules:
+        - alert: SimpleAlert
+          expr: '{__name__="alert_generator_test_suite", alertname="SimpleAlert", rulegroup="PendingAndFiringAndResolved"} > 10'
+          for: 3m
+          labels:
+            foo: bar
+          annotations:
+            description: SimpleAlert is firing
