@@ -7,20 +7,19 @@ import (
 
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
-	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/web/api/v1"
 )
 
 func PendingAndFiringAndResolved() TestCase {
 	groupName := "PendingAndFiringAndResolved"
-	alertName := "SimpleAlert"
+	alertName := groupName + "_SimpleAlert"
 	lbls := baseLabels(groupName, alertName)
 	zeroTime := int64(0)
 
 	return &testCase{
 		describe: func() (title string, description string) {
-			return "PendingAndFiringAndResolved", "An alert goes from pending to firing to resolved state and stays in resolved state"
+			return groupName, "An alert goes from pending to firing to resolved state and stays in resolved state"
 		},
 		ruleGroup: func() (rulefmt.RuleGroup, error) {
 			var alert yaml.Node
@@ -46,20 +45,26 @@ func PendingAndFiringAndResolved() TestCase {
 			}, nil
 		},
 		samplesToRemoteWrite: func() []prompb.TimeSeries {
-			// 15s scrape interval.
-			series := prompb.TimeSeries{
-				Labels: toProtoLabels(lbls),
-				Samples: []prompb.Sample{
-					{Value: 0},
+			// TODO: consider using the `load 15s metric 1+1x5` etc notation used in Prometheus tests.
+			return []prompb.TimeSeries{
+				{
+					Labels: toProtoLabels(lbls),
+					Samples: sampleSlice(5*time.Second,
+						3, 5, 5, 5, 9, // 1m (3 is @0 time).
+						9, 9, 9, 11, // 1m block. Gets into pending at value 11.
+						// 6m more of this, upto end of 8m.
+						// Firing at 5m hence should get min 2 alerts, one after resend delay of 1m.
+						11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, // 3m block.
+						11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, // 3m block.
+						// Resolved at 8m15s.
+						// 18m more of 9s. Hence must get multiple resolved alert but not after 15m of being resolved.
+						9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, // 5m block.
+						9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, // 5m block.
+						9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, // 5m block.
+						9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, // 3m block.
+					),
 				},
 			}
-			// Add the timestamps.
-			ts := time.Unix(0, 0)
-			for i := range series.Samples {
-				series.Samples[i].Timestamp = timestamp.FromTime(ts)
-				ts = ts.Add(15 * time.Second)
-			}
-			return []prompb.TimeSeries{series}
 		},
 		init: func(zt int64) {
 			zeroTime = zt

@@ -3,20 +3,23 @@ package cases
 import (
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
+	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/web/api/v1"
+	"time"
 )
 
 // TestCase defines a single test case for the alert generator.
 type TestCase interface {
-	// Describe returns the test case title and description.
-	Describe() (title string, description string)
+	// Describe returns the test case's rule group name and description.
+	Describe() (groupName string, description string)
 
 	// RuleGroup returns the alerting rule group that this test case is testing.
 	RuleGroup() (rulefmt.RuleGroup, error)
 
 	// SamplesToRemoteWrite gives all the samples that needs to be remote-written at their
-	// respective timestamps.
+	// respective timestamps. The last sample indicates the end of this test case hence appropriate
+	// additional samples must be considered beforehand.
 	//
 	// All the timestamps returned here are in milliseconds and starts at 0,
 	// which is the time when the test suite would start the test.
@@ -50,7 +53,7 @@ type testCase struct {
 	checkMetrics         func(ts int64, metrics string) (ok bool, expected string)
 }
 
-func (tc *testCase) Describe() (title string, description string) { return tc.describe() }
+func (tc *testCase) Describe() (groupName string, description string) { return tc.describe() }
 
 func (tc *testCase) RuleGroup() (rulefmt.RuleGroup, error) { return tc.ruleGroup() }
 
@@ -85,4 +88,17 @@ func toProtoLabels(lbls labels.Labels) []prompb.Label {
 		})
 	}
 	return res
+}
+
+func sampleSlice(interval time.Duration, values ...float64) []prompb.Sample {
+	samples := make([]prompb.Sample, 0, len(values))
+	ts := time.Unix(0, 0)
+	for _, v := range values {
+		samples = append(samples, prompb.Sample{
+			Timestamp: timestamp.FromTime(ts),
+			Value:     v,
+		})
+		ts = ts.Add(interval)
+	}
+	return samples
 }
