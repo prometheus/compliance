@@ -49,7 +49,7 @@ func PendingAndFiringAndResolved() TestCase {
 			return []prompb.TimeSeries{
 				{
 					Labels: toProtoLabels(lbls),
-					Samples: sampleSlice(5*time.Second,
+					Samples: sampleSlice(15*time.Second,
 						3, 5, 5, 5, 9, // 1m (3 is @0 time).
 						9, 9, 9, 11, // 1m block. Gets into pending at value 11.
 						// 6m more of this, upto end of 8m.

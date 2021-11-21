@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/config"
@@ -16,7 +18,7 @@ import (
 	"github.com/prometheus/prometheus/storage/remote"
 )
 
-func NewRemoteWriter(rwURL string) (*RemoteWriter, error) {
+func NewRemoteWriter(rwURL string, logger log.Logger) (*RemoteWriter, error) {
 	u, err := url.Parse(rwURL)
 	if err != nil {
 		return nil, err
@@ -33,6 +35,7 @@ func NewRemoteWriter(rwURL string) (*RemoteWriter, error) {
 		client: client,
 		stopc:  make(chan struct{}),
 		errc:   make(chan error, 1),
+		log:    logger,
 	}, nil
 }
 
@@ -47,7 +50,10 @@ type RemoteWriter struct {
 
 	stopc chan struct{}
 	errc  chan error
+	err   error
 	wg    sync.WaitGroup
+
+	log log.Logger
 }
 
 type sample struct {
@@ -122,16 +128,19 @@ func (rw *RemoteWriter) Start() time.Time {
 					break
 				}
 
+				level.Debug(rw.log).Log("msg", "Remote writing", "timestamp", currT, "total_series", len(writeSeries))
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				err = rw.client.Store(ctx, buf)
 				if err != nil {
 					cancel()
 					rw.errc <- err
+					level.Debug(rw.log).Log("msg", "Error in remote writing", "timestamp", currT, "total_series", len(writeSeries), "err", err)
 					break
 				}
 				if err := ctx.Err(); err != nil {
 					cancel()
 					rw.errc <- err
+					level.Debug(rw.log).Log("msg", "Error in remote writing", "timestamp", currT, "total_series", len(writeSeries), "err", err)
 					break
 				}
 				cancel()
@@ -143,8 +152,15 @@ func (rw *RemoteWriter) Start() time.Time {
 	return now
 }
 
-func (rw *RemoteWriter) Error() <-chan error {
-	return rw.errc
+func (rw *RemoteWriter) Error() error {
+	if rw.err != nil {
+		return rw.err
+	}
+	select {
+	case rw.err = <-rw.errc:
+	default:
+	}
+	return rw.err
 }
 
 func (rw *RemoteWriter) Stop() {

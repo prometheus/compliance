@@ -13,34 +13,29 @@ import (
 
 func main() {
 	// TODO: take auth credentials via config.
-	remoteWriteURL := flag.String("remote-write-url", "http://localhost:9090/api/v1/write", "URL for remote write.")
-	//apiBaseURL := flag.String("api-base-url", "http://localhost:9090", "Base URL including any prefix to request GET <base>/api/v1/rules and GET <base>/api/v1/alerts.")
+	remoteWriteURL := flag.String("remote-write-url", "http://localhost:9090/api/v1/write", "URL for remote writing samples.")
+	_ = flag.String("api-base-url", "http://localhost:9090", "Base URL including any prefix to request GET <base-url>/api/v1/rules and GET <base-url>/api/v1/alerts.")
+	_ = flag.String("promql-url", "http://localhost:9090", "URL where the test suite can access the time series data via PromQL including any prefix to request GET <promql-url>/api/v1/query and GET <promql-url>/api/v1/query_range.")
 	flag.Parse()
 
 	log := promlog.New(&promlog.Config{})
 
-	// TODO: Make remote writing testsuite.Manager's task.
-	remoteWriter, err := testsuite.NewRemoteWriter(*remoteWriteURL)
+	m, err := testsuite.NewManager(testsuite.ManagerOptions{
+		Cases:          cases.AllCases,
+		RemoteWriteURL: *remoteWriteURL,
+	})
 	if err != nil {
-		level.Error(log).Log("msg", "Failed to create the remote writer", "err", err)
+		level.Error(log).Log("msg", "Failed to create the test suite instance", "err", err)
 		os.Exit(1)
 	}
 
-	for _, c := range cases.AllCases {
-		remoteWriter.AddTimeSeries(c.SamplesToRemoteWrite())
-	}
+	level.Info(log).Log("msg", "Starting the test suite", "url", *remoteWriteURL)
 
-	level.Info(log).Log("msg", "Starting to remote write", "url", *remoteWriteURL)
+	m.Start()
+	m.Wait()
 
-	remoteWriter.Start()
-
-	remoteWriter.Wait()
-	select {
-	case err := <-remoteWriter.Error():
-		if err != nil {
-			level.Error(log).Log("msg", "Some error in the remote writer", "err", err)
-			os.Exit(1)
-		}
-	default:
+	if err := m.Error(); err != nil {
+		level.Error(log).Log("msg", "Some error in the test suite", "err", err)
+		os.Exit(1)
 	}
 }
