@@ -12,9 +12,12 @@ import (
 // TestCase defines a single test case for the alert generator.
 type TestCase interface {
 	// Describe returns the test case's rule group name and description.
+	// NOTE: The group name must be unique across all the test cases.
 	Describe() (groupName string, description string)
 
 	// RuleGroup returns the alerting rule group that this test case is testing.
+	// NOTE: All the rules in the group must include a label `rulegroup="<groupName>"`
+	//       which should also be attached to the resultant alerts.
 	RuleGroup() (rulefmt.RuleGroup, error)
 
 	// SamplesToRemoteWrite gives all the samples that needs to be remote-written at their

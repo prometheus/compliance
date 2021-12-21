@@ -14,15 +14,18 @@ import (
 func main() {
 	// TODO: take auth credentials via config.
 	remoteWriteURL := flag.String("remote-write-url", "http://localhost:9090/api/v1/write", "URL for remote writing samples.")
-	_ = flag.String("api-base-url", "http://localhost:9090", "Base URL including any prefix to request GET <base-url>/api/v1/rules and GET <base-url>/api/v1/alerts.")
-	_ = flag.String("promql-url", "http://localhost:9090", "URL where the test suite can access the time series data via PromQL including any prefix to request GET <promql-url>/api/v1/query and GET <promql-url>/api/v1/query_range.")
+	baseURL := flag.String("api-base-url", "http://localhost:9090", "Base URL including any prefix to request GET <base-url>/api/v1/rules and GET <base-url>/api/v1/alerts.")
+	promQLURL := flag.String("promql-url", "http://localhost:9090", "URL where the test suite can access the time series data via PromQL including any prefix to request GET <promql-url>/api/v1/query and GET <promql-url>/api/v1/query_range.")
 	flag.Parse()
 
 	log := promlog.New(&promlog.Config{})
 
 	m, err := testsuite.NewManager(testsuite.ManagerOptions{
+		Logger:         log,
 		Cases:          cases.AllCases,
 		RemoteWriteURL: *remoteWriteURL,
+		BaseApiURL:     *baseURL,
+		PromQLURL:      *promQLURL,
 	})
 	if err != nil {
 		level.Error(log).Log("msg", "Failed to create the test suite instance", "err", err)
