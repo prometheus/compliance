@@ -1,10 +1,7 @@
 package testsuite
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"net/url"
 	"path"
 	"sync"
@@ -14,12 +11,10 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/compliance/alert_generator/cases"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
-	v1 "github.com/prometheus/prometheus/web/api/v1"
-
-	"github.com/prometheus/compliance/alert_generator/cases"
 )
 
 // Manager runs the entire test suite from start to end.
@@ -39,12 +34,12 @@ type ManagerOptions struct {
 	Logger log.Logger
 	// All the test cases to test.
 	Cases []cases.TestCase
-	// URL to remote write samples.
+	// RemoteWriteURL is URL to remote write samples.
 	RemoteWriteURL string
-	// URL to query the GET APIs.
+	// BaseApiURL is the URL to query the GET <BaseApiURL>/api/v1/rules and <BaseApiURL>/api/v1/alerts.
 	BaseApiURL string
-	// URL to query the database via PromQL, without the /query or /query_range suffix.
-	PromQLURL string
+	// PromQLBaseURL is the URL to query the database via PromQL via GET <PromQLBaseURL>/query and <PromQLBaseURL>/query_range.
+	PromQLBaseURL string
 }
 
 func NewManager(opts ManagerOptions) (*Manager, error) {
@@ -161,67 +156,95 @@ func (m *Manager) Start() {
 		rgt.Start(m.remoteWriteStartTime)
 	}
 
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
+	m.wg.Add(2)
+	go m.checkAlertsLoop()
+	go m.checkMetricsLoop()
+}
 
-	Loop:
-		for {
-			select {
-			case <-m.stopc:
-				return
-			case <-time.After(time.Duration(m.minGroupInterval)):
-				nowTs := timestamp.FromTime(time.Now())
-				u, err := url.Parse(m.opts.BaseApiURL)
-				if err != nil {
-					level.Error(m.opts.Logger).Log("msg", "Error in parsing API URL", "url", m.opts.BaseApiURL, "err", err)
-					continue Loop
-				}
+func (m *Manager) checkAlertsLoop() {
+	defer m.wg.Done()
 
-				u.Path = path.Join(u.Path, "/api/v1/alerts")
-				resp, err := http.Get(u.String())
-				if err != nil {
-					level.Error(m.opts.Logger).Log("msg", "Error in fetching alerts", "url", u.String(), "err", err)
-					continue Loop
-				}
+Loop:
+	for {
+		select {
+		case <-m.stopc:
+			return
+		case <-time.After(time.Duration(m.minGroupInterval)):
+			nowTs := timestamp.FromTime(time.Now())
+			u, err := url.Parse(m.opts.BaseApiURL)
+			if err != nil {
+				level.Error(m.opts.Logger).Log("msg", "Error in parsing API URL", "url", m.opts.BaseApiURL, "err", err)
+				continue Loop
+			}
 
-				if resp.StatusCode != http.StatusOK {
-					level.Error(m.opts.Logger).Log("msg", "Got a non 200 response", "url", u.String(), "status_code", resp.StatusCode)
-					continue Loop
-				}
+			u.Path = path.Join(u.Path, "/api/v1/alerts")
+			b, err := DoGetRequest(u.String())
+			if err != nil {
+				level.Error(m.opts.Logger).Log("msg", "Error in fetching alerts", "url", u.String(), "err", err)
+				continue Loop
+			}
 
-				b, err := ioutil.ReadAll(resp.Body)
-				if err != nil {
-					level.Error(m.opts.Logger).Log("msg", "Error in reading response body", "url", u.String(), "err", err)
-					continue Loop
-				}
+			mappedAlerts, err := ParseAndGroupAlerts(b)
+			if err != nil {
+				level.Error(m.opts.Logger).Log("msg", "Error in parsing alerts response", "url", u.String(), "err", err)
+				continue Loop
+			}
 
-				var res GETAlertsResponse
-				err = json.Unmarshal(b, &res)
-				if err != nil {
-					level.Error(m.opts.Logger).Log("msg", "Error in unmarshaling response", "url", u.String(), "err", err)
-					continue Loop
-				}
-
-				if res.Status != "success" {
-					level.Error(m.opts.Logger).Log("msg", "Got a non success status", "url", u.String(), "status", res.Status)
-					fmt.Println("ERROR STATUS", res.Status)
-					continue Loop
-				}
-
-				// Group alerts based on group name via the "rulegroup" label.
-				mappedAlerts := make(map[string][]v1.Alert)
-				for _, al := range res.Data.Alerts {
-					groupName := al.Labels.Get("rulegroup")
-					mappedAlerts[groupName] = append(mappedAlerts[groupName], al)
-				}
-
-				for groupName, rgt := range m.ruleGroupTests {
-					rgt.CheckAlerts(nowTs, mappedAlerts[groupName])
+			for groupName, rgt := range m.ruleGroupTests {
+				ok, _ := rgt.CheckAlerts(nowTs, mappedAlerts[groupName])
+				if !ok {
+					// TODO: add error here.
+					level.Error(m.opts.Logger).Log("msg", "Check alerts failed", "group_name", groupName)
 				}
 			}
 		}
-	}()
+	}
+}
+
+func (m *Manager) checkMetricsLoop() {
+	defer m.wg.Done()
+
+Loop:
+	for {
+		select {
+		case <-m.stopc:
+			return
+		case <-time.After(time.Duration(m.minGroupInterval)):
+			nowTs := timestamp.FromTime(time.Now())
+
+			u, err := url.Parse(m.opts.PromQLBaseURL)
+			if err != nil {
+				level.Error(m.opts.Logger).Log("msg", "Error in parsing PromQL URL", "url", m.opts.BaseApiURL, "err", err)
+				continue Loop
+			}
+
+			u.Path = path.Join(u.Path, "/api/v1/query")
+			q := u.Query()
+			q.Add("query", "ALERTS")
+			q.Add("time", timestamp.Time(nowTs).Format(time.RFC3339))
+			u.RawQuery = q.Encode()
+
+			b, err := DoGetRequest(u.String())
+			if err != nil {
+				level.Error(m.opts.Logger).Log("msg", "Error in fetching metrics", "url", u.String(), "err", err)
+				continue Loop
+			}
+
+			mappedMetrics, err := ParseAndGroupMetrics(b)
+			if err != nil {
+				level.Error(m.opts.Logger).Log("msg", "Error in parsing metrics response", "url", u.String(), "err", err)
+				continue Loop
+			}
+
+			for groupName, rgt := range m.ruleGroupTests {
+				ok, _ := rgt.CheckMetrics(nowTs, mappedMetrics[groupName])
+				if !ok {
+					// TODO: add error here.
+					level.Error(m.opts.Logger).Log("msg", "Check metrics failed", "group_name", groupName)
+				}
+			}
+		}
+	}
 }
 
 func (m *Manager) Stop() {

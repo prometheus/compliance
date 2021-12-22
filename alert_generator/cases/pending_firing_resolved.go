@@ -2,14 +2,14 @@ package cases
 
 import (
 	"fmt"
-	"github.com/prometheus/prometheus/pkg/timestamp"
-	"gopkg.in/yaml.v3"
 	"time"
 
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
 	"github.com/prometheus/prometheus/prompb"
+	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/web/api/v1"
+	"gopkg.in/yaml.v3"
 )
 
 func PendingAndFiringAndResolved() TestCase {
@@ -17,6 +17,19 @@ func PendingAndFiringAndResolved() TestCase {
 	alertName := groupName + "_SimpleAlert"
 	lbls := baseLabels(groupName, alertName)
 	zeroTime := int64(0)
+
+	allPossibleStates := func(ts int64) (inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved bool) {
+		between := betweenFunc(ts)
+
+		inactive = between(0, 120-1)
+		maybePending = between(120-1, 120+30)
+		pending = between(120+30, 300-1)
+		maybeFiring = between(300-1, 300+30)
+		firing = between(300+30, (8*60)+15-1)
+		maybeResolved = between((8*60)+15-1, (8*60)+15+30)
+		resolved = between((8*60)+15+30, 3600)
+		return
+	}
 
 	return &testCase{
 		describe: func() (title string, description string) {
@@ -71,41 +84,28 @@ func PendingAndFiringAndResolved() TestCase {
 			zeroTime = zt
 		},
 		checkAlerts: func(ts int64, alerts []v1.Alert) (ok bool, expected []v1.Alert) {
-			relTs := ts - zeroTime
-			between := func(start, end float64) bool {
-				startTs := timestamp.FromFloatSeconds(start)
-				endTs := timestamp.FromFloatSeconds(end)
+			//relTs := ts - zeroTime
+			//inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := allPossibleStates(relTs)
 
-				return relTs > startTs && relTs <= endTs
-			}
-
-			inactive := between(0, 120-1)
-			maybePending := between(120-1, 120+30)
-			pending := between(120+30, 300-1)
-			maybeFiring := between(300-1, 300+30)
-			firing := between(300+30, (8*60)+15-1)
-			maybeResolved := between((8*60)+15-1, (8*60)+15+30)
-			resolved := between((8*60)+15+30, 3600)
-
-			fmt.Printf("\n")
-			switch {
-			case inactive:
-				fmt.Println("inactive", ts, alerts)
-			case maybePending:
-				fmt.Println("maybePending", ts, alerts)
-			case pending:
-				fmt.Println("pending", ts, alerts)
-			case maybeFiring:
-				fmt.Println("maybeFiring", ts, alerts)
-			case firing:
-				fmt.Println("firing", ts, alerts)
-			case maybeResolved:
-				fmt.Println("maybeResolved", ts, alerts)
-			case resolved:
-				fmt.Println("resolved", ts, alerts)
-			default:
-				fmt.Println("default ", ts, alerts)
-			}
+			//fmt.Printf("\n")
+			//switch {
+			//case inactive:
+			//	fmt.Println("inactive", ts, alerts)
+			//case maybePending:
+			//	fmt.Println("maybePending", ts, alerts)
+			//case pending:
+			//	fmt.Println("pending", ts, alerts)
+			//case maybeFiring:
+			//	fmt.Println("maybeFiring", ts, alerts)
+			//case firing:
+			//	fmt.Println("firing", ts, alerts)
+			//case maybeResolved:
+			//	fmt.Println("maybeResolved", ts, alerts)
+			//case resolved:
+			//	fmt.Println("resolved", ts, alerts)
+			//default:
+			//	fmt.Println("default ", ts, alerts)
+			//}
 
 			//pending 1640105102651 [{{alertname="PendingAndFiringAndResolved_SimpleAlert", foo="bar", rulegroup="PendingAndFiringAndResolved"} {description="SimpleAlert is firing"} pending 2021-12-21 16:42:44.682709561 +0000 UTC 1.1e+01}]
 			//level=debug ts=2021-12-21T16:45:17.612Z caller=remote_write.go:131 msg="Remote writing" timestamp=1640105117597 total_series=1
@@ -127,9 +127,30 @@ func PendingAndFiringAndResolved() TestCase {
 
 			return true, expected
 		},
-		checkMetrics: func(ts int64, metrics string) (ok bool, expected string) {
-			// TODO
-			fmt.Println(metrics)
+		checkMetrics: func(ts int64, metrics []promql.Sample) (ok bool, expected string) {
+			relTs := ts - zeroTime
+			inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := allPossibleStates(relTs)
+
+			fmt.Printf("\n")
+			switch {
+			case inactive:
+				fmt.Println("inactive", ts, metrics)
+			case maybePending:
+				fmt.Println("maybePending", ts, metrics)
+			case pending:
+				fmt.Println("pending", ts, metrics)
+			case maybeFiring:
+				fmt.Println("maybeFiring", ts, metrics)
+			case firing:
+				fmt.Println("firing", ts, metrics)
+			case maybeResolved:
+				fmt.Println("maybeResolved", ts, metrics)
+			case resolved:
+				fmt.Println("resolved", ts, metrics)
+			default:
+				fmt.Println("default ", ts, metrics)
+			}
+
 			return true, expected
 		},
 	}

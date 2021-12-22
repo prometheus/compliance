@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
 	"github.com/prometheus/prometheus/pkg/timestamp"
+	"github.com/prometheus/prometheus/promql"
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 
 	"github.com/prometheus/compliance/alert_generator/cases"
@@ -44,13 +45,8 @@ func (r *RuleGroupTest) CheckAlerts(ts int64, alerts []v1.Alert) (ok bool, expec
 	return r.c.CheckAlerts(ts, alerts)
 }
 
-type GETAlertsResponse struct {
-	Status string `json:"status"`
-	Data   Alerts `json:"data"`
-}
-
-type Alerts struct {
-	Alerts []v1.Alert `json:"alerts"`
+func (r *RuleGroupTest) CheckMetrics(ts int64, metrics []promql.Sample) (ok bool, expected string) {
+	return r.c.CheckMetrics(ts, metrics)
 }
 
 func (r *RuleGroupTest) Stop() {

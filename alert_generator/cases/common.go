@@ -1,12 +1,14 @@
 package cases
 
 import (
+	"time"
+
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/prompb"
+	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/web/api/v1"
-	"time"
 )
 
 // TestCase defines a single test case for the alert generator.
@@ -42,7 +44,7 @@ type TestCase interface {
 
 	// CheckMetrics returns true if at give timestamp the metrics contain the expected metrics.
 	// In case it's not correct, it returns false and the expected metrics.
-	CheckMetrics(ts int64, metrics string) (ok bool, expected string)
+	CheckMetrics(ts int64, metrics []promql.Sample) (ok bool, expected string)
 }
 
 // testCase implements TestCase.
@@ -53,7 +55,7 @@ type testCase struct {
 	samplesToRemoteWrite func() []prompb.TimeSeries
 	init                 func(zeroTime int64)
 	checkAlerts          func(ts int64, alerts []v1.Alert) (ok bool, expected []v1.Alert)
-	checkMetrics         func(ts int64, metrics string) (ok bool, expected string)
+	checkMetrics         func(ts int64, metrics []promql.Sample) (ok bool, expected string)
 }
 
 func (tc *testCase) Describe() (groupName string, description string) { return tc.describe() }
@@ -68,7 +70,7 @@ func (tc *testCase) CheckAlerts(ts int64, alerts []v1.Alert) (ok bool, expected 
 	return tc.checkAlerts(ts, alerts)
 }
 
-func (tc *testCase) CheckMetrics(ts int64, metrics string) (ok bool, expected string) {
+func (tc *testCase) CheckMetrics(ts int64, metrics []promql.Sample) (ok bool, expected string) {
 	return tc.checkMetrics(ts, metrics)
 }
 
@@ -104,4 +106,14 @@ func sampleSlice(interval time.Duration, values ...float64) []prompb.Sample {
 		ts = ts.Add(interval)
 	}
 	return samples
+}
+
+// betweenFunc returns a function that returns true if
+// ts belongs to (start, end].
+func betweenFunc(ts int64) func(start, end float64) bool {
+	return func(start, end float64) bool {
+		startTs := timestamp.FromFloatSeconds(start)
+		endTs := timestamp.FromFloatSeconds(end)
+		return ts > startTs && ts <= endTs
+	}
 }
