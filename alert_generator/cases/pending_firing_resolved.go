@@ -6,6 +6,7 @@ import (
 
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
+	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/web/api/v1"
@@ -33,7 +34,8 @@ func PendingAndFiringAndResolved() TestCase {
 
 	return &testCase{
 		describe: func() (title string, description string) {
-			return groupName, "An alert goes from pending to firing to resolved state and stays in resolved state"
+			return groupName,
+				"An alert goes from pending to firing to resolved state and stays in resolved state"
 		},
 		ruleGroup: func() (rulefmt.RuleGroup, error) {
 			var alert yaml.Node
@@ -83,7 +85,10 @@ func PendingAndFiringAndResolved() TestCase {
 		init: func(zt int64) {
 			zeroTime = zt
 		},
-		checkAlerts: func(ts int64, alerts []v1.Alert) (ok bool, expected []v1.Alert) {
+		testUntil: func() int64 {
+			return timestamp.FromTime(timestamp.Time(zeroTime).Add(26 * time.Minute))
+		},
+		checkAlerts: func(ts int64, alerts []v1.Alert) error {
 			//relTs := ts - zeroTime
 			//inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := allPossibleStates(relTs)
 
@@ -125,9 +130,9 @@ func PendingAndFiringAndResolved() TestCase {
 			//firing 1640105177667 [{{alertname="PendingAndFiringAndResolved_SimpleAlert", foo="bar", rulegroup="PendingAndFiringAndResolved"} {description="SimpleAlert is firing"} firing 2021-12-21 16:42:44.682709561 +0000 UTC 1.1e+01}]
 			//level=debug ts=2021-12-21T16:46:32.611Z caller=remote_write.go:131 msg="Remote writing" timestamp=1640105192597 total_series=1
 
-			return true, expected
+			return nil
 		},
-		checkMetrics: func(ts int64, metrics []promql.Sample) (ok bool, expected string) {
+		checkMetrics: func(ts int64, metrics []promql.Sample) error {
 			relTs := ts - zeroTime
 			inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := allPossibleStates(relTs)
 
@@ -151,7 +156,7 @@ func PendingAndFiringAndResolved() TestCase {
 				fmt.Println("default ", ts, metrics)
 			}
 
-			return true, expected
+			return nil
 		},
 	}
 }

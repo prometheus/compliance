@@ -11,10 +11,11 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/compliance/alert_generator/cases"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
+
+	"github.com/prometheus/compliance/alert_generator/cases"
 )
 
 // Manager runs the entire test suite from start to end.
@@ -22,7 +23,10 @@ type Manager struct {
 	opts                 ManagerOptions
 	remoteWriter         *RemoteWriter
 	remoteWriteStartTime time.Time
-	ruleGroupTests       map[string]*RuleGroupTest // Group name -> RuleGroupTest.
+
+	ruleGroupTestsMtx   sync.RWMutex
+	ruleGroupTests      map[string]cases.TestCase // Group name -> TestCase.
+	ruleGroupTestErrors map[string][]error        // Group name -> slice of errors in them.
 
 	minGroupInterval model.Duration
 
@@ -52,16 +56,12 @@ func NewManager(opts ManagerOptions) (*Manager, error) {
 		return nil, errors.Wrap(err, "create remote writer")
 	}
 
-	ruleGroupTests := make(map[string]*RuleGroupTest, len(opts.Cases))
+	ruleGroupTests := make(map[string]cases.TestCase, len(opts.Cases))
 	var minGroupInterval model.Duration
 	for i, c := range opts.Cases {
 		remoteWriter.AddTimeSeries(c.SamplesToRemoteWrite())
-		rgt, err := NewRuleGroupTest(c, opts.Logger)
-		if err != nil {
-			return nil, errors.Wrap(err, "get rule group test")
-		}
 		groupName, _ := c.Describe()
-		ruleGroupTests[groupName] = rgt
+		ruleGroupTests[groupName] = c
 
 		rg, err := c.RuleGroup()
 		if err != nil {
@@ -152,8 +152,10 @@ func validateOpts(opts ManagerOptions) error {
 func (m *Manager) Start() {
 	level.Info(m.opts.Logger).Log("msg", "Starting the remote writer", "url", m.opts.RemoteWriteURL)
 	m.remoteWriteStartTime = m.remoteWriter.Start()
-	for _, rgt := range m.ruleGroupTests {
-		rgt.Start(m.remoteWriteStartTime)
+	for _, c := range m.ruleGroupTests {
+		c.Init(timestamp.FromTime(m.remoteWriteStartTime))
+		gn, desc := c.Describe()
+		level.Info(m.opts.Logger).Log("msg", "Starting test for a rule group", "rulegroup", gn, "description", desc)
 	}
 
 	m.wg.Add(2)
@@ -163,6 +165,7 @@ func (m *Manager) Start() {
 
 func (m *Manager) checkAlertsLoop() {
 	defer m.wg.Done()
+	defer m.Stop()
 
 Loop:
 	for {
@@ -190,12 +193,22 @@ Loop:
 				continue Loop
 			}
 
-			for groupName, rgt := range m.ruleGroupTests {
-				ok, _ := rgt.CheckAlerts(nowTs, mappedAlerts[groupName])
-				if !ok {
-					// TODO: add error here.
-					level.Error(m.opts.Logger).Log("msg", "Check alerts failed", "group_name", groupName)
+			groupsToRemove := make(map[string]error)
+			m.ruleGroupTestsMtx.RLock()
+			for groupName, c := range m.ruleGroupTests {
+				if c.TestUntil() < nowTs {
+					groupsToRemove[groupName] = nil
+					continue
 				}
+				err := c.CheckAlerts(nowTs, mappedAlerts[groupName])
+				if err != nil {
+					groupsToRemove[groupName] = err
+				}
+			}
+			m.ruleGroupTestsMtx.RUnlock()
+
+			if m.removeGroups(groupsToRemove) {
+				return
 			}
 		}
 	}
@@ -203,6 +216,7 @@ Loop:
 
 func (m *Manager) checkMetricsLoop() {
 	defer m.wg.Done()
+	defer m.Stop()
 
 Loop:
 	for {
@@ -236,38 +250,92 @@ Loop:
 				continue Loop
 			}
 
-			for groupName, rgt := range m.ruleGroupTests {
-				ok, _ := rgt.CheckMetrics(nowTs, mappedMetrics[groupName])
-				if !ok {
-					// TODO: add error here.
-					level.Error(m.opts.Logger).Log("msg", "Check metrics failed", "group_name", groupName)
+			groupsToRemove := make(map[string]error)
+			m.ruleGroupTestsMtx.RLock()
+			for groupName, c := range m.ruleGroupTests {
+				if c.TestUntil() < nowTs {
+					groupsToRemove[groupName] = nil
+					continue
 				}
+				err := c.CheckMetrics(nowTs, mappedMetrics[groupName])
+				if err != nil {
+					groupsToRemove[groupName] = err
+				}
+			}
+			m.ruleGroupTestsMtx.RUnlock()
+
+			if m.removeGroups(groupsToRemove) {
+				return
 			}
 		}
 	}
 }
 
+func (m *Manager) removeGroups(groupsToRemove map[string]error) (empty bool) {
+	m.ruleGroupTestsMtx.Lock()
+	defer m.ruleGroupTestsMtx.Unlock()
+	for gn, err := range groupsToRemove {
+		delete(m.ruleGroupTests, gn)
+		if err != nil {
+			m.ruleGroupTestErrors[gn] = append(m.ruleGroupTestErrors[gn], err)
+			level.Error(m.opts.Logger).Log("msg", "Test failed for a rule group", "rulegroup", gn, "err", err)
+		} else {
+			level.Info(m.opts.Logger).Log("msg", "Test finished successfully for a rule group", "rulegroup", gn)
+		}
+	}
+	return len(m.ruleGroupTests) == 0
+}
+
 func (m *Manager) Stop() {
-	close(m.stopc)
-	m.remoteWriter.Stop()
-	for _, rgt := range m.ruleGroupTests {
-		rgt.Stop()
+	select {
+	case <-m.stopc:
+		// Already stopped.
+	default:
+		m.remoteWriter.Stop()
+		close(m.stopc)
 	}
 }
 
 func (m *Manager) Wait() {
-	m.wg.Wait()
 	m.remoteWriter.Wait()
-	for _, rgt := range m.ruleGroupTests {
-		rgt.Wait()
-	}
+	m.wg.Wait()
 }
 
+// Error() returns any error occured during execution of test and does
+// not tell if the tests passed or failed.
 func (m *Manager) Error() error {
 	merr := tsdb_errors.NewMulti()
 	merr.Add(errors.Wrap(m.remoteWriter.Error(), "remote writer"))
-	for _, rgt := range m.ruleGroupTests {
-		merr.Add(errors.Wrapf(rgt.Error(), "error from rule group %q", rgt.rg.Name))
-	}
 	return merr.Err()
+}
+
+// WasTestSuccessful tells if all the tests passed.
+// It returns an explanation if any test failed.
+// Before calling this method:
+// 	* Error() should be checked for no errors.
+//  * The test should have finished (i.e. Wait() is not blocking).
+func (m *Manager) WasTestSuccessful() (yes bool, describe string) {
+	select {
+	case <-m.stopc:
+	default:
+		return false, "test is still running"
+	}
+
+	if err := m.Error(); err != nil {
+		return false, fmt.Sprintf("got some error in Error(): %q", err.Error())
+	}
+
+	if len(m.ruleGroupTestErrors) == 0 {
+		return true, "Congrats! All tests passed"
+	}
+
+	describe = "The following rule groups failed the test:\n"
+	for gn, errs := range m.ruleGroupTestErrors {
+		describe += "\nGroup Name: " + gn + "\n"
+		for i, err := range errs {
+			describe += fmt.Sprintf("\tError %d: %s\n", i+1, err.Error())
+		}
+	}
+
+	return false, describe
 }

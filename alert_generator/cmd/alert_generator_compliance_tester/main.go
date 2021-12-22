@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/go-kit/log/level"
@@ -32,7 +33,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	level.Info(log).Log("msg", "Starting the test suite", "url", *remoteWriteURL)
+	level.Info(log).Log("msg", "Starting the test suite")
 
 	m.Start()
 	m.Wait()
@@ -41,4 +42,14 @@ func main() {
 		level.Error(log).Log("msg", "Some error in the test suite", "err", err)
 		os.Exit(1)
 	}
+
+	yes, describe := m.WasTestSuccessful()
+	exitCode := 0
+	stream := os.Stdout
+	if !yes {
+		exitCode = 1
+		stream = os.Stderr
+	}
+	fmt.Fprintln(stream, describe)
+	os.Exit(exitCode)
 }

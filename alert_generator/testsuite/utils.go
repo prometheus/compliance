@@ -12,6 +12,7 @@ import (
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 )
 
+// TODO: add retries and set some timeouts.
 func DoGetRequest(u string) ([]byte, error) {
 	resp, err := http.Get(u)
 	if err != nil {

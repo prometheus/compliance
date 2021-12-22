@@ -29,7 +29,7 @@ type TestCase interface {
 	// All the timestamps returned here are in milliseconds and starts at 0,
 	// which is the time when the test suite would start the test.
 	// The test suite is responsible for translating these 0 based
-	// timestamp to the relevant timestmaps for the current time.
+	// timestamp to the relevant timestamps for the current time.
 	//
 	// The samples must be delivered to the remote storage after the timestamp specified on the samples
 	// and must be delivered within 10 seconds of that timestamp.
@@ -38,13 +38,20 @@ type TestCase interface {
 	// Init tells the test case the actual timestamp for the 0 time.
 	Init(zeroTime int64)
 
-	// CheckAlerts returns true if the alerts provided are as expected at the given timestamp.
-	// In case it's not correct, it returns false and the expected alerts.
-	CheckAlerts(ts int64, alerts []v1.Alert) (ok bool, expected []v1.Alert)
+	// TestUntil returns a unix timestamp upto which the test must be running on this TestCase.
+	// This must be called after Init() and the returned timestamp refers to absolute unix
+	// timestamp (i.e. not relative like the SamplesToRemoteWrite())
+	TestUntil() int64
 
-	// CheckMetrics returns true if at give timestamp the metrics contain the expected metrics.
-	// In case it's not correct, it returns false and the expected metrics.
-	CheckMetrics(ts int64, metrics []promql.Sample) (ok bool, expected string)
+	// CheckAlerts returns nil if the alerts provided are as expected at the given timestamp.
+	// Returns an error otherwise describing what is the problem.
+	// This must be checked with a min interval of the rule group's interval from RuleGroup().
+	CheckAlerts(ts int64, alerts []v1.Alert) error
+
+	// CheckMetrics returns nil if at give timestamp the metrics contain the expected metrics.
+	// Returns an error otherwise describing what is the problem.
+	// This must be checked with a min interval of the rule group's interval from RuleGroup().
+	CheckMetrics(ts int64, metrics []promql.Sample) error
 }
 
 // testCase implements TestCase.
@@ -54,9 +61,14 @@ type testCase struct {
 	ruleGroup            func() (rulefmt.RuleGroup, error)
 	samplesToRemoteWrite func() []prompb.TimeSeries
 	init                 func(zeroTime int64)
-	checkAlerts          func(ts int64, alerts []v1.Alert) (ok bool, expected []v1.Alert)
-	checkMetrics         func(ts int64, metrics []promql.Sample) (ok bool, expected string)
+	testUntil            func() int64
+	checkAlerts          func(ts int64, alerts []v1.Alert) error
+	checkMetrics         func(ts int64, metrics []promql.Sample) error
 }
+
+// This makes sure that it always implements TestCase and help catch regressions
+// early during development.
+var _ TestCase = &testCase{}
 
 func (tc *testCase) Describe() (groupName string, description string) { return tc.describe() }
 
@@ -66,11 +78,13 @@ func (tc *testCase) SamplesToRemoteWrite() []prompb.TimeSeries { return tc.sampl
 
 func (tc *testCase) Init(zeroTime int64) { tc.init(zeroTime) }
 
-func (tc *testCase) CheckAlerts(ts int64, alerts []v1.Alert) (ok bool, expected []v1.Alert) {
+func (tc *testCase) TestUntil() int64 { return tc.testUntil() }
+
+func (tc *testCase) CheckAlerts(ts int64, alerts []v1.Alert) error {
 	return tc.checkAlerts(ts, alerts)
 }
 
-func (tc *testCase) CheckMetrics(ts int64, metrics []promql.Sample) (ok bool, expected string) {
+func (tc *testCase) CheckMetrics(ts int64, metrics []promql.Sample) error {
 	return tc.checkMetrics(ts, metrics)
 }
 
