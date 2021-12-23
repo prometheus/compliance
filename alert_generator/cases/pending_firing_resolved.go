@@ -2,6 +2,7 @@ package cases
 
 import (
 	"fmt"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"time"
 
 	"github.com/prometheus/common/model"
@@ -30,6 +31,67 @@ func PendingAndFiringAndResolved() TestCase {
 		maybeResolved = between((8*60)+15-1, (8*60)+15+30)
 		resolved = between((8*60)+15+30, 3600)
 		return
+	}
+
+	expAlertsMetricsRules := func(ts int64, alerts []v1.Alert) (expAlerts [][]v1.Alert, expActiveAtRanges [][2]time.Time, expSamples []promql.Sample) {
+		relTs := ts - zeroTime
+		inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := allPossibleStates(relTs)
+
+		pendingAlerts := []v1.Alert{
+			{
+				Labels:      labels.FromStrings("alertname", "PendingAndFiringAndResolved_SimpleAlert", "foo", "bar", "rulegroup", "PendingAndFiringAndResolved"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
+				State:       "pending",
+				Value:       "1.1",
+			},
+		}
+		firingAlerts := []v1.Alert{
+			{
+				Labels:      labels.FromStrings("alertname", "PendingAndFiringAndResolved_SimpleAlert", "foo", "bar", "rulegroup", "PendingAndFiringAndResolved"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
+				State:       "firing",
+				Value:       "1.1",
+			},
+		}
+		resolvedAlerts := []v1.Alert{
+			{
+				Labels:      labels.FromStrings("alertname", "PendingAndFiringAndResolved_SimpleAlert", "foo", "bar", "rulegroup", "PendingAndFiringAndResolved"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
+				State:       "inactive",
+				Value:       "9",
+			},
+		}
+		fmt.Printf("\n")
+		switch {
+		case inactive:
+			fmt.Println("inactive", alerts)
+			expAlerts = append(expAlerts, []v1.Alert{})
+		case maybePending:
+			fmt.Println("maybePending", alerts)
+			expAlerts = append(expAlerts, []v1.Alert{}, pendingAlerts)
+		case pending:
+			fmt.Println("pending", alerts)
+			expAlerts = append(expAlerts, pendingAlerts)
+		case maybeFiring:
+			fmt.Println("maybeFiring", alerts)
+			expAlerts = append(expAlerts, pendingAlerts, firingAlerts)
+		case firing:
+			fmt.Println("firing", alerts)
+			expAlerts = append(expAlerts, firingAlerts)
+		case maybeResolved:
+			fmt.Println("maybeResolved", alerts)
+			expAlerts = append(expAlerts, firingAlerts, resolvedAlerts)
+		case resolved:
+			fmt.Println("resolved", alerts)
+			// TODO: there should be no alerts found after a point.
+			expAlerts = append(expAlerts, resolvedAlerts)
+		default:
+		}
+
+		expActiveAtRanges = convertRelativeToAbsoluteTimes(zeroTime, [][2]int64{
+			{120, 120 + 30},
+		})
+		return expAlerts, expActiveAtRanges, nil
 	}
 
 	return &testCase{
@@ -89,73 +151,11 @@ func PendingAndFiringAndResolved() TestCase {
 			return timestamp.FromTime(timestamp.Time(zeroTime).Add(26 * time.Minute))
 		},
 		checkAlerts: func(ts int64, alerts []v1.Alert) error {
-			//relTs := ts - zeroTime
-			//inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := allPossibleStates(relTs)
-
-			//fmt.Printf("\n")
-			//switch {
-			//case inactive:
-			//	fmt.Println("inactive", ts, alerts)
-			//case maybePending:
-			//	fmt.Println("maybePending", ts, alerts)
-			//case pending:
-			//	fmt.Println("pending", ts, alerts)
-			//case maybeFiring:
-			//	fmt.Println("maybeFiring", ts, alerts)
-			//case firing:
-			//	fmt.Println("firing", ts, alerts)
-			//case maybeResolved:
-			//	fmt.Println("maybeResolved", ts, alerts)
-			//case resolved:
-			//	fmt.Println("resolved", ts, alerts)
-			//default:
-			//	fmt.Println("default ", ts, alerts)
-			//}
-
-			//pending 1640105102651 [{{alertname="PendingAndFiringAndResolved_SimpleAlert", foo="bar", rulegroup="PendingAndFiringAndResolved"} {description="SimpleAlert is firing"} pending 2021-12-21 16:42:44.682709561 +0000 UTC 1.1e+01}]
-			//level=debug ts=2021-12-21T16:45:17.612Z caller=remote_write.go:131 msg="Remote writing" timestamp=1640105117597 total_series=1
-			//
-			//maybeFiring 1640105117654 [{{alertname="PendingAndFiringAndResolved_SimpleAlert", foo="bar", rulegroup="PendingAndFiringAndResolved"} {description="SimpleAlert is firing"} pending 2021-12-21 16:42:44.682709561 +0000 UTC 1.1e+01}]
-			//level=debug ts=2021-12-21T16:45:32.611Z caller=remote_write.go:131 msg="Remote writing" timestamp=1640105132597 total_series=1
-			//
-			//maybeFiring 1640105132661 [{{alertname="PendingAndFiringAndResolved_SimpleAlert", foo="bar", rulegroup="PendingAndFiringAndResolved"} {description="SimpleAlert is firing"} pending 2021-12-21 16:42:44.682709561 +0000 UTC 1.1e+01}]
-			//level=debug ts=2021-12-21T16:45:47.611Z caller=remote_write.go:131 msg="Remote writing" timestamp=1640105147597 total_series=1
-			//
-			//firing 1640105147663 [{{alertname="PendingAndFiringAndResolved_SimpleAlert", foo="bar", rulegroup="PendingAndFiringAndResolved"} {description="SimpleAlert is firing"} firing 2021-12-21 16:42:44.682709561 +0000 UTC 1.1e+01}]
-			//level=debug ts=2021-12-21T16:46:02.611Z caller=remote_write.go:131 msg="Remote writing" timestamp=1640105162597 total_series=1
-			//
-			//firing 1640105162665 [{{alertname="PendingAndFiringAndResolved_SimpleAlert", foo="bar", rulegroup="PendingAndFiringAndResolved"} {description="SimpleAlert is firing"} firing 2021-12-21 16:42:44.682709561 +0000 UTC 1.1e+01}]
-			//level=debug ts=2021-12-21T16:46:17.602Z caller=remote_write.go:131 msg="Remote writing" timestamp=1640105177597 total_series=1
-			//
-			//firing 1640105177667 [{{alertname="PendingAndFiringAndResolved_SimpleAlert", foo="bar", rulegroup="PendingAndFiringAndResolved"} {description="SimpleAlert is firing"} firing 2021-12-21 16:42:44.682709561 +0000 UTC 1.1e+01}]
-			//level=debug ts=2021-12-21T16:46:32.611Z caller=remote_write.go:131 msg="Remote writing" timestamp=1640105192597 total_series=1
-
-			return nil
+			expAlerts, expRanges, _ := expAlertsMetricsRules(ts, alerts)
+			return checkAllPossibleExpectedAlerts(expAlerts, expRanges, alerts)
 		},
 		checkMetrics: func(ts int64, metrics []promql.Sample) error {
-			relTs := ts - zeroTime
-			inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := allPossibleStates(relTs)
-
-			fmt.Printf("\n")
-			switch {
-			case inactive:
-				fmt.Println("inactive", ts, metrics)
-			case maybePending:
-				fmt.Println("maybePending", ts, metrics)
-			case pending:
-				fmt.Println("pending", ts, metrics)
-			case maybeFiring:
-				fmt.Println("maybeFiring", ts, metrics)
-			case firing:
-				fmt.Println("firing", ts, metrics)
-			case maybeResolved:
-				fmt.Println("maybeResolved", ts, metrics)
-			case resolved:
-				fmt.Println("resolved", ts, metrics)
-			default:
-				fmt.Println("default ", ts, metrics)
-			}
-
+			//_, _, expSamples := expAlertsMetricsRules(ts, nil)
 			return nil
 		},
 	}

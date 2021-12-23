@@ -1,6 +1,10 @@
 package cases
 
 import (
+	"fmt"
+	"github.com/pkg/errors"
+	"sort"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -130,4 +134,115 @@ func betweenFunc(ts int64) func(start, end float64) bool {
 		endTs := timestamp.FromFloatSeconds(end)
 		return ts > startTs && ts <= endTs
 	}
+}
+
+// checkAllPossibleExpectedAlerts checks the actual alerts with all possible combinations of expected alerts
+// provided. It returns an error if none of them match.
+//
+// Notes about parameters:
+//   1) len(expAlerts) != 0
+//   2) if len(expAlerts[i]) > 0, then len(expAlerts[i]) == len(expActiveAtRanges)
+//   3) expActiveAtRanges[i][0] <= actAlerts[i].ActiveAt <= expActiveAtRanges[i][1]
+func checkAllPossibleExpectedAlerts(expAlerts [][]v1.Alert, expActiveAtRanges [][2]time.Time, actAlerts []v1.Alert) error {
+	var errs []error
+	for _, exp := range expAlerts {
+		err := areAlertsEqual(exp, actAlerts, expActiveAtRanges)
+		if err == nil {
+			// We only need one of the expected slice to match.
+			return nil
+		}
+		errs = append(errs, err)
+	}
+
+	if len(errs) == 1 {
+		return errs[0]
+	}
+
+	errMsg := "one of the following errors happened:"
+	for i, err := range errs {
+		errMsg += fmt.Sprintf(" (%d) %s", i+1, err.Error())
+	}
+
+	return errors.New(errMsg)
+}
+
+// areAlertsEqual tells whether both the expected and actual alerts match.
+// If they are not equal while number of alerts being same, the first
+// alert that mismatched is returned.
+func areAlertsEqual(exp, act []v1.Alert, expActiveAtRanges [][2]time.Time) error {
+	if len(exp) != len(act) {
+		return errors.Errorf("different number of alerts - expected(%d): %v, actual(%d): %v", len(exp), exp, len(act), act)
+	}
+
+	// Sort the alerts before checking.
+	sort.Slice(exp, func(i, j int) bool {
+		return labels.Compare(exp[i].Labels, exp[j].Labels) <= 0
+	})
+	sort.Slice(act, func(i, j int) bool {
+		return labels.Compare(act[i].Labels, act[j].Labels) <= 0
+	})
+
+	for i := range exp {
+		e, a := exp[i], act[i]
+		ev, err := strconv.ParseFloat(e.Value, 64)
+		if err != nil {
+			return errors.Errorf(
+				"unexpected error in the test suite - alert: %v, error: %s",
+				e, err.Error(),
+			)
+		}
+		av, err := strconv.ParseFloat(a.Value, 64)
+
+		if err != nil {
+			return errors.Errorf(
+				"error when parsing the value - alert: %v, error: %s",
+				a, err.Error(),
+			)
+		}
+
+		ok := labels.Compare(e.Labels, a.Labels) == 0 &&
+			labels.Compare(e.Annotations, a.Annotations) == 0 &&
+			e.State == a.State &&
+			ev == av
+
+		if !ok {
+			return errors.Errorf(
+				"alerts mismatch - expected: %v, actual: %v",
+				e,
+				a,
+			)
+		}
+	}
+
+	// The alerts match. Time to check the ActiveAt if it matches.
+	for i := range act {
+		if act[i].ActiveAt == nil {
+			return errors.Errorf(
+				"ActiveAt not found for the alert - alert: %v",
+				act[i],
+			)
+		}
+		t := *act[i].ActiveAt
+		if t.Before(expActiveAtRanges[i][0]) || expActiveAtRanges[i][1].Before(t) {
+			// Out of the range.
+			return errors.Errorf(
+				"ActiveAt mismatch - alert: %v, expected ActiveAT range: [%s, %s], actual ActiveAt: %s",
+				act[i],
+				expActiveAtRanges[i][0].Format(time.RFC3339),
+				expActiveAtRanges[i][0].Format(time.RFC3339),
+				act[i].ActiveAt.Format(time.RFC3339),
+			)
+		}
+	}
+
+	return nil
+}
+
+func convertRelativeToAbsoluteTimes(zeroTime int64, original [][2]int64) [][2]time.Time {
+	converted := make([][2]time.Time, len(original))
+	for i, r := range original {
+		converted[i][0] = timestamp.Time(zeroTime + r[0])
+		converted[i][1] = timestamp.Time(zeroTime + r[1])
+	}
+	return converted
 }

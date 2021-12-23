@@ -21,12 +21,12 @@ func main() {
 
 	log := promlog.New(&promlog.Config{})
 
-	m, err := testsuite.NewManager(testsuite.ManagerOptions{
-		Logger:         log,
-		Cases:          cases.AllCases,
-		RemoteWriteURL: *remoteWriteURL,
-		BaseApiURL:     *baseURL,
-		PromQLBaseURL:  *promQLBaseURL,
+	t, err := testsuite.NewTestSuite(testsuite.TestSuiteOptions{
+		Logger:           log,
+		Cases:            cases.AllCases,
+		RemoteWriteURL:   *remoteWriteURL,
+		BaseAlertsAPIURL: *baseURL,
+		PromQLBaseURL:    *promQLBaseURL,
 	})
 	if err != nil {
 		level.Error(log).Log("msg", "Failed to create the test suite instance", "err", err)
@@ -35,15 +35,15 @@ func main() {
 
 	level.Info(log).Log("msg", "Starting the test suite")
 
-	m.Start()
-	m.Wait()
+	t.Start()
+	t.Wait()
 
-	if err := m.Error(); err != nil {
+	if err := t.Error(); err != nil {
 		level.Error(log).Log("msg", "Some error in the test suite", "err", err)
 		os.Exit(1)
 	}
 
-	yes, describe := m.WasTestSuccessful()
+	yes, describe := t.WasTestSuccessful()
 	exitCode := 0
 	stream := os.Stdout
 	if !yes {
