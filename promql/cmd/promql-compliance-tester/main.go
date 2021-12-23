@@ -4,6 +4,7 @@ import (
 	"flag"
 	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"github.com/prometheus/compliance/promql/config"
 	"github.com/prometheus/compliance/promql/output"
 	"github.com/prometheus/compliance/promql/testcases"
+	"go.uber.org/atomic"
 )
 
 func newPromAPI(targetConfig config.TargetConfig) (v1.API, error) {
@@ -125,6 +127,7 @@ func main() {
 
 	workCh := make(chan struct{}, *queryParallelism)
 
+	allSuccess := atomic.NewBool(true)
 	for i, tc := range expandedTestCases {
 		workCh <- struct{}{}
 
@@ -134,6 +137,9 @@ func main() {
 				log.Fatalf("Error running comparison: %v", err)
 			}
 			results[i] = res
+			if !res.Success() {
+				allSuccess.Store(false)
+			}
 			progressBar.Increment()
 			<-workCh
 			wg.Done()
@@ -144,6 +150,10 @@ func main() {
 	progressBar.Finish()
 
 	outp(results, *outputPassing, cfg.QueryTweaks)
+
+	if !allSuccess.Load() {
+		os.Exit(1)
+	}
 }
 
 func getTime(timeStr string, defaultTime time.Time) time.Time {

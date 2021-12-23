@@ -51,10 +51,10 @@ func HTML(tplFile string) (Outputter, error) {
 	return func(results []*comparer.Result, includePassing bool, tweaks []*config.QueryTweak) {
 		err := t.Execute(os.Stdout, struct {
 			Results        []*comparer.Result
-			includePassing bool
+			IncludePassing bool
 		}{
 			Results:        results,
-			includePassing: includePassing,
+			IncludePassing: includePassing,
 		})
 		if err != nil {
 			log.Println("executing template:", err)
