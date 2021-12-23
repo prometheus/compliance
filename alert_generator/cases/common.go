@@ -141,12 +141,13 @@ func betweenFunc(ts int64) func(start, end float64) bool {
 //
 // Notes about parameters:
 //   1) len(expAlerts) != 0
-//   2) if len(expAlerts[i]) > 0, then len(expAlerts[i]) == len(expActiveAtRanges)
+//   2) len(expAlerts) == len(expActiveAtRanges) (and) len(expAlerts[i]) == len(expActiveAtRanges[i])
 //   3) expActiveAtRanges[i][0] <= actAlerts[i].ActiveAt <= expActiveAtRanges[i][1]
-func checkAllPossibleExpectedAlerts(expAlerts [][]v1.Alert, expActiveAtRanges [][2]time.Time, actAlerts []v1.Alert) error {
+// TODO: write unit tests for this.
+func checkAllPossibleExpectedAlerts(expAlerts [][]v1.Alert, expActiveAtRanges [][][2]time.Time, actAlerts []v1.Alert) error {
 	var errs []error
-	for _, exp := range expAlerts {
-		err := areAlertsEqual(exp, actAlerts, expActiveAtRanges)
+	for i, exp := range expAlerts {
+		err := areAlertsEqual(exp, actAlerts, expActiveAtRanges[i])
 		if err == nil {
 			// We only need one of the expected slice to match.
 			return nil
@@ -155,10 +156,10 @@ func checkAllPossibleExpectedAlerts(expAlerts [][]v1.Alert, expActiveAtRanges []
 	}
 
 	if len(errs) == 1 {
-		return errs[0]
+		return errors.New("error in alerts: " + errs[0].Error())
 	}
 
-	errMsg := "one of the following errors happened:"
+	errMsg := "one of the following errors happened in alerts:"
 	for i, err := range errs {
 		errMsg += fmt.Sprintf(" (%d) %s", i+1, err.Error())
 	}
@@ -167,14 +168,11 @@ func checkAllPossibleExpectedAlerts(expAlerts [][]v1.Alert, expActiveAtRanges []
 }
 
 // areAlertsEqual tells whether both the expected and actual alerts match.
-// If they are not equal while number of alerts being same, the first
-// alert that mismatched is returned.
 func areAlertsEqual(exp, act []v1.Alert, expActiveAtRanges [][2]time.Time) error {
 	if len(exp) != len(act) {
 		return errors.Errorf("different number of alerts - expected(%d): %v, actual(%d): %v", len(exp), exp, len(act), act)
 	}
 
-	// Sort the alerts before checking.
 	sort.Slice(exp, func(i, j int) bool {
 		return labels.Compare(exp[i].Labels, exp[j].Labels) <= 0
 	})
@@ -186,18 +184,12 @@ func areAlertsEqual(exp, act []v1.Alert, expActiveAtRanges [][2]time.Time) error
 		e, a := exp[i], act[i]
 		ev, err := strconv.ParseFloat(e.Value, 64)
 		if err != nil {
-			return errors.Errorf(
-				"unexpected error in the test suite - alert: %v, error: %s",
-				e, err.Error(),
-			)
+			return errors.Errorf("unexpected error in the test suite - alert: %v, error: %s", e, err.Error())
 		}
 		av, err := strconv.ParseFloat(a.Value, 64)
 
 		if err != nil {
-			return errors.Errorf(
-				"error when parsing the value - alert: %v, error: %s",
-				a, err.Error(),
-			)
+			return errors.Errorf("error when parsing the value - alert: %v, error: %s", a, err.Error())
 		}
 
 		ok := labels.Compare(e.Labels, a.Labels) == 0 &&
@@ -206,21 +198,14 @@ func areAlertsEqual(exp, act []v1.Alert, expActiveAtRanges [][2]time.Time) error
 			ev == av
 
 		if !ok {
-			return errors.Errorf(
-				"alerts mismatch - expected: %v, actual: %v",
-				e,
-				a,
-			)
+			return errors.Errorf("alerts mismatch - expected: %v, actual: %v", e, a)
 		}
 	}
 
 	// The alerts match. Time to check the ActiveAt if it matches.
 	for i := range act {
 		if act[i].ActiveAt == nil {
-			return errors.Errorf(
-				"ActiveAt not found for the alert - alert: %v",
-				act[i],
-			)
+			return errors.Errorf("ActiveAt not found for the alert - alert: %v", act[i])
 		}
 		t := *act[i].ActiveAt
 		if t.Before(expActiveAtRanges[i][0]) || expActiveAtRanges[i][1].Before(t) {
@@ -245,4 +230,55 @@ func convertRelativeToAbsoluteTimes(zeroTime int64, original [][2]int64) [][2]ti
 		converted[i][1] = timestamp.Time(zeroTime + r[1])
 	}
 	return converted
+}
+
+// checkAllPossibleExpectedSamples checks the actual samples with all possible combinations of expected samples
+// provided. It returns an error if none of them match.
+// TODO: write unit tests for this.
+func checkAllPossibleExpectedSamples(expSamples [][]promql.Sample, act []promql.Sample) error {
+	var errs []error
+	for _, exp := range expSamples {
+		err := areSamplesEqual(exp, act)
+		if err == nil {
+			// We only need one of the expected slice to match.
+			return nil
+		}
+
+		errs = append(errs, err)
+	}
+
+	if len(errs) == 1 {
+		return errors.New("error in metrics: " + errs[0].Error())
+	}
+
+	errMsg := "one of the following errors happened in metrics:"
+	for i, err := range errs {
+		errMsg += fmt.Sprintf(" (%d) %s", i+1, err.Error())
+	}
+
+	return errors.New(errMsg)
+}
+
+// areSamplesEqual tells whether both the expected and actual samples match.
+func areSamplesEqual(exp, act []promql.Sample) error {
+	if len(exp) != len(act) {
+		return errors.Errorf("different number of metrics - expected(%d): %v, actual(%d): %v", len(exp), exp, len(act), act)
+	}
+
+	sort.Slice(exp, func(i, j int) bool {
+		return labels.Compare(exp[i].Metric, exp[j].Metric) <= 0
+	})
+	sort.Slice(act, func(i, j int) bool {
+		return labels.Compare(act[i].Metric, act[j].Metric) <= 0
+	})
+
+	for i := range exp {
+		e, a := exp[i], act[i]
+		ok := labels.Compare(e.Metric, a.Metric) == 0 &&
+			e.T == a.T && e.V == a.V
+		if !ok {
+			return errors.Errorf("metrics mismatch - expected: %v, actual: %v", e, a)
+		}
+	}
+	return nil
 }

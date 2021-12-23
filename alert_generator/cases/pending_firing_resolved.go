@@ -33,65 +33,100 @@ func PendingAndFiringAndResolved() TestCase {
 		return
 	}
 
-	expAlertsMetricsRules := func(ts int64, alerts []v1.Alert) (expAlerts [][]v1.Alert, expActiveAtRanges [][2]time.Time, expSamples []promql.Sample) {
+	expAlertsMetricsRules := func(ts int64, alerts []v1.Alert) (expAlerts [][]v1.Alert, expActiveAtRanges [][][2]time.Time, expSamples [][]promql.Sample) {
 		relTs := ts - zeroTime
 		inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := allPossibleStates(relTs)
 
+		activeAtRange := convertRelativeToAbsoluteTimes(zeroTime, [][2]int64{
+			{120, 120 + 30},
+		})
+
 		pendingAlerts := []v1.Alert{
 			{
-				Labels:      labels.FromStrings("alertname", "PendingAndFiringAndResolved_SimpleAlert", "foo", "bar", "rulegroup", "PendingAndFiringAndResolved"),
+				Labels:      labels.FromStrings("alertname", alertName, "foo", "bar", "rulegroup", groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
 				State:       "pending",
-				Value:       "1.1",
+				Value:       "11",
 			},
 		}
+		pendingSample := []promql.Sample{
+			{
+				Point:  promql.Point{T: ts, V: 11},
+				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", alertName, "foo", "bar", "rulegroup", groupName),
+			},
+		}
+
 		firingAlerts := []v1.Alert{
 			{
-				Labels:      labels.FromStrings("alertname", "PendingAndFiringAndResolved_SimpleAlert", "foo", "bar", "rulegroup", "PendingAndFiringAndResolved"),
+				Labels:      labels.FromStrings("alertname", alertName, "foo", "bar", "rulegroup", groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
 				State:       "firing",
-				Value:       "1.1",
+				Value:       "11",
 			},
 		}
+		firingSample := []promql.Sample{
+			{
+				Point:  promql.Point{T: ts, V: 11},
+				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", alertName, "foo", "bar", "rulegroup", groupName),
+			},
+		}
+
 		resolvedAlerts := []v1.Alert{
 			{
-				Labels:      labels.FromStrings("alertname", "PendingAndFiringAndResolved_SimpleAlert", "foo", "bar", "rulegroup", "PendingAndFiringAndResolved"),
+				Labels:      labels.FromStrings("alertname", alertName, "foo", "bar", "rulegroup", groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
 				State:       "inactive",
 				Value:       "9",
 			},
 		}
+		resolvedSample := []promql.Sample{
+			{
+				Point:  promql.Point{T: ts, V: 9},
+				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "inactive", "alertname", alertName, "foo", "bar", "rulegroup", groupName),
+			},
+		}
+
 		fmt.Printf("\n")
+		if inactive || maybePending {
+			expAlerts = append(expAlerts, []v1.Alert{})
+			expActiveAtRanges = append(expActiveAtRanges, nil)
+			expSamples = append(expSamples, nil)
+		}
+		if maybePending || pending || maybeFiring {
+			expAlerts = append(expAlerts, pendingAlerts)
+			expActiveAtRanges = append(expActiveAtRanges, activeAtRange)
+			expSamples = append(expSamples, pendingSample)
+		}
+		if maybeFiring || firing || maybeResolved {
+			expAlerts = append(expAlerts, firingAlerts)
+			expActiveAtRanges = append(expActiveAtRanges, activeAtRange)
+			expSamples = append(expSamples, firingSample)
+		}
+		if maybeResolved || resolved {
+			expAlerts = append(expAlerts, resolvedAlerts)
+			expActiveAtRanges = append(expActiveAtRanges, activeAtRange)
+			expSamples = append(expSamples, resolvedSample)
+		}
 		switch {
 		case inactive:
 			fmt.Println("inactive", alerts)
-			expAlerts = append(expAlerts, []v1.Alert{})
 		case maybePending:
 			fmt.Println("maybePending", alerts)
-			expAlerts = append(expAlerts, []v1.Alert{}, pendingAlerts)
 		case pending:
 			fmt.Println("pending", alerts)
-			expAlerts = append(expAlerts, pendingAlerts)
 		case maybeFiring:
 			fmt.Println("maybeFiring", alerts)
-			expAlerts = append(expAlerts, pendingAlerts, firingAlerts)
 		case firing:
 			fmt.Println("firing", alerts)
-			expAlerts = append(expAlerts, firingAlerts)
 		case maybeResolved:
 			fmt.Println("maybeResolved", alerts)
-			expAlerts = append(expAlerts, firingAlerts, resolvedAlerts)
 		case resolved:
 			fmt.Println("resolved", alerts)
 			// TODO: there should be no alerts found after a point.
-			expAlerts = append(expAlerts, resolvedAlerts)
 		default:
 		}
 
-		expActiveAtRanges = convertRelativeToAbsoluteTimes(zeroTime, [][2]int64{
-			{120, 120 + 30},
-		})
-		return expAlerts, expActiveAtRanges, nil
+		return expAlerts, expActiveAtRanges, expSamples
 	}
 
 	return &testCase{
@@ -154,9 +189,9 @@ func PendingAndFiringAndResolved() TestCase {
 			expAlerts, expRanges, _ := expAlertsMetricsRules(ts, alerts)
 			return checkAllPossibleExpectedAlerts(expAlerts, expRanges, alerts)
 		},
-		checkMetrics: func(ts int64, metrics []promql.Sample) error {
-			//_, _, expSamples := expAlertsMetricsRules(ts, nil)
-			return nil
+		checkMetrics: func(ts int64, samples []promql.Sample) error {
+			_, _, expSamples := expAlertsMetricsRules(ts, nil)
+			return checkAllPossibleExpectedSamples(expSamples, samples)
 		},
 	}
 }
