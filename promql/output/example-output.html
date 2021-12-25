@@ -36,7 +36,7 @@
 				<th>Outcome</th>
 				<!-- <th>Diff</th> -->
 			</tr>
-			{{ $includePassing := .includePassing }}
+			{{ $includePassing := .IncludePassing }}
 			{{ range .Results }}
 				{{ if include $includePassing . }}
 					<tr class="comparison-result-row {{ if .Success }}pass{{ else }}fail{{ end }}">
