@@ -58,40 +58,6 @@ type TestCase interface {
 	CheckMetrics(ts int64, metrics []promql.Sample) error
 }
 
-// testCase implements TestCase.
-// All variables must be initialised.
-type testCase struct {
-	describe             func() (title string, description string)
-	ruleGroup            func() (rulefmt.RuleGroup, error)
-	samplesToRemoteWrite func() []prompb.TimeSeries
-	init                 func(zeroTime int64)
-	testUntil            func() int64
-	checkAlerts          func(ts int64, alerts []v1.Alert) error
-	checkMetrics         func(ts int64, metrics []promql.Sample) error
-}
-
-// This makes sure that it always implements TestCase and help catch regressions
-// early during development.
-var _ TestCase = &testCase{}
-
-func (tc *testCase) Describe() (groupName string, description string) { return tc.describe() }
-
-func (tc *testCase) RuleGroup() (rulefmt.RuleGroup, error) { return tc.ruleGroup() }
-
-func (tc *testCase) SamplesToRemoteWrite() []prompb.TimeSeries { return tc.samplesToRemoteWrite() }
-
-func (tc *testCase) Init(zeroTime int64) { tc.init(zeroTime) }
-
-func (tc *testCase) TestUntil() int64 { return tc.testUntil() }
-
-func (tc *testCase) CheckAlerts(ts int64, alerts []v1.Alert) error {
-	return tc.checkAlerts(ts, alerts)
-}
-
-func (tc *testCase) CheckMetrics(ts int64, metrics []promql.Sample) error {
-	return tc.checkMetrics(ts, metrics)
-}
-
 const sourceTimeSeriesName = "alert_generator_test_suite"
 
 func baseLabels(groupName, alertName string) labels.Labels {
@@ -210,11 +176,12 @@ func areAlertsEqual(exp, act []v1.Alert, expActiveAtRanges [][2]time.Time) error
 		t := *act[i].ActiveAt
 		if t.Before(expActiveAtRanges[i][0]) || expActiveAtRanges[i][1].Before(t) {
 			// Out of the range.
+			fmt.Printf("range %v", expActiveAtRanges[i])
 			return errors.Errorf(
 				"ActiveAt mismatch - alert: %v, expected ActiveAT range: [%s, %s], actual ActiveAt: %s",
 				act[i],
 				expActiveAtRanges[i][0].Format(time.RFC3339),
-				expActiveAtRanges[i][0].Format(time.RFC3339),
+				expActiveAtRanges[i][1].Format(time.RFC3339),
 				act[i].ActiveAt.Format(time.RFC3339),
 			)
 		}
@@ -223,11 +190,11 @@ func areAlertsEqual(exp, act []v1.Alert, expActiveAtRanges [][2]time.Time) error
 	return nil
 }
 
-func convertRelativeToAbsoluteTimes(zeroTime int64, original [][2]int64) [][2]time.Time {
+func convertRelativeToAbsoluteTimes(zeroTime int64, original [][2]time.Duration) [][2]time.Time {
 	converted := make([][2]time.Time, len(original))
 	for i, r := range original {
-		converted[i][0] = timestamp.Time(zeroTime + r[0])
-		converted[i][1] = timestamp.Time(zeroTime + r[1])
+		converted[i][0] = timestamp.Time(zeroTime).Add(r[0])
+		converted[i][1] = timestamp.Time(zeroTime).Add(r[1])
 	}
 	return converted
 }

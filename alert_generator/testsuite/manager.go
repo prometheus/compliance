@@ -55,9 +55,10 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 	}
 
 	m := &TestSuite{
-		opts:           opts,
-		ruleGroupTests: make(map[string]cases.TestCase, len(opts.Cases)),
-		stopc:          make(chan struct{}),
+		opts:                opts,
+		ruleGroupTests:      make(map[string]cases.TestCase, len(opts.Cases)),
+		ruleGroupTestErrors: make(map[string][]error),
+		stopc:               make(chan struct{}),
 	}
 
 	m.remoteWriter, err = NewRemoteWriter(opts.RemoteWriteURL, opts.Logger)
@@ -103,7 +104,7 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 // minConfiguredGroupInterval is the minimum group interval for any rule.
 // The API/PromQL check interval is based on the group interval per rule.
 // Hence, we have a minimum to keep that interval not so small.
-const minConfiguredGroupInterval = model.Duration(20 * time.Second)
+const minConfiguredGroupInterval = model.Duration(0 * time.Second)
 
 // TODO(codesome): verify the validation.
 func validateOpts(opts TestSuiteOptions) error {
@@ -344,7 +345,8 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 		return true, "Congrats! All tests passed"
 	}
 
-	describe = "The following rule groups failed the test:\n"
+	describe = "------------------------------------------\n"
+	describe += "The following rule groups failed the test:\n"
 	for gn, errs := range ts.ruleGroupTestErrors {
 		describe += "\nGroup Name: " + gn + "\n"
 		for i, err := range errs {
