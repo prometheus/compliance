@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"path"
+	"strconv"
 	"sync"
 	"time"
 
@@ -20,11 +21,14 @@ import (
 
 // TestSuite runs the entire test suite from start to end.
 type TestSuite struct {
+	logger                          log.Logger
 	opts                            TestSuiteOptions
 	baseAlertsAPIURL, promqlBaseURL *url.URL
 
 	remoteWriter         *RemoteWriter
 	remoteWriteStartTime time.Time
+
+	as *alertsServer
 
 	ruleGroupTestsMtx   sync.RWMutex
 	ruleGroupTests      map[string]cases.TestCase // Group name -> TestCase.
@@ -46,6 +50,8 @@ type TestSuiteOptions struct {
 	BaseAlertsAPIURL string
 	// PromQLBaseURL is the URL to query the database via PromQL via GET <PromQLBaseURL>/query and <PromQLBaseURL>/query_range.
 	PromQLBaseURL string
+	// AlertServerPort is the port at which the alert receiving server will be run.
+	AlertServerPort string
 }
 
 func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
@@ -55,10 +61,12 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 	}
 
 	m := &TestSuite{
+		logger:              log.WithPrefix(opts.Logger, "component", "testsuite"),
 		opts:                opts,
 		ruleGroupTests:      make(map[string]cases.TestCase, len(opts.Cases)),
 		ruleGroupTestErrors: make(map[string][]error),
 		stopc:               make(chan struct{}),
+		as:                  newAlertsServer(opts.AlertServerPort, opts.Logger),
 	}
 
 	m.remoteWriter, err = NewRemoteWriter(opts.RemoteWriteURL, opts.Logger)
@@ -116,6 +124,18 @@ func validateOpts(opts TestSuiteOptions) error {
 	}
 	if opts.PromQLBaseURL == "" {
 		return fmt.Errorf("no PromQL URL found")
+	}
+	if opts.AlertServerPort == "" {
+		return fmt.Errorf("no alert server port found")
+	}
+
+	// TODO: validate the AlertServerPort.
+	p, err := strconv.Atoi(opts.AlertServerPort)
+	if err != nil {
+		return fmt.Errorf("provided alert server port %q does not parse as an integer", opts.AlertServerPort)
+	}
+	if p > 65535 {
+		return fmt.Errorf("provided alert server port %q must be less than 65535", opts.AlertServerPort)
 	}
 
 	seenRuleGroups := make(map[string]bool)
@@ -176,108 +196,127 @@ func validateOpts(opts TestSuiteOptions) error {
 }
 
 func (ts *TestSuite) Start() {
-	level.Info(ts.opts.Logger).Log("msg", "Starting the remote writer", "url", ts.opts.RemoteWriteURL)
+	level.Info(ts.logger).Log("msg", "Starting the alert receiving server", "port", ts.opts.AlertServerPort)
+	ts.as.Start()
+
+	level.Info(ts.logger).Log("msg", "Starting the remote writer", "url", ts.opts.RemoteWriteURL)
 	ts.remoteWriteStartTime = ts.remoteWriter.Start()
 	for _, c := range ts.ruleGroupTests {
-		c.Init(timestamp.FromTime(ts.remoteWriteStartTime))
 		gn, desc := c.Describe()
-		level.Info(ts.opts.Logger).Log("msg", "Starting test for a rule group", "rulegroup", gn, "description", desc)
+		level.Info(ts.logger).Log("msg", "Starting test for a rule group", "rulegroup", gn, "description", desc)
+
+		c.Init(timestamp.FromTime(ts.remoteWriteStartTime))
+		ts.as.addExpectedAlerts(c.ExpectedAlerts()...)
 	}
 
-	ts.wg.Add(2)
+	ts.wg.Add(3)
 	go ts.checkAlertsLoop()
 	go ts.checkMetricsLoop()
+	go ts.monitorAlertReception()
 }
 
 func (ts *TestSuite) checkAlertsLoop() {
 	defer ts.wg.Done()
-	defer ts.Stop()
 
-Loop:
-	for !ts.isOver() {
-		select {
-		case <-ts.stopc:
+	ts.loopTillItsOver(func() {
+		nowTs := timestamp.FromTime(time.Now())
+
+		u := ts.baseAlertsAPIURL
+		b, err := DoGetRequest(u.String())
+		if err != nil {
+			level.Error(ts.logger).Log("msg", "Error in fetching alerts", "url", u.String(), "err", err)
 			return
-		case <-time.After(time.Duration(ts.minGroupInterval)):
-			nowTs := timestamp.FromTime(time.Now())
-
-			u := ts.baseAlertsAPIURL
-			b, err := DoGetRequest(u.String())
-			if err != nil {
-				level.Error(ts.opts.Logger).Log("msg", "Error in fetching alerts", "url", u.String(), "err", err)
-				continue Loop
-			}
-
-			mappedAlerts, err := ParseAndGroupAlerts(b)
-			if err != nil {
-				level.Error(ts.opts.Logger).Log("msg", "Error in parsing alerts response", "url", u.String(), "err", err)
-				continue Loop
-			}
-
-			groupsToRemove := make(map[string]error)
-			ts.ruleGroupTestsMtx.RLock()
-			for groupName, c := range ts.ruleGroupTests {
-				if c.TestUntil() < nowTs {
-					groupsToRemove[groupName] = nil
-					continue
-				}
-				err := c.CheckAlerts(nowTs, mappedAlerts[groupName])
-				if err != nil {
-					groupsToRemove[groupName] = err
-				}
-			}
-			ts.ruleGroupTestsMtx.RUnlock()
-
-			ts.removeGroups(groupsToRemove)
 		}
-	}
+
+		mappedAlerts, err := ParseAndGroupAlerts(b)
+		if err != nil {
+			level.Error(ts.logger).Log("msg", "Error in parsing alerts response", "url", u.String(), "err", err)
+			return
+		}
+
+		groupsToRemove := make(map[string]error)
+		ts.ruleGroupTestsMtx.RLock()
+		for groupName, c := range ts.ruleGroupTests {
+			if c.TestUntil() < nowTs {
+				groupsToRemove[groupName] = nil
+				continue
+			}
+			err := c.CheckAlerts(nowTs, mappedAlerts[groupName])
+			if err != nil {
+				groupsToRemove[groupName] = err
+			}
+		}
+		ts.ruleGroupTestsMtx.RUnlock()
+
+		ts.removeGroups(groupsToRemove)
+	})
 }
 
 func (ts *TestSuite) checkMetricsLoop() {
 	defer ts.wg.Done()
+
+	ts.loopTillItsOver(func() {
+		nowTs := timestamp.FromTime(time.Now())
+
+		u := ts.promqlBaseURL
+		q := u.Query()
+		q.Set("query", "ALERTS")
+		q.Set("time", timestamp.Time(nowTs).Format(time.RFC3339))
+		u.RawQuery = q.Encode()
+
+		b, err := DoGetRequest(u.String())
+		if err != nil {
+			level.Error(ts.logger).Log("msg", "Error in fetching metrics", "url", u.String(), "err", err)
+			return
+		}
+
+		mappedMetrics, err := ParseAndGroupMetrics(b)
+		if err != nil {
+			level.Error(ts.logger).Log("msg", "Error in parsing metrics response", "url", u.String(), "err", err)
+			return
+		}
+
+		groupsToRemove := make(map[string]error)
+		ts.ruleGroupTestsMtx.RLock()
+		for groupName, c := range ts.ruleGroupTests {
+			if c.TestUntil() < nowTs {
+				groupsToRemove[groupName] = nil
+				continue
+			}
+			err := c.CheckMetrics(nowTs, mappedMetrics[groupName])
+			if err != nil {
+				groupsToRemove[groupName] = err
+			}
+		}
+		ts.ruleGroupTestsMtx.RUnlock()
+
+		ts.removeGroups(groupsToRemove)
+	})
+}
+
+func (ts *TestSuite) monitorAlertReception() {
+	defer ts.wg.Done()
+
+	ts.loopTillItsOver(func() {
+		groupsToRemove := make(map[string]error)
+		for groupName := range ts.as.groupsFacingErrors() {
+			groupsToRemove[groupName] = errors.New("error in alert reception")
+		}
+
+		ts.removeGroups(groupsToRemove)
+	})
+}
+
+// loopTillItsOver runs the given function in intervals until the test has ended.
+func (ts *TestSuite) loopTillItsOver(f func()) {
 	defer ts.Stop()
 
-Loop:
 	for !ts.isOver() {
 		select {
 		case <-ts.stopc:
 			return
 		case <-time.After(time.Duration(ts.minGroupInterval)):
-			nowTs := timestamp.FromTime(time.Now())
-
-			u := ts.promqlBaseURL
-			q := u.Query()
-			q.Set("query", "ALERTS")
-			q.Set("time", timestamp.Time(nowTs).Format(time.RFC3339))
-			u.RawQuery = q.Encode()
-
-			b, err := DoGetRequest(u.String())
-			if err != nil {
-				level.Error(ts.opts.Logger).Log("msg", "Error in fetching metrics", "url", u.String(), "err", err)
-				continue Loop
-			}
-
-			mappedMetrics, err := ParseAndGroupMetrics(b)
-			if err != nil {
-				level.Error(ts.opts.Logger).Log("msg", "Error in parsing metrics response", "url", u.String(), "err", err)
-				continue Loop
-			}
-
-			groupsToRemove := make(map[string]error)
-			ts.ruleGroupTestsMtx.RLock()
-			for groupName, c := range ts.ruleGroupTests {
-				if c.TestUntil() < nowTs {
-					groupsToRemove[groupName] = nil
-					continue
-				}
-				err := c.CheckMetrics(nowTs, mappedMetrics[groupName])
-				if err != nil {
-					groupsToRemove[groupName] = err
-				}
-			}
-			ts.ruleGroupTestsMtx.RUnlock()
-
-			ts.removeGroups(groupsToRemove)
+			f()
 		}
 	}
 }
@@ -286,12 +325,16 @@ func (ts *TestSuite) removeGroups(groupsToRemove map[string]error) {
 	ts.ruleGroupTestsMtx.Lock()
 	defer ts.ruleGroupTestsMtx.Unlock()
 	for gn, err := range groupsToRemove {
+		if _, ok := ts.ruleGroupTests[gn]; !ok {
+			// Has been already removed.
+			continue
+		}
 		delete(ts.ruleGroupTests, gn)
 		if err != nil {
 			ts.ruleGroupTestErrors[gn] = append(ts.ruleGroupTestErrors[gn], err)
-			level.Error(ts.opts.Logger).Log("msg", "Test failed for a rule group", "rulegroup", gn, "err", err)
+			level.Error(ts.logger).Log("msg", "Test failed for a rule group", "rulegroup", gn, "err", err)
 		} else {
-			level.Info(ts.opts.Logger).Log("msg", "Test finished successfully for a rule group", "rulegroup", gn)
+			level.Info(ts.logger).Log("msg", "Test finished successfully for a rule group", "rulegroup", gn)
 		}
 	}
 }
@@ -307,12 +350,15 @@ func (ts *TestSuite) Stop() {
 	case <-ts.stopc:
 		// Already stopped.
 	default:
-		ts.remoteWriter.Stop()
+		// TODO: there might still be a race in calling Stop twice. Low priority to fix it.
 		close(ts.stopc)
+		ts.as.Stop()
+		ts.remoteWriter.Stop()
 	}
 }
 
 func (ts *TestSuite) Wait() {
+	ts.as.Wait()
 	ts.remoteWriter.Wait()
 	ts.wg.Wait()
 }
@@ -322,6 +368,7 @@ func (ts *TestSuite) Wait() {
 func (ts *TestSuite) Error() error {
 	merr := tsdb_errors.NewMulti()
 	merr.Add(errors.Wrap(ts.remoteWriter.Error(), "remote writer"))
+	merr.Add(errors.Wrap(ts.as.runningError(), "alert server"))
 	return merr.Err()
 }
 
@@ -338,19 +385,76 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 	}
 
 	if err := ts.Error(); err != nil {
-		return false, fmt.Sprintf("got some error in Error(): %q", err.Error())
+		return false, fmt.Sprintf("got some error in test execution: %q", err.Error())
 	}
 
-	if len(ts.ruleGroupTestErrors) == 0 {
+	alertServerErrors := ts.as.groupError()
+	if len(ts.ruleGroupTestErrors) == 0 && len(alertServerErrors) == 0 {
 		return true, "Congrats! All tests passed"
 	}
 
-	describe = "------------------------------------------\n"
-	describe += "The following rule groups failed the test:\n"
-	for gn, errs := range ts.ruleGroupTestErrors {
-		describe += "\nGroup Name: " + gn + "\n"
-		for i, err := range errs {
-			describe += fmt.Sprintf("\tError %d: %s\n", i+1, err.Error())
+	if len(ts.ruleGroupTestErrors) > 0 {
+		describe += "------------------------------------------\n"
+		describe += "The following rule groups failed the API and metrics check:\n"
+		for gn, errs := range ts.ruleGroupTestErrors {
+			describe += "\nGroup Name: " + gn + "\n"
+			for i, err := range errs {
+				describe += fmt.Sprintf("\tError %d: %s\n", i+1, err.Error())
+			}
+		}
+	}
+
+	if len(alertServerErrors) > 0 {
+		describe += "------------------------------------------\n"
+		describe += "The following rule groups faced alert reception issues:\n"
+		for gn, errs := range alertServerErrors {
+			describe += "\nGroup Name: " + gn + "\n"
+
+			if len(errs.missedAlerts) > 0 {
+				describe += "\tReason: Missed some alerts that were expected (time is approx)\n"
+				for i, ma := range errs.missedAlerts {
+					state := "firing"
+					if ma.Resolved {
+						state = "resolved"
+					}
+					describe += fmt.Sprintf("\t\t%d: Expected time: %s, Labels: %s, Annotations: %s, State: %s\n",
+						i+1,
+						ma.Ts.Format(time.RFC3339),
+						ma.Alert.Labels.String(),
+						ma.Alert.Annotations.String(),
+						state,
+					)
+				}
+			}
+
+			if len(errs.matchingErrs) > 0 {
+				describe += "\tReason: Alerts mismatch while received at right time\n"
+				for i, err := range errs.matchingErrs {
+					describe += fmt.Sprintf("\t\t%d: At %s, Labels: %s, Annotations: %s, Error: %s\n",
+						i+1,
+						err.t.Format(time.RFC3339),
+						err.alert.Labels.String(),
+						err.alert.Annotations.String(),
+						err.err.Error(),
+					)
+				}
+			}
+
+			if len(errs.unexpectedAlerts) > 0 {
+				describe += "\tReason: Unexpected alerts (Example: alerts that we didn't expect OR received outside expected time range OR duplicate alerts)\n"
+				for i, alert := range errs.unexpectedAlerts {
+					describe += fmt.Sprintf("\t\t%d: At %s, Labels: %s, Annotations: %s, StartsAt: %s, EndsAt: %s, GeneratorURL: %s\n",
+						i+1,
+						alert.t.Format(time.RFC3339),
+						alert.alert.Labels.String(),
+						alert.alert.Annotations.String(),
+						alert.alert.StartsAt.Format(time.RFC3339),
+						alert.alert.EndsAt.Format(time.RFC3339),
+						alert.alert.GeneratorURL,
+					)
+				}
+			}
+
 		}
 	}
 

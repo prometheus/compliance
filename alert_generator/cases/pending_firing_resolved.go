@@ -2,6 +2,7 @@ package cases
 
 import (
 	"fmt"
+	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"time"
 
@@ -184,13 +185,14 @@ func (tc *pendingAndFiringAndResolved) expAlertsMetricsRules(ts int64, alerts []
 	return expAlerts, expActiveAtRanges, expSamples
 }
 
+// ts is relative time w.r.t. zeroTime.
 func (tc *pendingAndFiringAndResolved) allPossibleStates(ts int64) (inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved bool) {
 	between := betweenFunc(ts)
 
 	rwItvlSecFloat, grpItvlSecFloat := float64(tc.rwInterval/time.Second), float64(tc.groupInterval/time.Second)
-	_8th := 8 * rwItvlSecFloat
-	_20th := 20 * rwItvlSecFloat
-	_33rd := 33 * rwItvlSecFloat
+	_8th := 8 * rwItvlSecFloat   // Goes into pending.
+	_20th := 20 * rwItvlSecFloat // Goes into firing.
+	_33rd := 33 * rwItvlSecFloat // Resolved.
 	inactive = between(0, _8th-1)
 	maybePending = between(_8th-1, _8th+grpItvlSecFloat)
 	pending = between(_8th+grpItvlSecFloat, _20th-1)
@@ -199,4 +201,34 @@ func (tc *pendingAndFiringAndResolved) allPossibleStates(ts int64) (inactive, ma
 	maybeResolved = between(_33rd-1, _33rd+grpItvlSecFloat)
 	resolved = between(_33rd+grpItvlSecFloat, 240*rwItvlSecFloat)
 	return
+}
+
+func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
+	_20th := 20 * int64(tc.rwInterval/time.Millisecond) // Firing.
+	_33rd := 33 * int64(tc.rwInterval/time.Millisecond) // Resolved.
+	_33rd_plus_15m := _33rd + int64(15*time.Minute/time.Millisecond)
+
+	var exp []ExpectedAlert
+	endsAtDelta := 4 * resendDelay
+	if endsAtDelta < 4*tc.groupInterval {
+		endsAtDelta = 4 * tc.groupInterval
+	}
+
+	resendDelayMs := int64(resendDelay / time.Millisecond)
+	for ts := _20th; ts < _33rd_plus_15m; ts += resendDelayMs {
+		exp = append(exp, ExpectedAlert{
+			TimeTolerance: tc.groupInterval,
+			Ts:            timestamp.Time(tc.zeroTime + ts),
+			Resolved:      ts >= _33rd,
+			ResolvedTime:  timestamp.Time(tc.zeroTime + _33rd),
+			EndsAtDelta:   endsAtDelta,
+			Alert: &notifier.Alert{
+				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
+				StartsAt:    timestamp.Time(tc.zeroTime + _20th),
+			},
+		})
+	}
+
+	return exp
 }

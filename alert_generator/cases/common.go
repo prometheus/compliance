@@ -3,6 +3,8 @@ package cases
 import (
 	"fmt"
 	"github.com/pkg/errors"
+	"github.com/prometheus/prometheus/notifier"
+	"net/url"
 	"sort"
 	"strconv"
 	"time"
@@ -56,7 +58,13 @@ type TestCase interface {
 	// Returns an error otherwise describing what is the problem.
 	// This must be checked with a min interval of the rule group's interval from RuleGroup().
 	CheckMetrics(ts int64, metrics []promql.Sample) error
+
+	// ExpectedAlerts returns all the expected alerts that must be received for this test case.
+	// This must be called only after Init().
+	ExpectedAlerts() []ExpectedAlert
 }
+
+const resendDelay = time.Minute
 
 const sourceTimeSeriesName = "alert_generator_test_suite"
 
@@ -247,5 +255,90 @@ func areSamplesEqual(exp, act []promql.Sample) error {
 			return errors.Errorf("metrics mismatch - expected: %v, actual: %v", e, a)
 		}
 	}
+	return nil
+}
+
+// ExpectedAlert describes the characteristics of a receiving alert.
+// The alert is considered as "may or may not come" (hence no error if not received) in these scenarios:
+//   1. (Ts + TimeTolerance) crosses the ResolvedTime time when Resolved is false.
+//      Because it can get resolved during the tolerance period.
+//   2. (Ts + TimeTolerance) crosses ResolvedTime+15m when Resolved is true.
+type ExpectedAlert struct {
+	// TimeTolerance is the tolerance to be considered when
+	// comparing the time of the alert receiving and alert payload fields.
+	// This is usually the group interval.
+	// TODO: have some additional tolerance on the http request delay on top of group interval.
+	TimeTolerance time.Duration
+
+	// This alert should come at Ts time.
+	Ts time.Time
+
+	// If it is a Resolved alert, Resolved must be set to true.
+	Resolved bool
+
+	// ResolvedTime is the time when the alert becomes Resolved. time.Unix(0,0) if never Resolved.
+	// This is also the EndsAt of the alert when the alert is Resolved.
+	ResolvedTime time.Time
+
+	// EndsAtDelta is the duration w.r.t. the alert reception time when the EndsAt must be set.
+	// This is only for pending and firing alerts.
+	// It is usually 4*resendDelay or 4*groupInterval, whichever is higher.
+	EndsAtDelta time.Duration
+
+	// This is the expected alert.
+	Alert *notifier.Alert
+}
+
+// Matches tells if the given alert satisfies the expected alert description.
+func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) error {
+	if labels.Compare(ea.Alert.Labels, a.Labels) != 0 {
+		return fmt.Errorf("labels mismatch, expected: %s, got: %s", ea.Alert.Labels.String(), a.Labels.String())
+	}
+	if labels.Compare(ea.Alert.Annotations, a.Annotations) != 0 {
+		return fmt.Errorf("annotations mismatch, expected: %s, got: %s", ea.Alert.Annotations.String(), a.Annotations.String())
+	}
+
+	matchesTime := func(exp, act time.Time) bool {
+		return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance))
+	}
+
+	if !matchesTime(ea.Ts, now) {
+		return fmt.Errorf("got the alert a little late, expected range: [%s, %s], got: %s",
+			ea.Ts.Format(time.RFC3339),
+			ea.Ts.Add(ea.TimeTolerance).Format(time.RFC3339),
+			now.Format(time.RFC3339),
+		)
+	}
+
+	if !a.StartsAt.Equal(time.Time{}) && !matchesTime(ea.Alert.StartsAt, a.StartsAt) {
+		return fmt.Errorf("mismatch in StartsAt, expected range: [%s, %s], got: %s",
+			ea.Alert.StartsAt.Format(time.RFC3339),
+			ea.Alert.StartsAt.Add(ea.TimeTolerance).Format(time.RFC3339),
+			a.StartsAt.Format(time.RFC3339),
+		)
+	}
+
+	if !a.EndsAt.Equal(time.Time{}) {
+		expEndsAt := now.Add(ea.EndsAtDelta)
+		if ea.Resolved {
+			expEndsAt = ea.ResolvedTime
+		}
+
+		if !matchesTime(expEndsAt, a.EndsAt) {
+			return fmt.Errorf("mismatch in EndsAt, expected range: [%s, %s], got: %s",
+				expEndsAt.Format(time.RFC3339),
+				expEndsAt.Add(ea.TimeTolerance).Format(time.RFC3339),
+				a.EndsAt.Format(time.RFC3339),
+			)
+		}
+	}
+
+	if a.GeneratorURL != "" {
+		_, err := url.Parse(a.GeneratorURL)
+		if err != nil {
+			return fmt.Errorf("generator URL %q does not parse as a URL", a.GeneratorURL)
+		}
+	}
+
 	return nil
 }
