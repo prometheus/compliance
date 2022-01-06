@@ -2,13 +2,13 @@ package cases
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/prometheus/prometheus/notifier"
 	"net/url"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/pkg/errors"
+	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
 	"github.com/prometheus/prometheus/pkg/timestamp"
@@ -64,7 +64,11 @@ type TestCase interface {
 	ExpectedAlerts() []ExpectedAlert
 }
 
-const resendDelay = time.Minute
+const ResendDelay = time.Minute
+
+// MaxAlertSendDelay is the max request time for alert-generator sending the alert.
+// TODO: make it 5s for final use.
+const MaxAlertSendDelay = 2 * time.Second
 
 const sourceTimeSeriesName = "alert_generator_test_suite"
 
@@ -276,6 +280,9 @@ type ExpectedAlert struct {
 	// If it is a Resolved alert, Resolved must be set to true.
 	Resolved bool
 
+	// Resend is true if this alert was a resend of the earlier alert with same labels.
+	Resend bool
+
 	// ResolvedTime is the time when the alert becomes Resolved. time.Unix(0,0) if never Resolved.
 	// This is also the EndsAt of the alert when the alert is Resolved.
 	ResolvedTime time.Time
@@ -290,7 +297,7 @@ type ExpectedAlert struct {
 }
 
 // Matches tells if the given alert satisfies the expected alert description.
-func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) error {
+func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) (err error) {
 	if labels.Compare(ea.Alert.Labels, a.Labels) != 0 {
 		return fmt.Errorf("labels mismatch, expected: %s, got: %s", ea.Alert.Labels.String(), a.Labels.String())
 	}
@@ -298,23 +305,19 @@ func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) error {
 		return fmt.Errorf("annotations mismatch, expected: %s, got: %s", ea.Alert.Annotations.String(), a.Annotations.String())
 	}
 
-	matchesTime := func(exp, act time.Time) bool {
-		return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance))
-	}
-
-	if !matchesTime(ea.Ts, now) {
+	if !ea.matchesWithinToleranceAndSendDelay(ea.Ts, now) {
 		return fmt.Errorf("got the alert a little late, expected range: [%s, %s], got: %s",
-			ea.Ts.Format(time.RFC3339),
-			ea.Ts.Add(ea.TimeTolerance).Format(time.RFC3339),
-			now.Format(time.RFC3339),
+			ea.Ts.Format(time.RFC3339Nano),
+			ea.Ts.Add(ea.TimeTolerance).Format(time.RFC3339Nano),
+			now.Format(time.RFC3339Nano),
 		)
 	}
 
-	if !a.StartsAt.Equal(time.Time{}) && !matchesTime(ea.Alert.StartsAt, a.StartsAt) {
+	if !a.StartsAt.Equal(time.Time{}) && !ea.matchesWithinTolerance(ea.Alert.StartsAt, a.StartsAt) {
 		return fmt.Errorf("mismatch in StartsAt, expected range: [%s, %s], got: %s",
-			ea.Alert.StartsAt.Format(time.RFC3339),
-			ea.Alert.StartsAt.Add(ea.TimeTolerance).Format(time.RFC3339),
-			a.StartsAt.Format(time.RFC3339),
+			ea.Alert.StartsAt.Format(time.RFC3339Nano),
+			ea.Alert.StartsAt.Add(ea.TimeTolerance).Format(time.RFC3339Nano),
+			a.StartsAt.Format(time.RFC3339Nano),
 		)
 	}
 
@@ -324,11 +327,14 @@ func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) error {
 			expEndsAt = ea.ResolvedTime
 		}
 
-		if !matchesTime(expEndsAt, a.EndsAt) {
+		// Since EndsAt is w.r.t. the current time for a firing alert, if it does not match the expEndsAt,
+		// we need to consider any delay in sending the alert in case the alert was firing.
+		if !ea.matchesWithinTolerance(expEndsAt, a.EndsAt) &&
+			(ea.Resolved || !ea.matchesWithinTolerance(expEndsAt.Add(-MaxAlertSendDelay), a.EndsAt)) {
 			return fmt.Errorf("mismatch in EndsAt, expected range: [%s, %s], got: %s",
-				expEndsAt.Format(time.RFC3339),
-				expEndsAt.Add(ea.TimeTolerance).Format(time.RFC3339),
-				a.EndsAt.Format(time.RFC3339),
+				expEndsAt.Format(time.RFC3339Nano),
+				expEndsAt.Add(ea.TimeTolerance).Format(time.RFC3339Nano),
+				a.EndsAt.Format(time.RFC3339Nano),
 			)
 		}
 	}
@@ -341,4 +347,20 @@ func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) error {
 	}
 
 	return nil
+}
+
+func (ea *ExpectedAlert) matchesWithinTolerance(exp, act time.Time) bool {
+	return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance))
+}
+
+func (ea *ExpectedAlert) matchesWithinToleranceAndSendDelay(exp, act time.Time) bool {
+	return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance+MaxAlertSendDelay))
+}
+
+// CanBeIgnored tells if the alert can be ignored. It can be ignored in the following cases:
+// 1. It is a firing alert but it gets into "inactive" state within the tolerance time.
+// 2. It is a resolved alert but it was resolved more than 15m ago.
+func (ea *ExpectedAlert) CanBeIgnored() bool {
+	return (!ea.Resolved && ea.matchesWithinTolerance(ea.Ts, ea.ResolvedTime)) ||
+		(ea.Resolved && time.Now().Sub(ea.Ts) > 15*time.Minute)
 }

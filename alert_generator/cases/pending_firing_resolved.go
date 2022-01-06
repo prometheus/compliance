@@ -2,11 +2,11 @@ package cases
 
 import (
 	"fmt"
-	"github.com/prometheus/prometheus/notifier"
-	"github.com/prometheus/prometheus/pkg/labels"
 	"time"
 
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/notifier"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/rulefmt"
 	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/prompb"
@@ -23,8 +23,8 @@ func PendingAndFiringAndResolved() TestCase {
 		alertName: alertName,
 		lbls:      baseLabels(groupName, alertName),
 		// TODO: make this 15 and 30 for final use.
-		rwInterval:    5 * time.Second,
-		groupInterval: 10 * time.Second,
+		rwInterval:    15 * time.Second,
+		groupInterval: 30 * time.Second,
 	}
 }
 
@@ -209,17 +209,43 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 	_33rd_plus_15m := _33rd + int64(15*time.Minute/time.Millisecond)
 
 	var exp []ExpectedAlert
-	endsAtDelta := 4 * resendDelay
+	endsAtDelta := 4 * ResendDelay
 	if endsAtDelta < 4*tc.groupInterval {
 		endsAtDelta = 4 * tc.groupInterval
 	}
 
-	resendDelayMs := int64(resendDelay / time.Millisecond)
-	for ts := _20th; ts < _33rd_plus_15m; ts += resendDelayMs {
+	resendDelayMs := int64(ResendDelay / time.Millisecond)
+	for ts := _20th; ts < _33rd; ts += resendDelayMs {
 		exp = append(exp, ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
-			Resolved:      ts >= _33rd,
+			Resolved:      false,
+			Resend:        ts != _20th,
+			ResolvedTime:  timestamp.Time(tc.zeroTime + _33rd),
+			EndsAtDelta:   endsAtDelta,
+			Alert: &notifier.Alert{
+				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
+				StartsAt:    timestamp.Time(tc.zeroTime + _20th),
+			},
+		})
+	}
+
+	for ts := _33rd; ts < _33rd_plus_15m; ts += resendDelayMs {
+		tolerance := tc.groupInterval
+		if ts == _33rd {
+			// Since the alert state is reset, the alert sent time for resolved alert can be upto
+			// 1 groupInterval late compared to actual time when it gets resolved. So we need to
+			// account for this delay plus the usual tolerance.
+			// We don't change tolerance for other resolved alerts because their Ts will be adjusted
+			// based on this first resolved alert.
+			tolerance = 2 * tc.groupInterval
+		}
+		exp = append(exp, ExpectedAlert{
+			TimeTolerance: tolerance,
+			Ts:            timestamp.Time(tc.zeroTime + ts),
+			Resolved:      true,
+			Resend:        ts != _33rd,
 			ResolvedTime:  timestamp.Time(tc.zeroTime + _33rd),
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{

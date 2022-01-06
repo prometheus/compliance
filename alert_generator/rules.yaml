@@ -1,10 +1,10 @@
 groups:
     - name: PendingAndFiringAndResolved
-      interval: 10s
+      interval: 30s
       rules:
         - alert: PendingAndFiringAndResolved_SimpleAlert
           expr: '{__name__="alert_generator_test_suite", alertname="PendingAndFiringAndResolved_SimpleAlert", rulegroup="PendingAndFiringAndResolved"} > 10'
-          for: 1m
+          for: 3m
           labels:
             foo: bar
             rulegroup: PendingAndFiringAndResolved

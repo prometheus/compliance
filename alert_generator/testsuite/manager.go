@@ -388,8 +388,8 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 		return false, fmt.Sprintf("got some error in test execution: %q", err.Error())
 	}
 
-	alertServerErrors := ts.as.groupError()
-	if len(ts.ruleGroupTestErrors) == 0 && len(alertServerErrors) == 0 {
+	groupsFacingErrors := ts.as.groupsFacingErrors()
+	if len(ts.ruleGroupTestErrors) == 0 && len(groupsFacingErrors) == 0 {
 		return true, "Congrats! All tests passed"
 	}
 
@@ -404,10 +404,12 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 		}
 	}
 
-	if len(alertServerErrors) > 0 {
+	alertServerErrors := ts.as.groupError()
+	if len(groupsFacingErrors) > 0 {
 		describe += "------------------------------------------\n"
 		describe += "The following rule groups faced alert reception issues:\n"
-		for gn, errs := range alertServerErrors {
+		for gn := range groupsFacingErrors {
+			errs := alertServerErrors[gn]
 			describe += "\nGroup Name: " + gn + "\n"
 
 			if len(errs.missedAlerts) > 0 {
@@ -419,7 +421,7 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 					}
 					describe += fmt.Sprintf("\t\t%d: Expected time: %s, Labels: %s, Annotations: %s, State: %s\n",
 						i+1,
-						ma.Ts.Format(time.RFC3339),
+						ma.Ts.Format(time.RFC3339Nano),
 						ma.Alert.Labels.String(),
 						ma.Alert.Annotations.String(),
 						state,
@@ -432,7 +434,7 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 				for i, err := range errs.matchingErrs {
 					describe += fmt.Sprintf("\t\t%d: At %s, Labels: %s, Annotations: %s, Error: %s\n",
 						i+1,
-						err.t.Format(time.RFC3339),
+						err.t.Format(time.RFC3339Nano),
 						err.alert.Labels.String(),
 						err.alert.Annotations.String(),
 						err.err.Error(),
@@ -445,11 +447,11 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 				for i, alert := range errs.unexpectedAlerts {
 					describe += fmt.Sprintf("\t\t%d: At %s, Labels: %s, Annotations: %s, StartsAt: %s, EndsAt: %s, GeneratorURL: %s\n",
 						i+1,
-						alert.t.Format(time.RFC3339),
+						alert.t.Format(time.RFC3339Nano),
 						alert.alert.Labels.String(),
 						alert.alert.Annotations.String(),
-						alert.alert.StartsAt.Format(time.RFC3339),
-						alert.alert.EndsAt.Format(time.RFC3339),
+						alert.alert.StartsAt.Format(time.RFC3339Nano),
+						alert.alert.EndsAt.Format(time.RFC3339Nano),
 						alert.alert.GeneratorURL,
 					)
 				}
