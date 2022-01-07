@@ -10,7 +10,7 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/compliance/alert_generator/cases"
-	"github.com/prometheus/prometheus/pkg/rulefmt"
+	"github.com/prometheus/prometheus/model/rulefmt"
 	yaml "gopkg.in/yaml.v3"
 )
 

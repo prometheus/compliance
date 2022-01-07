@@ -12,10 +12,8 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
-	"github.com/prometheus/prometheus/notifier"
-	tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
-
 	"github.com/prometheus/compliance/alert_generator/cases"
+	"github.com/prometheus/prometheus/notifier"
 )
 
 type alertsServer struct {
@@ -83,6 +81,10 @@ func newAlertsServer(port string, logger log.Logger) *alertsServer {
 }
 
 func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	// TODO: Temporary.
+	res.WriteHeader(http.StatusOK)
+	return
+
 	now := time.Now().UTC()
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -162,7 +164,7 @@ Outer2:
 			// alert that matches the state.
 			if ea.Resolved == eas.alerts[i].Resolved {
 				if eas.alerts[i].Resend {
-					eas.alerts[i].Ts = now.Add(cases.ResendDelay - cases.MaxAlertSendDelay)
+					eas.alerts[i].Ts = now.Add(cases.ResendDelay - cases.MaxRTT)
 				}
 				continue Outer2
 			}
@@ -220,11 +222,11 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 		for _, ea := range eas.alerts {
 			rg := ea.Alert.Labels.Get("rulegroup")
 			// TODO: 2*cases.MaxAlertSendDelay became of some edge case. Like missed by some milli/micro seconds. Fix it.
-			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxAlertSendDelay)).Before(now) {
+			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
 				if !ea.CanBeIgnored() {
 					staleAlerts[rg] = append(staleAlerts[rg], ea)
 				}
-			} else if id == lblsString && now.After(ea.Ts) && now.Before(ea.Ts.Add(ea.TimeTolerance+(2*cases.MaxAlertSendDelay))) {
+			} else if id == lblsString && now.After(ea.Ts) && now.Before(ea.Ts.Add(ea.TimeTolerance+(2*cases.MaxRTT))) {
 				alerts = append(alerts, ea)
 			} else {
 				newExpAlerts = append(newExpAlerts, ea)
@@ -264,7 +266,7 @@ func (as *alertsServer) runningError() error {
 	if as.serverErr == http.ErrServerClosed {
 		as.serverErr = nil
 	}
-	return tsdb_errors.NewMulti(
+	return NewMulti(
 		errors.Wrap(as.serverErr, "http server"),
 		errors.Wrap(as.serverCloseErr, "http server close"),
 	).Err()

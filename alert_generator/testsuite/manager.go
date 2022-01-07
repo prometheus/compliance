@@ -12,18 +12,18 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/prometheus/pkg/rulefmt"
-	"github.com/prometheus/prometheus/pkg/timestamp"
-	tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
+	"github.com/prometheus/prometheus/model/rulefmt"
+	"github.com/prometheus/prometheus/model/timestamp"
 
 	"github.com/prometheus/compliance/alert_generator/cases"
 )
 
 // TestSuite runs the entire test suite from start to end.
 type TestSuite struct {
-	logger                          log.Logger
-	opts                            TestSuiteOptions
-	baseAlertsAPIURL, promqlBaseURL *url.URL
+	logger                    log.Logger
+	opts                      TestSuiteOptions
+	alertsAPIURL, rulesAPIURL string
+	promqlURL                 *url.URL
 
 	remoteWriter         *RemoteWriter
 	remoteWriteStartTime time.Time
@@ -46,8 +46,8 @@ type TestSuiteOptions struct {
 	Cases []cases.TestCase
 	// RemoteWriteURL is URL to remote write samples.
 	RemoteWriteURL string
-	// BaseAlertsAPIURL is the URL to query the GET <BaseApiURL>/api/v1/rules and <BaseApiURL>/api/v1/alerts.
-	BaseAlertsAPIURL string
+	// BaseAPIURL is the URL to query the GET <BaseApiURL>/api/v1/rules and <BaseApiURL>/api/v1/alerts.
+	BaseAPIURL string
 	// PromQLBaseURL is the URL to query the database via PromQL via GET <PromQLBaseURL>/query and <PromQLBaseURL>/query_range.
 	PromQLBaseURL string
 	// AlertServerPort is the port at which the alert receiving server will be run.
@@ -89,12 +89,15 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 	}
 
 	{
-		u, err := url.Parse(m.opts.BaseAlertsAPIURL)
+		u, err := url.Parse(m.opts.BaseAPIURL)
 		if err != nil {
 			return nil, err
 		}
-		u.Path = path.Join(u.Path, "/api/v1/alerts")
-		m.baseAlertsAPIURL = u
+		orgPath := u.Path
+		u.Path = path.Join(orgPath, "/api/v1/alerts")
+		m.alertsAPIURL = u.String()
+		u.Path = path.Join(orgPath, "/api/v1/rules")
+		m.rulesAPIURL = u.String()
 	}
 
 	{
@@ -103,7 +106,7 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 			return nil, err
 		}
 		u.Path = path.Join(u.Path, "/api/v1/query")
-		m.promqlBaseURL = u
+		m.promqlURL = u
 	}
 
 	return m, nil
@@ -119,7 +122,7 @@ func validateOpts(opts TestSuiteOptions) error {
 	if opts.RemoteWriteURL == "" {
 		return fmt.Errorf("no remote write URL found")
 	}
-	if opts.BaseAlertsAPIURL == "" {
+	if opts.BaseAPIURL == "" {
 		return fmt.Errorf("no API URL found")
 	}
 	if opts.PromQLBaseURL == "" {
@@ -160,7 +163,7 @@ func validateOpts(opts TestSuiteOptions) error {
 		}
 		seenRuleGroups[rg.Name] = true
 
-		merr := tsdb_errors.NewMulti()
+		merr := NewMulti()
 		for i, r := range rg.Rules {
 			if r.Alert.Value == "" {
 				return fmt.Errorf("alert name cannot be empty, %q group has one empty", rg.Name)
@@ -209,8 +212,9 @@ func (ts *TestSuite) Start() {
 		ts.as.addExpectedAlerts(c.ExpectedAlerts()...)
 	}
 
-	ts.wg.Add(3)
+	ts.wg.Add(4)
 	go ts.checkAlertsLoop()
+	go ts.checkRulesLoop()
 	go ts.checkMetricsLoop()
 	go ts.monitorAlertReception()
 }
@@ -221,16 +225,15 @@ func (ts *TestSuite) checkAlertsLoop() {
 	ts.loopTillItsOver(func() {
 		nowTs := timestamp.FromTime(time.Now())
 
-		u := ts.baseAlertsAPIURL
-		b, err := DoGetRequest(u.String())
+		b, err := DoGetRequest(ts.alertsAPIURL)
 		if err != nil {
-			level.Error(ts.logger).Log("msg", "Error in fetching alerts", "url", u.String(), "err", err)
+			level.Error(ts.logger).Log("msg", "Error in fetching alerts", "url", ts.alertsAPIURL, "err", err)
 			return
 		}
 
 		mappedAlerts, err := ParseAndGroupAlerts(b)
 		if err != nil {
-			level.Error(ts.logger).Log("msg", "Error in parsing alerts response", "url", u.String(), "err", err)
+			level.Error(ts.logger).Log("msg", "Error in parsing alerts response", "url", ts.alertsAPIURL, "err", err)
 			return
 		}
 
@@ -252,13 +255,49 @@ func (ts *TestSuite) checkAlertsLoop() {
 	})
 }
 
+func (ts *TestSuite) checkRulesLoop() {
+	defer ts.wg.Done()
+
+	ts.loopTillItsOver(func() {
+		nowTs := timestamp.FromTime(time.Now())
+
+		b, err := DoGetRequest(ts.rulesAPIURL)
+		if err != nil {
+			level.Error(ts.logger).Log("msg", "Error in fetching rules", "url", ts.rulesAPIURL, "err", err)
+			return
+		}
+
+		mappedGroups, err := ParseAndGroupRules(b)
+		if err != nil {
+			level.Error(ts.logger).Log("msg", "Error in parsing rules response", "url", ts.rulesAPIURL, "err", err)
+			return
+		}
+
+		groupsToRemove := make(map[string]error)
+		ts.ruleGroupTestsMtx.RLock()
+		for groupName, c := range ts.ruleGroupTests {
+			if c.TestUntil() < nowTs {
+				groupsToRemove[groupName] = nil
+				continue
+			}
+			err := c.CheckRuleGroup(nowTs, mappedGroups[groupName])
+			if err != nil {
+				groupsToRemove[groupName] = err
+			}
+		}
+		ts.ruleGroupTestsMtx.RUnlock()
+
+		ts.removeGroups(groupsToRemove)
+	})
+}
+
 func (ts *TestSuite) checkMetricsLoop() {
 	defer ts.wg.Done()
 
 	ts.loopTillItsOver(func() {
 		nowTs := timestamp.FromTime(time.Now())
 
-		u := ts.promqlBaseURL
+		u := ts.promqlURL
 		q := u.Query()
 		q.Set("query", "ALERTS")
 		q.Set("time", timestamp.Time(nowTs).Format(time.RFC3339))
@@ -366,7 +405,7 @@ func (ts *TestSuite) Wait() {
 // Error() returns any error occured during execution of test and does
 // not tell if the tests passed or failed.
 func (ts *TestSuite) Error() error {
-	merr := tsdb_errors.NewMulti()
+	merr := NewMulti()
 	merr.Add(errors.Wrap(ts.remoteWriter.Error(), "remote writer"))
 	merr.Add(errors.Wrap(ts.as.runningError(), "alert server"))
 	return merr.Err()

@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/rulefmt"
+	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/notifier"
-	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/pkg/rulefmt"
-	"github.com/prometheus/prometheus/pkg/timestamp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/web/api/v1"
@@ -18,21 +19,28 @@ import (
 func PendingAndFiringAndResolved() TestCase {
 	groupName := "PendingAndFiringAndResolved"
 	alertName := groupName + "_SimpleAlert"
-	return &pendingAndFiringAndResolved{
-		groupName: groupName,
-		alertName: alertName,
-		lbls:      baseLabels(groupName, alertName),
+	lbls := metricLabels(groupName, alertName)
+	query := fmt.Sprintf("%s > 10", lbls.String())
+	tc := &pendingAndFiringAndResolved{
+		groupName:    groupName,
+		alertName:    alertName,
+		query:        query,
+		metricLabels: lbls,
 		// TODO: make this 15 and 30 for final use.
-		rwInterval:    15 * time.Second,
-		groupInterval: 30 * time.Second,
+		rwInterval:    5 * time.Second,
+		groupInterval: 10 * time.Second,
 	}
+	tc.forDuration = model.Duration(12 * tc.rwInterval)
+	return tc
 }
 
 type pendingAndFiringAndResolved struct {
 	groupName                 string
 	alertName                 string
-	lbls                      labels.Labels
+	query                     string
+	metricLabels              labels.Labels
 	rwInterval, groupInterval time.Duration
+	forDuration               model.Duration
 
 	zeroTime int64
 }
@@ -48,7 +56,7 @@ func (tc *pendingAndFiringAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
 	if err := alert.Encode(tc.alertName); err != nil {
 		return rulefmt.RuleGroup{}, err
 	}
-	if err := expr.Encode(fmt.Sprintf("%s > 10", tc.lbls.String())); err != nil {
+	if err := expr.Encode(tc.query); err != nil {
 		return rulefmt.RuleGroup{}, err
 	}
 	return rulefmt.RuleGroup{
@@ -58,7 +66,7 @@ func (tc *pendingAndFiringAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
 			{
 				Alert:       alert,
 				Expr:        expr,
-				For:         model.Duration(12 * tc.rwInterval),
+				For:         tc.forDuration,
 				Labels:      map[string]string{"foo": "bar", "rulegroup": tc.groupName},
 				Annotations: map[string]string{"description": "SimpleAlert is firing"},
 			},
@@ -70,7 +78,7 @@ func (tc *pendingAndFiringAndResolved) SamplesToRemoteWrite() []prompb.TimeSerie
 	// TODO: consider using the `load 15s metric 1+1x5` etc notation used in Prometheus tests.
 	return []prompb.TimeSeries{
 		{
-			Labels: toProtoLabels(tc.lbls),
+			Labels: toProtoLabels(tc.metricLabels),
 			Samples: sampleSlice(tc.rwInterval,
 				// All comment times is assuming 15s interval.
 				3, 5, 5, 5, 9, // 1m (3 is @0 time).
@@ -99,35 +107,39 @@ func (tc *pendingAndFiringAndResolved) TestUntil() int64 {
 }
 
 func (tc *pendingAndFiringAndResolved) CheckAlerts(ts int64, alerts []v1.Alert) error {
-	expAlerts, expRanges, _ := tc.expAlertsMetricsRules(ts, alerts)
-	return checkAllPossibleExpectedAlerts(expAlerts, expRanges, alerts)
+	expAlerts := tc.expAlerts(ts, alerts)
+	return checkExpectedAlerts(expAlerts, alerts, tc.groupInterval)
+}
+
+func (tc *pendingAndFiringAndResolved) CheckRuleGroup(ts int64, rg *v1.RuleGroup) error {
+	if ts-tc.zeroTime < int64(tc.groupInterval/time.Millisecond) {
+		// We wait till 1 evaluation is done.
+		return nil
+	}
+	if rg == nil {
+		return errors.New("no rule group found")
+	}
+	expRgs := tc.expRuleGroups(ts)
+	return checkExpectedRuleGroup(timestamp.Time(ts), expRgs, *rg)
 }
 
 func (tc *pendingAndFiringAndResolved) CheckMetrics(ts int64, samples []promql.Sample) error {
-	_, _, expSamples := tc.expAlertsMetricsRules(ts, nil)
-	return checkAllPossibleExpectedSamples(expSamples, samples)
+	expSamples := tc.expMetrics(ts)
+	return checkExpectedSamples(expSamples, samples)
 }
 
-func (tc *pendingAndFiringAndResolved) expAlertsMetricsRules(ts int64, alerts []v1.Alert) (expAlerts [][]v1.Alert, expActiveAtRanges [][][2]time.Time, expSamples [][]promql.Sample) {
+func (tc *pendingAndFiringAndResolved) expAlerts(ts int64, alerts []v1.Alert) (expAlerts [][]v1.Alert) {
 	relTs := ts - tc.zeroTime
 	inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := tc.allPossibleStates(relTs)
 
-	activeAtRange := convertRelativeToAbsoluteTimes(tc.zeroTime, [][2]time.Duration{
-		{8 * tc.rwInterval, (8 * tc.rwInterval) + tc.groupInterval},
-	})
-
+	activeAt := timestamp.Time(tc.zeroTime + int64(8*tc.rwInterval/time.Millisecond))
 	pendingAlerts := []v1.Alert{
 		{
 			Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
 			Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
 			State:       "pending",
 			Value:       "11",
-		},
-	}
-	pendingSample := []promql.Sample{
-		{
-			Point:  promql.Point{T: ts / 1000, V: 1},
-			Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+			ActiveAt:    &activeAt,
 		},
 	}
 
@@ -137,32 +149,21 @@ func (tc *pendingAndFiringAndResolved) expAlertsMetricsRules(ts int64, alerts []
 			Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
 			State:       "firing",
 			Value:       "11",
-		},
-	}
-	firingSample := []promql.Sample{
-		{
-			Point:  promql.Point{T: ts / 1000, V: 1},
-			Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+			ActiveAt:    &activeAt,
 		},
 	}
 
-	fmt.Printf("\n")
 	if inactive || maybePending || maybeResolved || resolved {
 		expAlerts = append(expAlerts, []v1.Alert{})
-		expActiveAtRanges = append(expActiveAtRanges, nil)
-		expSamples = append(expSamples, nil)
 	}
 	if maybePending || pending || maybeFiring {
 		expAlerts = append(expAlerts, pendingAlerts)
-		expActiveAtRanges = append(expActiveAtRanges, activeAtRange)
-		expSamples = append(expSamples, pendingSample)
 	}
 	if maybeFiring || firing || maybeResolved {
 		expAlerts = append(expAlerts, firingAlerts)
-		expActiveAtRanges = append(expActiveAtRanges, activeAtRange)
-		expSamples = append(expSamples, firingSample)
 	}
 
+	fmt.Printf("\n")
 	switch {
 	case inactive:
 		fmt.Println("inactive", alerts)
@@ -182,7 +183,96 @@ func (tc *pendingAndFiringAndResolved) expAlertsMetricsRules(ts int64, alerts []
 	default:
 	}
 
-	return expAlerts, expActiveAtRanges, expSamples
+	return expAlerts
+}
+
+func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
+	relTs := ts - tc.zeroTime
+	inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := tc.allPossibleStates(relTs)
+
+	activeAt := timestamp.Time(tc.zeroTime + int64(8*tc.rwInterval/time.Millisecond))
+
+	getRg := func(state string, alerts []*v1.Alert) v1.RuleGroup {
+		return v1.RuleGroup{
+			Name:     tc.groupName,
+			Interval: float64(tc.groupInterval / time.Second),
+			Rules: []v1.Rule{
+				v1.AlertingRule{
+					State:       state,
+					Name:        tc.alertName,
+					Query:       tc.query,
+					Duration:    float64(time.Duration(tc.forDuration) / time.Second),
+					Labels:      labels.FromStrings("foo", "bar", "rulegroup", tc.groupName),
+					Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
+					Alerts:      alerts,
+					Health:      "ok",
+					Type:        "alerting",
+				},
+			},
+		}
+	}
+
+	inactiveRg := getRg("inactive", nil)
+	pendingRg := getRg("pending", []*v1.Alert{
+		{
+			Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+			Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
+			State:       "pending",
+			Value:       "11",
+			ActiveAt:    &activeAt,
+		},
+	})
+	firingRg := getRg("firing", []*v1.Alert{
+		{
+			Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+			Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
+			State:       "firing",
+			Value:       "11",
+			ActiveAt:    &activeAt,
+		},
+	})
+
+	if inactive || maybePending || maybeResolved || resolved {
+		expRgs = append(expRgs, inactiveRg)
+	}
+	if maybePending || pending || maybeFiring {
+		expRgs = append(expRgs, pendingRg)
+	}
+	if maybeFiring || firing || maybeResolved {
+		expRgs = append(expRgs, firingRg)
+	}
+
+	return expRgs
+}
+
+func (tc *pendingAndFiringAndResolved) expMetrics(ts int64) (expSamples [][]promql.Sample) {
+	relTs := ts - tc.zeroTime
+	inactive, maybePending, pending, maybeFiring, firing, maybeResolved, resolved := tc.allPossibleStates(relTs)
+
+	pendingSample := []promql.Sample{
+		{
+			Point:  promql.Point{T: ts / 1000, V: 1},
+			Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+		},
+	}
+	firingSample := []promql.Sample{
+		{
+			Point:  promql.Point{T: ts / 1000, V: 1},
+			Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+		},
+	}
+
+	if inactive || maybePending || maybeResolved || resolved {
+		expSamples = append(expSamples, nil)
+	}
+	if maybePending || pending || maybeFiring {
+		expSamples = append(expSamples, pendingSample)
+	}
+	if maybeFiring || firing || maybeResolved {
+		expSamples = append(expSamples, firingSample)
+	}
+
+	return expSamples
 }
 
 // ts is relative time w.r.t. zeroTime.

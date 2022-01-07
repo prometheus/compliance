@@ -1,6 +1,9 @@
 build:
 	go build ./cmd/alert_generator_compliance_tester/
 
+run:
+	go run ./cmd/alert_generator_compliance_tester/
+
 build-rules:
 	go run ./cmd/rule_config_builder/main.go -rules-file-path="./rules.yaml"
 

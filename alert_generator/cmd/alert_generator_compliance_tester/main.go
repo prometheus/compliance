@@ -23,12 +23,12 @@ func main() {
 	log := promlog.New(&promlog.Config{})
 
 	t, err := testsuite.NewTestSuite(testsuite.TestSuiteOptions{
-		Logger:           log,
-		Cases:            cases.AllCases,
-		RemoteWriteURL:   *remoteWriteURL,
-		BaseAlertsAPIURL: *baseURL,
-		PromQLBaseURL:    *promQLBaseURL,
-		AlertServerPort:  *alertServerPort,
+		Logger:          log,
+		Cases:           cases.AllCases,
+		RemoteWriteURL:  *remoteWriteURL,
+		BaseAPIURL:      *baseURL,
+		PromQLBaseURL:   *promQLBaseURL,
+		AlertServerPort: *alertServerPort,
 	})
 	if err != nil {
 		level.Error(log).Log("msg", "Failed to create the test suite instance", "err", err)

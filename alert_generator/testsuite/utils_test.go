@@ -1,10 +1,10 @@
 package testsuite
 
 import (
-	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/stretchr/testify/require"
 	"testing"
 
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/stretchr/testify/require"
 	"github.com/prometheus/prometheus/promql"
 )
 
