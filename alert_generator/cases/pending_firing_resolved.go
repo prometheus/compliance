@@ -296,7 +296,7 @@ func (tc *pendingAndFiringAndResolved) allPossibleStates(ts int64) (inactive, ma
 func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 	_20th := 20 * int64(tc.rwInterval/time.Millisecond) // Firing.
 	_33rd := 33 * int64(tc.rwInterval/time.Millisecond) // Resolved.
-	_33rd_plus_15m := _33rd + int64(15*time.Minute/time.Millisecond)
+	_33rdPlus15m := _33rd + int64(15*time.Minute/time.Millisecond)
 
 	var exp []ExpectedAlert
 	endsAtDelta := 4 * ResendDelay
@@ -307,6 +307,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 	resendDelayMs := int64(ResendDelay / time.Millisecond)
 	for ts := _20th; ts < _33rd; ts += resendDelayMs {
 		exp = append(exp, ExpectedAlert{
+			OrderingID:    int(ts),
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -321,7 +322,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 		})
 	}
 
-	for ts := _33rd; ts < _33rd_plus_15m; ts += resendDelayMs {
+	for ts := _33rd; ts < _33rdPlus15m; ts += resendDelayMs {
 		tolerance := tc.groupInterval
 		if ts == _33rd {
 			// Since the alert state is reset, the alert sent time for resolved alert can be upto
@@ -332,6 +333,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			tolerance = 2 * tc.groupInterval
 		}
 		exp = append(exp, ExpectedAlert{
+			OrderingID:    int(ts),
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,

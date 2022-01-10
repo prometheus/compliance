@@ -81,10 +81,6 @@ func newAlertsServer(port string, logger log.Logger) *alertsServer {
 }
 
 func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	// TODO: Temporary.
-	res.WriteHeader(http.StatusOK)
-	return
-
 	now := time.Now().UTC()
 	b, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -146,7 +142,8 @@ Outer:
 		}
 		errs.matchingErrs = append(errs.matchingErrs, *me)
 	}
-	// TODO: do we need to add back?
+	// TODO: do we need to add back? We can actually get rid of the alerts that came before the
+	// matched alert but add back only the ones that came later.
 	as.addExpectedAlerts(addBack...)
 
 	// Since the alert is sent with a "resend delay" w.r.t. the last time the alert was sent,
@@ -203,7 +200,7 @@ func (as *alertsServer) addExpectedAlerts(alerts ...cases.ExpectedAlert) {
 	for id := range seen {
 		ea := as.expectedAlerts[id]
 		sort.Slice(ea.alerts, func(i, j int) bool {
-			return ea.alerts[i].Ts.Before(ea.alerts[j].Ts)
+			return ea.alerts[i].OrderingID < ea.alerts[j].OrderingID
 		})
 	}
 }
@@ -221,7 +218,7 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 		var newExpAlerts []cases.ExpectedAlert
 		for _, ea := range eas.alerts {
 			rg := ea.Alert.Labels.Get("rulegroup")
-			// TODO: 2*cases.MaxAlertSendDelay became of some edge case. Like missed by some milli/micro seconds. Fix it.
+			// TODO: 2*cases.MaxAlertSendDelay because of some edge case. Like missed by some milli/micro seconds. Fix it.
 			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
 				if !ea.CanBeIgnored() {
 					staleAlerts[rg] = append(staleAlerts[rg], ea)

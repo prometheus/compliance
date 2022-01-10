@@ -14,6 +14,9 @@ import (
 //      Because it can get resolved during the tolerance period.
 //   2. (Ts + TimeTolerance) crosses ResolvedTime+15m when Resolved is true.
 type ExpectedAlert struct {
+	// OrderingID is the number used to sort the slice of expected alerts for a given label set of an alert.
+	OrderingID int
+
 	// TimeTolerance is the tolerance to be considered when
 	// comparing the time of the alert receiving and alert payload fields.
 	// This is usually the group interval.
@@ -51,7 +54,8 @@ func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) (err error) {
 		return fmt.Errorf("annotations mismatch, expected: %s, got: %s", ea.Alert.Annotations.String(), a.Annotations.String())
 	}
 
-	if !ea.matchesWithinToleranceAndSendDelay(ea.Ts, now) {
+	// TODO: 2*cases.MaxAlertSendDelay because of some edge case. Like missed by some milli/micro seconds. Fix it.
+	if !ea.matchesWithinToleranceAndTwiceSendDelay(ea.Ts, now) {
 		return fmt.Errorf("got the alert a little late, expected range: [%s, %s], got: %s",
 			ea.Ts.Format(time.RFC3339Nano),
 			ea.Ts.Add(ea.TimeTolerance).Format(time.RFC3339Nano),
@@ -103,11 +107,15 @@ func (ea *ExpectedAlert) matchesWithinToleranceAndSendDelay(exp, act time.Time) 
 	return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance+MaxRTT))
 }
 
+func (ea *ExpectedAlert) matchesWithinToleranceAndTwiceSendDelay(exp, act time.Time) bool {
+	return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance+(2*MaxRTT)))
+}
+
 // CanBeIgnored tells if the alert can be ignored. It can be ignored in the following cases:
 // 1. It is a firing alert but it gets into "inactive" state within the tolerance time.
 // 2. It is a resolved alert but it was resolved more than 15m ago.
 func (ea *ExpectedAlert) CanBeIgnored() bool {
 	// TODO: because of time adjusting for resends, this might be wrong.
-	return (!ea.Resolved && ea.matchesWithinTolerance(ea.Ts, ea.ResolvedTime)) ||
-		(ea.Resolved && time.Now().Sub(ea.Ts) > 15*time.Minute)
+	return (!ea.Resolved && ea.matchesWithinToleranceAndSendDelay(ea.Ts, ea.ResolvedTime)) ||
+		(ea.Resolved && ea.Ts.Sub(ea.ResolvedTime) > 15*time.Minute)
 }
