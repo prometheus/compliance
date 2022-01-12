@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -13,6 +14,10 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/web/api/v1"
+)
+
+const (
+	sourceTimeSeriesName = "alert_generator_test_suite"
 )
 
 func metricLabels(groupName, alertName string) labels.Labels {
@@ -34,15 +39,57 @@ func toProtoLabels(lbls labels.Labels) []prompb.Label {
 	return res
 }
 
-func sampleSlice(interval time.Duration, values ...float64) []prompb.Sample {
-	samples := make([]prompb.Sample, 0, len(values))
+// sampleSlice take the interval and the sample values for the samples.
+// The returned samples start at timestamp 0 with an increment of 'interval'
+// in milliseconds.
+// Each value notation must be of the form "V" or "AxB" where
+//   * "V" is the absolute value of the sample in float.
+//   * "AxB" A is the value increment per sample and B is the number of samples.
+//     The initial value starts at 0 if this notation is the first value.
+//     A is a float, B is an integer.
+// Example:
+//   Input values : [ "1x1",  "0x3",      "5x3",   "9", "8",   "-2x2" ]
+//   Output values: [   1,   1, 1, 1,   6, 11, 16,  9,   8,     6, 4 ]
+func sampleSlice(interval time.Duration, values ...string) []prompb.Sample {
+	var samples []prompb.Sample
 	ts := time.Unix(0, 0)
+	var val float64
 	for _, v := range values {
-		samples = append(samples, prompb.Sample{
-			Timestamp: timestamp.FromTime(ts),
-			Value:     v,
-		})
-		ts = ts.Add(interval)
+		splits := strings.Split(v, "x")
+		if len(splits) == 2 {
+			a, err := strconv.ParseFloat(splits[0], 64)
+			if err != nil {
+				panic(fmt.Sprintf("invalid values notation %s, err: %s", v, err.Error()))
+			}
+
+			b, err := strconv.Atoi(splits[1])
+			if err != nil {
+				panic(fmt.Sprintf("invalid values notation %s, err: %s", v, err.Error()))
+			}
+
+			for i := 0; i < b; i++ {
+				val += a
+				samples = append(samples, prompb.Sample{
+					Timestamp: timestamp.FromTime(ts),
+					Value:     val,
+				})
+				ts = ts.Add(interval)
+			}
+		} else if len(splits) == 1 {
+			var err error
+			val, err = strconv.ParseFloat(splits[0], 64)
+			if err != nil {
+				panic(fmt.Sprintf("invalid values notation %s, err: %s", splits[0], err.Error()))
+			}
+			samples = append(samples, prompb.Sample{
+				Timestamp: timestamp.FromTime(ts),
+				Value:     val,
+			})
+			ts = ts.Add(interval)
+		} else {
+			panic(fmt.Sprintf("invalid values notation %s", v))
+		}
+
 	}
 	return samples
 }

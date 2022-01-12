@@ -2,7 +2,6 @@ package testsuite
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sort"
@@ -58,16 +57,10 @@ type unexpectedErr struct {
 	alert notifier.Alert
 }
 
-// TODO notes:
-// ts is the start of when the alert is expected.
-// The StartsAt comes from the test cases
-// If this alert is resolved, the EndsAt is when it was resolved. It comes from test cases as well.
-// EndsAt is now+4m (with tolerance) assuming 1m of resend delay.
-
 // TODO: assumes resend delay of 1m.
 func newAlertsServer(port string, logger log.Logger) *alertsServer {
 	as := &alertsServer{
-		logger:         log.WithPrefix(logger, "component", "alertsServer"),
+		logger:         log.With(logger, "component", "alertsServer"),
 		errs:           make(map[string]*allErrs),
 		expectedAlerts: make(map[string]*expectedAlerts),
 	}
@@ -97,14 +90,14 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO: check alerts
-	fmt.Println("GOT ALERTS", time.Now().UTC().String(), alerts)
+	level.Info(as.logger).Log("msg", "Received alerts", "num_alerts", len(alerts))
 	as.expectedAlertsMtx.Lock()
+
 	var addBack []cases.ExpectedAlert
+	var missedAlerts []cases.ExpectedAlert
 
 	// Alerts that matched. This will be used to adjust the time for the next resend.
 	success := make(map[string]cases.ExpectedAlert)
-Outer:
 	for _, al := range alerts {
 		id := al.Labels.String()
 		exp := as.getPossibleAlert(now, id)
@@ -118,19 +111,19 @@ Outer:
 		}
 
 		var me *matchingErr
+		var idx int
 		for i, ex := range exp {
 			err := ex.Matches(now, al)
 			if err == nil {
-				// We found a match. No need to report error and add back remaining expected alerts.
+				// We found a match.
 				success[id] = ex
+				idx = i
 				if i != len(exp)-1 {
 					addBack = append(addBack, exp[i+1:]...)
 				}
-				continue Outer
+				me = nil
+				break
 			}
-			// Add this back into expectedAlerts. This might be some delayed alert and the correct alert
-			// might be on its way.
-			addBack = append(addBack, ex)
 			if me == nil {
 				// We only report the first matching error.
 				me = &matchingErr{
@@ -140,11 +133,25 @@ Outer:
 				}
 			}
 		}
-		errs.matchingErrs = append(errs.matchingErrs, *me)
+
+		if me == nil {
+			// We are expecting these alert to come later.
+			addBack = append(addBack, exp[idx+1:]...)
+			// These are missed, were expected before.
+			for _, ma := range exp[:idx] {
+				if !ma.CanBeIgnored() {
+					missedAlerts = append(missedAlerts, ma)
+				}
+			}
+
+		} else {
+			// None matches. Put back the alerts to match future alerts.
+			addBack = append(addBack, exp...)
+			errs.matchingErrs = append(errs.matchingErrs, *me)
+		}
 	}
-	// TODO: do we need to add back? We can actually get rid of the alerts that came before the
-	// matched alert but add back only the ones that came later.
 	as.addExpectedAlerts(addBack...)
+	as.addMissedAlerts(missedAlerts)
 
 	// Since the alert is sent with a "resend delay" w.r.t. the last time the alert was sent,
 	// the delay might drift upto 1 group interval everytime. So for the Nth resend, the interval
@@ -212,16 +219,15 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 
 	// The additional allocations for every call is a design choice to keep the code simple
 	// since the absolute size of total allocations will be tiny.
-	staleAlerts := make(map[string][]cases.ExpectedAlert)
+	var missedAlerts []cases.ExpectedAlert
 
 	for id, eas := range as.expectedAlerts {
 		var newExpAlerts []cases.ExpectedAlert
 		for _, ea := range eas.alerts {
-			rg := ea.Alert.Labels.Get("rulegroup")
 			// TODO: 2*cases.MaxAlertSendDelay because of some edge case. Like missed by some milli/micro seconds. Fix it.
 			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
 				if !ea.CanBeIgnored() {
-					staleAlerts[rg] = append(staleAlerts[rg], ea)
+					missedAlerts = append(missedAlerts, ea)
 				}
 			} else if id == lblsString && now.After(ea.Ts) && now.Before(ea.Ts.Add(ea.TimeTolerance+(2*cases.MaxRTT))) {
 				alerts = append(alerts, ea)
@@ -232,12 +238,16 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 		as.expectedAlerts[id].alerts = newExpAlerts
 	}
 
-	for rg, sa := range staleAlerts {
-		errs := as.getErr(rg)
-		errs.missedAlerts = append(errs.missedAlerts, sa...)
-	}
+	as.addMissedAlerts(missedAlerts)
 
 	return alerts
+}
+
+func (as *alertsServer) addMissedAlerts(missedAlerts []cases.ExpectedAlert) {
+	for _, sa := range missedAlerts {
+		errs := as.getErr(sa.Alert.Labels.Get("rulegroup"))
+		errs.missedAlerts = append(errs.missedAlerts, sa)
+	}
 }
 
 func (as *alertsServer) Start() {

@@ -61,7 +61,7 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 	}
 
 	m := &TestSuite{
-		logger:              log.WithPrefix(opts.Logger, "component", "testsuite"),
+		logger:              log.With(opts.Logger, "component", "testsuite"),
 		opts:                opts,
 		ruleGroupTests:      make(map[string]cases.TestCase, len(opts.Cases)),
 		ruleGroupTestErrors: make(map[string][]error),
@@ -115,6 +115,7 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 // minConfiguredGroupInterval is the minimum group interval for any rule.
 // The API/PromQL check interval is based on the group interval per rule.
 // Hence, we have a minimum to keep that interval not so small.
+// TODO: set this.
 const minConfiguredGroupInterval = model.Duration(0 * time.Second)
 
 // TODO(codesome): verify the validation.
@@ -132,7 +133,6 @@ func validateOpts(opts TestSuiteOptions) error {
 		return fmt.Errorf("no alert server port found")
 	}
 
-	// TODO: validate the AlertServerPort.
 	p, err := strconv.Atoi(opts.AlertServerPort)
 	if err != nil {
 		return fmt.Errorf("provided alert server port %q does not parse as an integer", opts.AlertServerPort)

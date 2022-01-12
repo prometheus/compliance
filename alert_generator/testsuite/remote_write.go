@@ -35,7 +35,7 @@ func NewRemoteWriter(rwURL string, logger log.Logger) (*RemoteWriter, error) {
 		client: client,
 		stopc:  make(chan struct{}),
 		errc:   make(chan error, 1),
-		log:    logger,
+		log:    log.With(logger, "component", "remote_write"),
 	}, nil
 }
 

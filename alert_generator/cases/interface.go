@@ -9,6 +9,14 @@ import (
 	"github.com/prometheus/prometheus/web/api/v1"
 )
 
+const (
+	ResendDelay = time.Minute
+
+	// MaxRTT is the max request time for alert-generator sending the alert or making GET requests to the API.
+	// TODO: make it 5s for final use.
+	MaxRTT = 2 * time.Second
+)
+
 // TestCase defines a single test case for the alert generator.
 type TestCase interface {
 	// Describe returns the test case's rule group name and description.
@@ -60,11 +68,3 @@ type TestCase interface {
 	// This must be called only after Init().
 	ExpectedAlerts() []ExpectedAlert
 }
-
-const ResendDelay = time.Minute
-
-// MaxRTT is the max request time for alert-generator sending the alert or making GET requests to the API.
-// TODO: make it 5s for final use.
-const MaxRTT = 2 * time.Second
-
-const sourceTimeSeriesName = "alert_generator_test_suite"

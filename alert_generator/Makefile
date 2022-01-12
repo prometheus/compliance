@@ -2,6 +2,7 @@ build:
 	go build ./cmd/alert_generator_compliance_tester/
 
 run:
+	@echo "Running alert_generator_compliance_tester for development. Use binaries to run actual tests."
 	go run ./cmd/alert_generator_compliance_tester/
 
 build-rules:

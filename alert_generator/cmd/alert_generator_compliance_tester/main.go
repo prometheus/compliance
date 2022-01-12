@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"sync"
 
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/common/promlog"
@@ -31,14 +33,31 @@ func main() {
 		AlertServerPort: *alertServerPort,
 	})
 	if err != nil {
-		level.Error(log).Log("msg", "Failed to create the test suite instance", "err", err)
+		level.Error(log).Log("msg", "Failed to start the test suite", "err", err)
 		os.Exit(1)
 	}
 
 	level.Info(log).Log("msg", "Starting the test suite")
-
 	t.Start()
+
+	var wg sync.WaitGroup
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	interrupted := false
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range c {
+			level.Info(log).Log("msg", "Received SIGINT, stopping the test")
+			interrupted = true
+			t.Stop()
+			return
+		}
+	}()
+
 	t.Wait()
+	close(c)
+	wg.Wait()
 
 	if err := t.Error(); err != nil {
 		level.Error(log).Log("msg", "Some error in the test suite", "err", err)
@@ -51,8 +70,12 @@ func main() {
 	if !yes {
 		exitCode = 1
 		stream = os.Stderr
+	} else if interrupted {
+		exitCode = 1
+		stream = os.Stderr
+		describe = "Test was incomplete"
 	}
-	// TODO: gracefully shutdown on Ctrl+C and show any errors occured till now.
+
 	fmt.Fprintln(stream, describe)
 	os.Exit(exitCode)
 }
