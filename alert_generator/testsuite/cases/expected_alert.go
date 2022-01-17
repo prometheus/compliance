@@ -2,10 +2,11 @@ package cases
 
 import (
 	"fmt"
-	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/notifier"
 	"net/url"
 	"time"
+
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/notifier"
 )
 
 // ExpectedAlert describes the characteristics of a receiving alert.

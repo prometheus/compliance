@@ -15,7 +15,7 @@ import (
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
 
-	"github.com/prometheus/compliance/alert_generator/cases"
+	"github.com/prometheus/compliance/alert_generator/testsuite/cases"
 )
 
 // TestSuite runs the entire test suite from start to end.

@@ -11,7 +11,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
-	"github.com/prometheus/compliance/alert_generator/cases"
+	"github.com/prometheus/compliance/alert_generator/testsuite/cases"
 	"github.com/prometheus/prometheus/notifier"
 )
 

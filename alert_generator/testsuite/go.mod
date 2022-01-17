@@ -1,4 +1,4 @@
-module github.com/prometheus/compliance/alert_generator
+module github.com/prometheus/compliance/alert_generator/testsuite
 
 go 1.17
 

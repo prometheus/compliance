@@ -1,11 +1,12 @@
 package cases
 
 import (
+	"testing"
+	"time"
+
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func TestSampleSlice(t *testing.T) {
