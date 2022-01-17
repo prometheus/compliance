@@ -1,0 +1,4 @@
+vendor
+*.yaml
+!rules.yaml
+alert_generator_compliance_tester

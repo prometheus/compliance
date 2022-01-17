@@ -1,1 +1,4 @@
-We currently do not have a test suite. We plan to introduce one and make it mandatory.
+You can find the specification [here](specification.md).
+
+
+The test suite is being heavily worked on and is not yet ready for testing.
