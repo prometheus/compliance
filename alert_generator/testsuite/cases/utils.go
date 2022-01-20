@@ -261,7 +261,6 @@ func checkExpectedRuleGroup(now time.Time, expRgs []v1.RuleGroup, actRg v1.RuleG
 }
 
 func areRulesEqual(now time.Time, itvl time.Duration, exp []v1.Rule, actRules []v1.AlertingRule, actAlerts []v1.Alert) error {
-	fmt.Println("Checking rules", len(actRules))
 	var expAlerts []v1.Alert
 	var expRules []v1.AlertingRule
 	for _, r := range exp {

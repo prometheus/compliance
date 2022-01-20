@@ -273,6 +273,8 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 		endsAtDelta = 4 * tc.groupInterval
 	}
 
+	// TODO: there is a bug which is making firing alert to be detected as "missed" when it is
+	// already resolved. This is randomly occurring. Maybe some tracking error in the server.
 	resendDelayMs := int64(ResendDelay / time.Millisecond)
 	for ts := _20th; ts < _33rd; ts += resendDelayMs {
 		exp = append(exp, ExpectedAlert{

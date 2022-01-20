@@ -15,16 +15,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func PendingAndResolved() TestCase {
-	groupName := "PendingAndResolved"
-	alertName := groupName + "_SimpleAlert"
-	lbls := metricLabels(groupName, alertName)
-	query := fmt.Sprintf("%s > 10", lbls.String())
+func PendingAndResolved_AlwaysInactive() TestCase {
+	groupName := "PendingAndResolved_AlwaysInactive"
+	pendingAlertName := groupName + "_PendingAlert"
+	inactiveAlertName := groupName + "_InactiveAlert"
+	pendingLabels := metricLabels(groupName, pendingAlertName)
+	inactiveLabels := metricLabels(groupName, inactiveAlertName)
 	tc := &pendingAndResolved{
-		groupName:    groupName,
-		alertName:    alertName,
-		query:        query,
-		metricLabels: lbls,
+		groupName:            groupName,
+		pendingAlertName:     groupName + "_PendingAlert",
+		pendingQuery:         fmt.Sprintf("%s > 10", pendingLabels.String()),
+		pendingMetricLabels:  pendingLabels,
+		inactiveAlertName:    groupName + "_InactiveAlert",
+		inactiveQuery:        fmt.Sprintf("%s > 99", inactiveLabels.String()),
+		inactiveMetricLabels: inactiveLabels,
 		// TODO: make this 15 and 30 for final use.
 		rwInterval:    5 * time.Second,
 		groupInterval: 10 * time.Second,
@@ -34,13 +38,13 @@ func PendingAndResolved() TestCase {
 }
 
 type pendingAndResolved struct {
-	groupName                 string
-	alertName                 string
-	query                     string
-	metricLabels              labels.Labels
-	rwInterval, groupInterval time.Duration
-	forDuration               model.Duration
-	totalSamples              int
+	groupName                                 string
+	pendingAlertName, inactiveAlertName       string
+	pendingQuery, inactiveQuery               string
+	pendingMetricLabels, inactiveMetricLabels labels.Labels
+	rwInterval, groupInterval                 time.Duration
+	forDuration                               model.Duration
+	totalSamples                              int
 
 	zeroTime int64
 }
@@ -51,24 +55,37 @@ func (tc *pendingAndResolved) Describe() (title string, description string) {
 }
 
 func (tc *pendingAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
-	var alert yaml.Node
-	var expr yaml.Node
-	if err := alert.Encode(tc.alertName); err != nil {
+	var pendingAlert, inactiveAlert yaml.Node
+	if err := pendingAlert.Encode(tc.pendingAlertName); err != nil {
 		return rulefmt.RuleGroup{}, err
 	}
-	if err := expr.Encode(tc.query); err != nil {
+	if err := inactiveAlert.Encode(tc.inactiveAlertName); err != nil {
+		return rulefmt.RuleGroup{}, err
+	}
+	var pendingExpr, inactiveExpr yaml.Node
+	if err := pendingExpr.Encode(tc.pendingQuery); err != nil {
+		return rulefmt.RuleGroup{}, err
+	}
+	if err := inactiveExpr.Encode(tc.inactiveQuery); err != nil {
 		return rulefmt.RuleGroup{}, err
 	}
 	return rulefmt.RuleGroup{
 		Name:     tc.groupName,
 		Interval: model.Duration(tc.groupInterval),
 		Rules: []rulefmt.RuleNode{
-			{
-				Alert:       alert,
-				Expr:        expr,
+			{ // inactive -> pending -> inactive.
+				Alert:       pendingAlert,
+				Expr:        pendingExpr,
 				For:         tc.forDuration,
 				Labels:      map[string]string{"foo": "bar", "rulegroup": tc.groupName},
 				Annotations: map[string]string{"description": "SimpleAlert is firing"},
+			},
+			{ // Always inactive.
+				Alert:       inactiveAlert,
+				Expr:        inactiveExpr,
+				For:         tc.forDuration,
+				Labels:      map[string]string{"ba_dum": "tss", "rulegroup": tc.groupName},
+				Annotations: map[string]string{"description": "This should never fire"},
 			},
 		},
 	}, nil
@@ -87,7 +104,11 @@ func (tc *pendingAndResolved) SamplesToRemoteWrite() []prompb.TimeSeries {
 	tc.totalSamples = len(samples)
 	return []prompb.TimeSeries{
 		{
-			Labels:  toProtoLabels(tc.metricLabels),
+			Labels:  toProtoLabels(tc.pendingMetricLabels),
+			Samples: samples,
+		},
+		{
+			Labels:  toProtoLabels(tc.inactiveMetricLabels),
 			Samples: samples,
 		},
 	}
@@ -136,7 +157,7 @@ func (tc *pendingAndResolved) expAlerts(ts int64, alerts []v1.Alert) (expAlerts 
 	if canBePending {
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
-				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+				Labels:      labels.FromStrings("alertname", tc.pendingAlertName, "foo", "bar", "rulegroup", tc.groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
 				State:       "pending",
 				Value:       "11",
@@ -164,12 +185,22 @@ func (tc *pendingAndResolved) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
 			Rules: []v1.Rule{
 				v1.AlertingRule{
 					State:       state,
-					Name:        tc.alertName,
-					Query:       tc.query,
+					Name:        tc.pendingAlertName,
+					Query:       tc.pendingQuery,
 					Duration:    float64(time.Duration(tc.forDuration) / time.Second),
 					Labels:      labels.FromStrings("foo", "bar", "rulegroup", tc.groupName),
 					Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
 					Alerts:      alerts,
+					Health:      "ok",
+					Type:        "alerting",
+				},
+				v1.AlertingRule{
+					State:       "inactive",
+					Name:        tc.inactiveAlertName,
+					Query:       tc.inactiveQuery,
+					Duration:    float64(time.Duration(tc.forDuration) / time.Second),
+					Labels:      labels.FromStrings("ba_dum", "tss", "rulegroup", tc.groupName),
+					Annotations: labels.FromStrings("description", "This should never fire"),
 					Health:      "ok",
 					Type:        "alerting",
 				},
@@ -183,7 +214,7 @@ func (tc *pendingAndResolved) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
 	if canBePending {
 		expRgs = append(expRgs, getRg("pending", []*v1.Alert{
 			{
-				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+				Labels:      labels.FromStrings("alertname", tc.pendingAlertName, "foo", "bar", "rulegroup", tc.groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing"),
 				State:       "pending",
 				Value:       "11",
@@ -206,7 +237,7 @@ func (tc *pendingAndResolved) expMetrics(ts int64) (expSamples [][]promql.Sample
 		expSamples = append(expSamples, []promql.Sample{
 			{
 				Point:  promql.Point{T: ts / 1000, V: 1},
-				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.pendingAlertName, "foo", "bar", "rulegroup", tc.groupName),
 			},
 		})
 	}

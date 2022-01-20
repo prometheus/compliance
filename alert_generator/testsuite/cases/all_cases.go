@@ -5,5 +5,5 @@ package cases
 // for easy debugging.
 var AllCases = []TestCase{
 	PendingAndFiringAndResolved(),
-	PendingAndResolved(),
+	PendingAndResolved_AlwaysInactive(),
 }
