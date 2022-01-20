@@ -10,3 +10,22 @@ groups:
             rulegroup: PendingAndFiringAndResolved
           annotations:
             description: SimpleAlert is firing
+    - name: PendingAndResolved_AlwaysInactive
+      interval: 10s
+      rules:
+        - alert: PendingAndResolved_AlwaysInactive_PendingAlert
+          expr: '{__name__="alert_generator_test_suite", alertname="PendingAndResolved_AlwaysInactive_PendingAlert", rulegroup="PendingAndResolved_AlwaysInactive"} > 10'
+          for: 1m
+          labels:
+            foo: bar
+            rulegroup: PendingAndResolved_AlwaysInactive
+          annotations:
+            description: SimpleAlert is firing
+        - alert: PendingAndResolved_AlwaysInactive_InactiveAlert
+          expr: '{__name__="alert_generator_test_suite", alertname="PendingAndResolved_AlwaysInactive_InactiveAlert", rulegroup="PendingAndResolved_AlwaysInactive"} > 99'
+          for: 1m
+          labels:
+            ba_dum: tss
+            rulegroup: PendingAndResolved_AlwaysInactive
+          annotations:
+            description: This should never fire
