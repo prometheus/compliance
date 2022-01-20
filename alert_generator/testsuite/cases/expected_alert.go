@@ -27,6 +27,11 @@ type ExpectedAlert struct {
 	// This alert should come at Ts time.
 	Ts time.Time
 
+	// NextState is the time when the next state of this alert is expected.
+	// time.Time{} if the state won't change from here.
+	// This is used to check if this alert can be ignored.
+	NextState time.Time
+
 	// If it is a Resolved alert, Resolved must be set to true.
 	Resolved bool
 
@@ -117,6 +122,9 @@ func (ea *ExpectedAlert) matchesWithinToleranceAndTwiceSendDelay(exp, act time.T
 // 2. It is a resolved alert but it was resolved more than 15m ago.
 func (ea *ExpectedAlert) CanBeIgnored() bool {
 	// TODO: because of time adjusting for resends, this might be wrong.
-	return (!ea.Resolved && ea.matchesWithinToleranceAndSendDelay(ea.Ts, ea.ResolvedTime)) ||
-		(ea.Resolved && ea.Ts.Sub(ea.ResolvedTime) > 15*time.Minute)
+	return (ea.Resolved && ea.Ts.Sub(ea.ResolvedTime) > 15*time.Minute) || // Time limit for sending resolved.
+		// Might have gone into next state.
+		(ea.NextState != time.Time{} && ea.matchesWithinToleranceAndSendDelay(ea.Ts, ea.NextState)) ||
+		// Might be near resolved state.
+		(ea.NextState != time.Time{} && ea.matchesWithinToleranceAndSendDelay(ea.Ts, ea.ResolvedTime))
 }

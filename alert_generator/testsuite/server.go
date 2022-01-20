@@ -2,6 +2,7 @@ package testsuite
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"sort"
@@ -99,6 +100,7 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	// Alerts that matched. This will be used to adjust the time for the next resend.
 	success := make(map[string]cases.ExpectedAlert)
 	for _, al := range alerts {
+		fmt.Println("GOT ALERT", al)
 		id := al.Labels.String()
 		exp := as.getPossibleAlert(now, id)
 		errs := as.getErr(al.Labels.Get("rulegroup"))
@@ -115,12 +117,10 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		for i, ex := range exp {
 			err := ex.Matches(now, al)
 			if err == nil {
+				fmt.Println("MATCHES", ex.Resolved, ex.Resend, ex)
 				// We found a match.
 				success[id] = ex
 				idx = i
-				if i != len(exp)-1 {
-					addBack = append(addBack, exp[i+1:]...)
-				}
 				me = nil
 				break
 			}
@@ -138,9 +138,21 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			// We are expecting these alert to come later.
 			addBack = append(addBack, exp[idx+1:]...)
 			// These are missed, were expected before.
+			lastResendWasIgnored := false
 			for _, ma := range exp[:idx] {
 				if !ma.CanBeIgnored() {
+					if lastResendWasIgnored && ma.Resend {
+						fmt.Println("CAME HERE")
+						// If the last resend was ignored, it means this resend can
+						// also be ignored since this alert's time would not be updated
+						// yet and can give false positive as missed alert.
+						continue
+					}
+					lastResendWasIgnored = false
+					fmt.Println("Missed P2")
 					missedAlerts = append(missedAlerts, ma)
+				} else {
+					lastResendWasIgnored = ma.Resend
 				}
 			}
 
@@ -158,20 +170,16 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	// between the first alert sent and Nth resend can be upto N*(ResendDelay+GroupInterval), and not N*ResendDelay.
 	// Hence, we adjust our time expectation for the next alert if it is supposed to be a resend.
 Outer2:
-	for id, ea := range success {
+	for id, _ := range success {
 		eas := as.expectedAlerts[id]
 		if len(eas.alerts) == 0 {
 			continue
 		}
 		for i := range eas.alerts {
-			// There could be some optional alerts in different state. So we look for the first
-			// alert that matches the state.
-			if ea.Resolved == eas.alerts[i].Resolved {
-				if eas.alerts[i].Resend {
-					eas.alerts[i].Ts = now.Add(cases.ResendDelay - cases.MaxRTT)
-				}
+			if !eas.alerts[i].Resend {
 				continue Outer2
 			}
+			eas.alerts[i].Ts = now.Add(cases.ResendDelay - cases.MaxRTT)
 		}
 	}
 
@@ -227,6 +235,7 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 			// TODO: 2*cases.MaxAlertSendDelay because of some edge case. Like missed by some milli/micro seconds. Fix it.
 			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
 				if !ea.CanBeIgnored() {
+					fmt.Println("Missed P1")
 					missedAlerts = append(missedAlerts, ea)
 				}
 			} else if id == lblsString && now.After(ea.Ts) && now.Before(ea.Ts.Add(ea.TimeTolerance+(2*cases.MaxRTT))) {

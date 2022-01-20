@@ -6,4 +6,5 @@ package cases
 var AllCases = []TestCase{
 	PendingAndFiringAndResolved(),
 	PendingAndResolved_AlwaysInactive(),
+	ZeroFor_SmallFor(),
 }

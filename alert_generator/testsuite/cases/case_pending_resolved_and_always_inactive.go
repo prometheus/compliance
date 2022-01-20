@@ -23,10 +23,10 @@ func PendingAndResolved_AlwaysInactive() TestCase {
 	inactiveLabels := metricLabels(groupName, inactiveAlertName)
 	tc := &pendingAndResolved{
 		groupName:            groupName,
-		pendingAlertName:     groupName + "_PendingAlert",
+		pendingAlertName:     pendingAlertName,
 		pendingQuery:         fmt.Sprintf("%s > 10", pendingLabels.String()),
 		pendingMetricLabels:  pendingLabels,
-		inactiveAlertName:    groupName + "_InactiveAlert",
+		inactiveAlertName:    inactiveAlertName,
 		inactiveQuery:        fmt.Sprintf("%s > 99", inactiveLabels.String()),
 		inactiveMetricLabels: inactiveLabels,
 		// TODO: make this 15 and 30 for final use.
