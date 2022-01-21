@@ -117,7 +117,6 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		for i, ex := range exp {
 			err := ex.Matches(now, al)
 			if err == nil {
-				fmt.Println("MATCHES", ex.Resolved, ex.Resend, ex)
 				// We found a match.
 				success[id] = ex
 				idx = i
@@ -142,14 +141,12 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			for _, ma := range exp[:idx] {
 				if !ma.CanBeIgnored() {
 					if lastResendWasIgnored && ma.Resend {
-						fmt.Println("CAME HERE")
 						// If the last resend was ignored, it means this resend can
 						// also be ignored since this alert's time would not be updated
 						// yet and can give false positive as missed alert.
 						continue
 					}
 					lastResendWasIgnored = false
-					fmt.Println("Missed P2")
 					missedAlerts = append(missedAlerts, ma)
 				} else {
 					lastResendWasIgnored = ma.Resend
@@ -235,7 +232,6 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 			// TODO: 2*cases.MaxAlertSendDelay because of some edge case. Like missed by some milli/micro seconds. Fix it.
 			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
 				if !ea.CanBeIgnored() {
-					fmt.Println("Missed P1")
 					missedAlerts = append(missedAlerts, ea)
 				}
 			} else if id == lblsString && now.After(ea.Ts) && now.Before(ea.Ts.Add(ea.TimeTolerance+(2*cases.MaxRTT))) {

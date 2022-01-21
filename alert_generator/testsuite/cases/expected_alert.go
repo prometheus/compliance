@@ -60,7 +60,7 @@ func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) (err error) {
 		return fmt.Errorf("annotations mismatch, expected: %s, got: %s", ea.Alert.Annotations.String(), a.Annotations.String())
 	}
 
-	// TODO: 2*cases.MaxAlertSendDelay because of some edge case. Like missed by some milli/micro seconds. Fix it.
+	// TODO: 2*MaxRTT because of some edge case. Like missed by some milli/micro seconds. Fix it.
 	if !ea.matchesWithinToleranceAndTwiceSendDelay(ea.Ts, now) {
 		return fmt.Errorf("got the alert a little late, expected range: [%s, %s], got: %s",
 			ea.Ts.Format(time.RFC3339Nano),
@@ -117,6 +117,11 @@ func (ea *ExpectedAlert) matchesWithinToleranceAndTwiceSendDelay(exp, act time.T
 	return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance+(2*MaxRTT)))
 }
 
+func (ea *ExpectedAlert) timeCanBeIgnored(t time.Time) bool {
+	// t is within the tolerance OR ea.Ts is after t.
+	return ea.matchesWithinToleranceAndTwiceSendDelay(ea.Ts, t) || ea.Ts.After(t)
+}
+
 // CanBeIgnored tells if the alert can be ignored. It can be ignored in the following cases:
 // 1. It is a firing alert but it gets into "inactive" state within the tolerance time.
 // 2. It is a resolved alert but it was resolved more than 15m ago.
@@ -124,7 +129,7 @@ func (ea *ExpectedAlert) CanBeIgnored() bool {
 	// TODO: because of time adjusting for resends, this might be wrong.
 	return (ea.Resolved && ea.Ts.Sub(ea.ResolvedTime) > 15*time.Minute) || // Time limit for sending resolved.
 		// Might have gone into next state.
-		(ea.NextState != time.Time{} && ea.matchesWithinToleranceAndSendDelay(ea.Ts, ea.NextState)) ||
+		(ea.NextState != time.Time{} && ea.timeCanBeIgnored(ea.NextState)) ||
 		// Might be near resolved state.
-		(ea.NextState != time.Time{} && ea.matchesWithinToleranceAndSendDelay(ea.Ts, ea.ResolvedTime))
+		(ea.ResolvedTime != time.Time{} && ea.timeCanBeIgnored(ea.ResolvedTime))
 }
