@@ -4,12 +4,13 @@ groups:
       rules:
         - alert: PendingAndFiringAndResolved_SimpleAlert
           expr: '{__name__="alert_generator_test_suite", alertname="PendingAndFiringAndResolved_SimpleAlert", rulegroup="PendingAndFiringAndResolved"} > 10'
-          for: 1m
+          for: 2m
           labels:
             foo: bar
             rulegroup: PendingAndFiringAndResolved
           annotations:
             description: SimpleAlert is firing
+            summary: The value is {{$value}}
     - name: PendingAndResolved_AlwaysInactive
       interval: 10s
       rules:
@@ -29,3 +30,21 @@ groups:
             rulegroup: PendingAndResolved_AlwaysInactive
           annotations:
             description: This should never fire
+    - name: ZeroFor_SmallFor
+      interval: 10s
+      rules:
+        - alert: ZeroFor_SmallFor_ZeroFor
+          expr: '{__name__="alert_generator_test_suite", alertname="ZeroFor_SmallFor_ZeroFor", rulegroup="ZeroFor_SmallFor"} > 10'
+          labels:
+            foo: bar
+            rulegroup: ZeroFor_SmallFor
+          annotations:
+            description: This should immediately fire
+        - alert: ZeroFor_SmallFor_SmallFor
+          expr: '{__name__="alert_generator_test_suite", alertname="ZeroFor_SmallFor_SmallFor", rulegroup="ZeroFor_SmallFor"} > 10'
+          for: 5s
+          labels:
+            ba_dum: tss
+            rulegroup: ZeroFor_SmallFor
+          annotations:
+            description: This should fire after an interval
