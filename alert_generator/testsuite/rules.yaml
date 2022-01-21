@@ -4,7 +4,7 @@ groups:
       rules:
         - alert: PendingAndFiringAndResolved_SimpleAlert
           expr: '{__name__="alert_generator_test_suite", alertname="PendingAndFiringAndResolved_SimpleAlert", rulegroup="PendingAndFiringAndResolved"} > 10'
-          for: 1m
+          for: 2m
           labels:
             foo: bar
             rulegroup: PendingAndFiringAndResolved
