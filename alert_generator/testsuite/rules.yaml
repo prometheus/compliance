@@ -48,3 +48,22 @@ groups:
             rulegroup: ZeroFor_SmallFor
           annotations:
             description: This should fire after an interval
+    - name: NewAlerts_OrderCheck
+      interval: 10s
+      rules:
+        - alert: NewAlerts_OrderCheck_Rule1
+          expr: '{__name__="alert_generator_test_suite", alertname="NewAlerts_OrderCheck_Rule1", rulegroup="NewAlerts_OrderCheck"} > 10'
+          for: 1m
+          labels:
+            foo: bar
+            rulegroup: NewAlerts_OrderCheck
+          annotations:
+            description: This should produce more alerts later
+        - alert: NewAlerts_OrderCheck_Rule2
+          expr: (ALERTS{alertstate="firing", alertname="NewAlerts_OrderCheck_Rule1", foo="bar", rulegroup="NewAlerts_OrderCheck", variant="one"} + ignoring(variant) ALERTS{alertstate="firing", alertname="NewAlerts_OrderCheck_Rule1", foo="bar", rulegroup="NewAlerts_OrderCheck", variant="two"}) == 2
+          labels:
+            ba_dum: tss
+            foo: baz
+            rulegroup: NewAlerts_OrderCheck
+          annotations:
+            description: Based on ALERTS. Old alertname was {{$labels.alertname}}. foo was {{$labels.foo}}.

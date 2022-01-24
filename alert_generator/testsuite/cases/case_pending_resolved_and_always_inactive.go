@@ -18,6 +18,7 @@ import (
 // PendingAndResolved_AlwaysInactive tests the following cases:
 // * Alert that goes from pending->inactive.
 // * Rule that never becomes active (i.e. alerts in pending or firing).
+// * Alert goes into inactive when there is no more data in pending.
 func PendingAndResolved_AlwaysInactive() TestCase {
 	groupName := "PendingAndResolved_AlwaysInactive"
 	pendingAlertName := groupName + "_PendingAlert"
@@ -55,7 +56,8 @@ type pendingAndResolved struct {
 func (tc *pendingAndResolved) Describe() (title string, description string) {
 	return tc.groupName,
 		"(1) Alert that goes from pending->inactive. " +
-			"(2) Rule that never becomes active (i.e. alerts in pending or firing)."
+			"(2) Rule that never becomes active (i.e. alerts in pending or firing)." +
+			"(3) Alert goes into inactive when there is no more data in pending."
 }
 
 func (tc *pendingAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
@@ -103,9 +105,9 @@ func (tc *pendingAndResolved) SamplesToRemoteWrite() []prompb.TimeSeries {
 		// Firing after 4m more, so we let it be in pending for 2m30s more, and then inactive again.
 		"0x10", // 2m30s.
 		// Resolved. 10m more of 9s. Should not get any alerts.
-		"9", "0x39",
+		"9",
 	)
-	tc.totalSamples = len(samples)
+	tc.totalSamples = len(samples) + 40 // Check for more time to expect inactive at the end.
 	return []prompb.TimeSeries{
 		{
 			Labels:  toProtoLabels(tc.pendingMetricLabels),
