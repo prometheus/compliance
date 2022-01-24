@@ -443,6 +443,7 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 		}
 	}
 
+	// TODO: check if there were more alerts that were expected and if they can be ignored.
 	alertServerErrors := ts.as.groupError()
 	if len(groupsFacingErrors) > 0 {
 		describe += "------------------------------------------\n"
