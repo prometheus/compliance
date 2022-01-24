@@ -16,6 +16,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// PendingAndFiringAndResolved tests the following cases:
+// * Alert that goes from pending->firing->inactive.
+// * pending alerts having changing annotation values (checked via API).
+// * firing and inactive alerts being sent when they first went into those states.
+// * firing alert being re-sent at expected intervals when the alert is active with changing annotation contents.
+// * inactive alert being re-sent at expected intervals up to a certain time and not after that.
+// * Alert that becomes active after having fired already and gone into inactive state where 'for' duration is non zero where inactive alert was still being sent.
 func PendingAndFiringAndResolved() TestCase {
 	groupName := "PendingAndFiringAndResolved"
 	alertName := groupName + "_SimpleAlert"
@@ -48,7 +55,12 @@ type pendingAndFiringAndResolved struct {
 
 func (tc *pendingAndFiringAndResolved) Describe() (title string, description string) {
 	return tc.groupName,
-		"An alert goes from pending to firing to resolved state and stays in resolved state"
+		"(1) Alert that goes from pending->firing->inactive. " +
+			"(2) pending alerts having changing annotation values (checked via API). " +
+			"(3) firing and inactive alerts being sent when they first went into those states. " +
+			"(4) firing alert being re-sent at expected intervals when the alert is active with changing annotation contents. " +
+			"(5) inactive alert being re-sent at expected intervals up to a certain time and not after that. " +
+			"(6) Alert that becomes active after having fired already and gone into inactive state where 'for' duration is non zero where inactive alert was still being sent."
 }
 
 func (tc *pendingAndFiringAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
@@ -88,10 +100,13 @@ func (tc *pendingAndFiringAndResolved) SamplesToRemoteWrite() []prompb.TimeSerie
 		"15", "0x11", // 3m of changed value. Goes into firing at the end here.
 		"0x20",       // 5m.
 		"19", "0x15", // 4m of changed value.
-		//"0x31", // 12m.
-		// Resolved at 14m15s.
-		// 20m more of 9s. Hence must get multiple resolved alert but not after 15m of being resolved.
-		"9", "0x79",
+		// Resolved.
+		// 5m more of 9s. Hence must get multiple resolved alerts.
+		"9", "0x19",
+		// Pending again.
+		"15", "0x24", // 6m. Goes into firing at the end here.
+		"0x20",      // 5m. Firing.
+		"8", "0x15", // 4m of resolved.
 	)
 	tc.totalSamples = len(samples)
 	return []prompb.TimeSeries{
@@ -134,8 +149,9 @@ func (tc *pendingAndFiringAndResolved) CheckMetrics(ts int64, samples []promql.S
 
 func (tc *pendingAndFiringAndResolved) expAlerts(ts int64, alerts []v1.Alert) (expAlerts [][]v1.Alert) {
 	relTs := ts - tc.zeroTime
-	canBeInactive, canBePending1, canBePending2, canBeFiring1, canBeFiring2 := tc.allPossibleStates(relTs)
+	canBeInactive, canBePending1, canBePending2, canBeFiring1, canBeFiring2, pendingAgain, firingAgain := tc.allPossibleStates(relTs)
 	activeAt := timestamp.Time(tc.zeroTime + int64(8*tc.rwInterval/time.Millisecond))
+	activeAt2 := timestamp.Time(tc.zeroTime + int64(89*tc.rwInterval/time.Millisecond))
 
 	desc := "-----"
 	if canBeInactive {
@@ -154,26 +170,34 @@ func (tc *pendingAndFiringAndResolved) expAlerts(ts int64, alerts []v1.Alert) (e
 		})
 		desc += "/pending"
 	}
-	if canBePending2 {
+	if canBePending2 || pendingAgain {
+		aa := activeAt
+		if pendingAgain {
+			aa = activeAt2
+		}
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
 				State:       "pending",
 				Value:       "15",
-				ActiveAt:    &activeAt,
+				ActiveAt:    &aa,
 			},
 		})
 		desc += "/pending"
 	}
-	if canBeFiring1 {
+	if canBeFiring1 || firingAgain {
+		aa := activeAt
+		if firingAgain {
+			aa = activeAt2
+		}
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
 				State:       "firing",
 				Value:       "15",
-				ActiveAt:    &activeAt,
+				ActiveAt:    &aa,
 			},
 		})
 		desc += "/firing"
@@ -199,8 +223,9 @@ func (tc *pendingAndFiringAndResolved) expAlerts(ts int64, alerts []v1.Alert) (e
 
 func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
 	relTs := ts - tc.zeroTime
-	canBeInactive, canBePending1, canBePending2, canBeFiring1, canBeFiring2 := tc.allPossibleStates(relTs)
+	canBeInactive, canBePending1, canBePending2, canBeFiring1, canBeFiring2, pendingAgain, firingAgain := tc.allPossibleStates(relTs)
 	activeAt := timestamp.Time(tc.zeroTime + int64(8*tc.rwInterval/time.Millisecond))
+	activeAt2 := timestamp.Time(tc.zeroTime + int64(89*tc.rwInterval/time.Millisecond))
 
 	getRg := func(state string, alerts []*v1.Alert) v1.RuleGroup {
 		return v1.RuleGroup{
@@ -236,25 +261,33 @@ func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.Rule
 			},
 		}))
 	}
-	if canBePending2 {
+	if canBePending2 || pendingAgain {
+		aa := activeAt
+		if pendingAgain {
+			aa = activeAt2
+		}
 		expRgs = append(expRgs, getRg("pending", []*v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
 				State:       "pending",
 				Value:       "15",
-				ActiveAt:    &activeAt,
+				ActiveAt:    &aa,
 			},
 		}))
 	}
-	if canBeFiring1 {
+	if canBeFiring1 || firingAgain {
+		aa := activeAt
+		if firingAgain {
+			aa = activeAt2
+		}
 		expRgs = append(expRgs, getRg("firing", []*v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
 				State:       "firing",
 				Value:       "15",
-				ActiveAt:    &activeAt,
+				ActiveAt:    &aa,
 			},
 		}))
 	}
@@ -275,12 +308,12 @@ func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.Rule
 
 func (tc *pendingAndFiringAndResolved) expMetrics(ts int64) (expSamples [][]promql.Sample) {
 	relTs := ts - tc.zeroTime
-	canBeInactive, canBePending1, canBePending2, canBeFiring1, canBeFiring2 := tc.allPossibleStates(relTs)
+	canBeInactive, canBePending1, canBePending2, canBeFiring1, canBeFiring2, pendingAgain, firingAgain := tc.allPossibleStates(relTs)
 
 	if canBeInactive {
 		expSamples = append(expSamples, nil)
 	}
-	if canBePending1 || canBePending2 {
+	if canBePending1 || canBePending2 || pendingAgain {
 		expSamples = append(expSamples, []promql.Sample{
 			{
 				Point:  promql.Point{T: ts / 1000, V: 1},
@@ -288,7 +321,7 @@ func (tc *pendingAndFiringAndResolved) expMetrics(ts int64) (expSamples [][]prom
 			},
 		})
 	}
-	if canBeFiring1 || canBeFiring2 {
+	if canBeFiring1 || canBeFiring2 || firingAgain {
 		expSamples = append(expSamples, []promql.Sample{
 			{
 				Point:  promql.Point{T: ts / 1000, V: 1},
@@ -301,28 +334,44 @@ func (tc *pendingAndFiringAndResolved) expMetrics(ts int64) (expSamples [][]prom
 }
 
 // ts is relative time w.r.t. zeroTime.
-func (tc *pendingAndFiringAndResolved) allPossibleStates(ts int64) (canBeInactive, canBePending1, canBePending2, canBeFiring1, canBeFiring2 bool) {
+func (tc *pendingAndFiringAndResolved) allPossibleStates(ts int64) (
+	canBeInactive bool,
+	canBePending1, canBePending2 bool,
+	canBeFiring1, canBeFiring2 bool,
+	pendingAgain, firingAgain bool,
+) {
 	between := betweenFunc(ts)
 
 	rwItvlSecFloat, grpItvlSecFloat := float64(tc.rwInterval/time.Second), float64(tc.groupInterval/time.Second)
-	_8th := 8 * rwItvlSecFloat   // Goes into pending.
-	_21st := 21 * rwItvlSecFloat // Pending, but another value.
-	_32nd := 32 * rwItvlSecFloat // Goes into firing.
-	_53rd := 53 * rwItvlSecFloat // Firing, but another value.
-	_69th := 69 * rwItvlSecFloat // Resolved.
-	canBeInactive = between(0, _8th+grpItvlSecFloat) || between(_69th, 240*rwItvlSecFloat)
+	_8th := 8 * rwItvlSecFloat     // Goes into pending.
+	_21st := 21 * rwItvlSecFloat   // Pending, but another value.
+	_32nd := 32 * rwItvlSecFloat   // Goes into firing.
+	_53rd := 53 * rwItvlSecFloat   // Firing, but another value.
+	_69th := 69 * rwItvlSecFloat   // Resolved.
+	_89th := 89 * rwItvlSecFloat   // Pending again.
+	_113th := 113 * rwItvlSecFloat // Firing again.
+	_134th := 134 * rwItvlSecFloat // Resolved again.
+	canBeInactive = between(0, _8th+grpItvlSecFloat) ||
+		between(_69th-1, _89th+grpItvlSecFloat) ||
+		between(_134th, 240*rwItvlSecFloat)
 	canBePending1 = between(_8th-1, _21st+grpItvlSecFloat)
 	canBePending2 = between(_21st-1, _32nd+grpItvlSecFloat)
 	canBeFiring1 = between(_32nd-1, _53rd+grpItvlSecFloat)
 	canBeFiring2 = between(_53rd-1, _69th+grpItvlSecFloat)
+
+	pendingAgain = between(_89th-1, _113th+grpItvlSecFloat)
+	firingAgain = between(_113th-1, _134th+grpItvlSecFloat)
 	return
 }
 
 func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
-	_32nd := 32 * int64(tc.rwInterval/time.Millisecond) // Firing.
-	_53rd := 53 * int64(tc.rwInterval/time.Millisecond) // Firing with value change.
-	_69th := 69 * int64(tc.rwInterval/time.Millisecond) // Resolved.
-	_69thPlus15m := _69th + int64(15*time.Minute/time.Millisecond)
+	_32nd := 32 * int64(tc.rwInterval/time.Millisecond)   // Firing.
+	_53rd := 53 * int64(tc.rwInterval/time.Millisecond)   // Firing with value change.
+	_69th := 69 * int64(tc.rwInterval/time.Millisecond)   // Resolved.
+	_89th := 89 * int64(tc.rwInterval/time.Millisecond)   // Pending again.
+	_113th := 113 * int64(tc.rwInterval/time.Millisecond) // Firing again.
+	_134th := 134 * int64(tc.rwInterval/time.Millisecond) // Resolved again.
+	_134thPlus15m := _134th + int64(15*time.Minute/time.Millisecond)
 
 	var exp []ExpectedAlert
 	endsAtDelta := 4 * ResendDelay
@@ -330,8 +379,6 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 		endsAtDelta = 4 * tc.groupInterval
 	}
 
-	// TODO: there is a bug which is making firing alert to be detected as "missed" when it is
-	// already resolved. This is randomly occurring. Maybe some tracking error in the server.
 	resendDelayMs := int64(ResendDelay / time.Millisecond)
 	for ts := _32nd; ts < _53rd; ts += resendDelayMs {
 		exp = append(exp, ExpectedAlert{
@@ -369,7 +416,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 		})
 	}
 
-	for ts := _69th; ts < _69thPlus15m; ts += resendDelayMs {
+	for ts := _69th; ts < _89th; ts += resendDelayMs {
 		tolerance := tc.groupInterval
 		if ts == _69th {
 			// Since the alert state is reset, the alert sent time for resolved alert can be upto
@@ -385,12 +432,58 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,
 			Resend:        ts != _69th,
+			NextState:     timestamp.Time(tc.zeroTime + _89th),
 			ResolvedTime:  timestamp.Time(tc.zeroTime + _69th),
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
 				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19"),
 				StartsAt:    timestamp.Time(tc.zeroTime + _32nd),
+			},
+		})
+	}
+
+	// Firing again.
+	for ts := _113th; ts < _134th; ts += resendDelayMs {
+		exp = append(exp, ExpectedAlert{
+			OrderingID:    int(ts),
+			TimeTolerance: tc.groupInterval,
+			Ts:            timestamp.Time(tc.zeroTime + ts),
+			Resolved:      false,
+			Resend:        ts != _113th,
+			NextState:     timestamp.Time(tc.zeroTime + _134th),
+			ResolvedTime:  timestamp.Time(tc.zeroTime + _134th),
+			EndsAtDelta:   endsAtDelta,
+			Alert: &notifier.Alert{
+				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				StartsAt:    timestamp.Time(tc.zeroTime + _113th),
+			},
+		})
+	}
+
+	for ts := _134th; ts < _134thPlus15m; ts += resendDelayMs {
+		tolerance := tc.groupInterval
+		if ts == _134th {
+			// Since the alert state is reset, the alert sent time for resolved alert can be upto
+			// 1 groupInterval late compared to actual time when it gets resolved. So we need to
+			// account for this delay plus the usual tolerance.
+			// We don't change tolerance for other resolved alerts because their Ts will be adjusted
+			// based on this first resolved alert.
+			tolerance = 2 * tc.groupInterval
+		}
+		exp = append(exp, ExpectedAlert{
+			OrderingID:    int(ts),
+			TimeTolerance: tolerance,
+			Ts:            timestamp.Time(tc.zeroTime + ts),
+			Resolved:      true,
+			Resend:        ts != _134th,
+			ResolvedTime:  timestamp.Time(tc.zeroTime + _134th),
+			EndsAtDelta:   endsAtDelta,
+			Alert: &notifier.Alert{
+				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				StartsAt:    timestamp.Time(tc.zeroTime + _113th),
 			},
 		})
 	}

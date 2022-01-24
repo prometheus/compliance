@@ -230,6 +230,9 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 		var newExpAlerts []cases.ExpectedAlert
 		for _, ea := range eas.alerts {
 			// TODO: 2*cases.MaxAlertSendDelay because of some edge case. Like missed by some milli/micro seconds. Fix it.
+			if ea.ShouldBeIgnored() {
+				continue
+			}
 			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
 				if !ea.CanBeIgnored() {
 					missedAlerts = append(missedAlerts, ea)

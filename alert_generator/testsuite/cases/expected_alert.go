@@ -125,11 +125,22 @@ func (ea *ExpectedAlert) timeCanBeIgnored(t time.Time) bool {
 // CanBeIgnored tells if the alert can be ignored. It can be ignored in the following cases:
 // 1. It is a firing alert but it gets into "inactive" state within the tolerance time.
 // 2. It is a resolved alert but it was resolved more than 15m ago.
+// 3. The alert goes into the next state within the tolerance time.
 func (ea *ExpectedAlert) CanBeIgnored() bool {
 	// TODO: because of time adjusting for resends, this might be wrong.
 	return (ea.Resolved && ea.Ts.Sub(ea.ResolvedTime) > 15*time.Minute) || // Time limit for sending resolved.
 		// Might have gone into next state.
 		(ea.NextState != time.Time{} && ea.timeCanBeIgnored(ea.NextState)) ||
 		// Might be near resolved state.
-		(ea.ResolvedTime != time.Time{} && ea.timeCanBeIgnored(ea.ResolvedTime))
+		(ea.ResolvedTime != time.Time{} && !ea.Resolved && ea.timeCanBeIgnored(ea.ResolvedTime))
+}
+
+// ShouldBeIgnored tells if the alert should be ignored. It is ignored in the following cases:
+// 1. It is a resolved alert and Ts has crossed ResolvedTime+15m.
+// 2. Ts has crossed the next state time.
+func (ea *ExpectedAlert) ShouldBeIgnored() bool {
+	// TODO: because of time adjusting for resends, this might be wrong.
+	return (ea.Resolved && ea.Ts.Sub(ea.ResolvedTime) > 15*time.Minute) || // Time limit for sending resolved.
+		// Gone into next state.
+		(ea.NextState != time.Time{} && ea.Ts.After(ea.NextState))
 }

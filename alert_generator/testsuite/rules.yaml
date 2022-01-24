@@ -41,7 +41,7 @@ groups:
           annotations:
             description: This should immediately fire
         - alert: ZeroFor_SmallFor_SmallFor
-          expr: '{__name__="alert_generator_test_suite", alertname="ZeroFor_SmallFor_SmallFor", rulegroup="ZeroFor_SmallFor"} > 10'
+          expr: '{__name__="alert_generator_test_suite", alertname="ZeroFor_SmallFor_SmallFor", rulegroup="ZeroFor_SmallFor"} > 13'
           for: 5s
           labels:
             ba_dum: tss

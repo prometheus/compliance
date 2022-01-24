@@ -15,6 +15,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// PendingAndResolved_AlwaysInactive tests the following cases:
+// * Alert that goes from pending->inactive.
+// * Rule that never becomes active (i.e. alerts in pending or firing).
 func PendingAndResolved_AlwaysInactive() TestCase {
 	groupName := "PendingAndResolved_AlwaysInactive"
 	pendingAlertName := groupName + "_PendingAlert"
@@ -51,7 +54,8 @@ type pendingAndResolved struct {
 
 func (tc *pendingAndResolved) Describe() (title string, description string) {
 	return tc.groupName,
-		"An alert goes from pending to firing to resolved state and stays in resolved state"
+		"(1) Alert that goes from pending->inactive. " +
+			"(2) Rule that never becomes active (i.e. alerts in pending or firing)."
 }
 
 func (tc *pendingAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
@@ -251,7 +255,7 @@ func (tc *pendingAndResolved) allPossibleStates(ts int64) (canBeInactive, canBeP
 
 	rwItvlSecFloat, grpItvlSecFloat := float64(tc.rwInterval/time.Second), float64(tc.groupInterval/time.Second)
 	_8th := 8 * rwItvlSecFloat   // Goes into pending.
-	_19th := 20 * rwItvlSecFloat // Becomes inactive again.
+	_19th := 19 * rwItvlSecFloat // Becomes inactive.
 	canBeInactive = between(0, _8th+grpItvlSecFloat) || between(_19th, 240*rwItvlSecFloat)
 	canBePending = between(_8th-1, _19th+grpItvlSecFloat)
 	return
