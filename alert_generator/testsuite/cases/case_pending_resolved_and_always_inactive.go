@@ -80,22 +80,18 @@ func (tc *pendingAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
 		Interval: model.Duration(tc.groupInterval),
 		Rules: []rulefmt.RuleNode{
 			{ // inactive -> pending -> inactive.
-				Alert:  pendingAlert,
-				Expr:   pendingExpr,
-				For:    tc.forDuration,
-				Labels: map[string]string{"foo": "bar", "rulegroup": tc.groupName},
-				Annotations: map[string]string{
-					"description": "SimpleAlert is firing",
-				},
+				Alert:       pendingAlert,
+				Expr:        pendingExpr,
+				For:         tc.forDuration,
+				Labels:      map[string]string{"foo": "bar", "rulegroup": tc.groupName},
+				Annotations: map[string]string{"description": "SimpleAlert is firing"},
 			},
 			{ // Always inactive.
-				Alert:  inactiveAlert,
-				Expr:   inactiveExpr,
-				For:    tc.forDuration,
-				Labels: map[string]string{"ba_dum": "tss", "rulegroup": tc.groupName},
-				Annotations: map[string]string{
-					"description": "This should never fire",
-				},
+				Alert:       inactiveAlert,
+				Expr:        inactiveExpr,
+				For:         tc.forDuration,
+				Labels:      map[string]string{"ba_dum": "tss", "rulegroup": tc.groupName},
+				Annotations: map[string]string{"description": "This should never fire"},
 			},
 		},
 	}, nil

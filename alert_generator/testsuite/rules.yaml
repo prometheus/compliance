@@ -40,6 +40,7 @@ groups:
             rulegroup: ZeroFor_SmallFor
           annotations:
             description: This should immediately fire
+            template_test: '{{humanize 1048576}} {{humanize1024 1048576}} {{humanizeDuration 135.3563}} {{humanizePercentage 0.959}} {{humanizeTimestamp 1643114203}}'
         - alert: ZeroFor_SmallFor_SmallFor
           expr: '{__name__="alert_generator_test_suite", alertname="ZeroFor_SmallFor_SmallFor", rulegroup="ZeroFor_SmallFor"} > 13'
           for: 5s
@@ -48,6 +49,7 @@ groups:
             rulegroup: ZeroFor_SmallFor
           annotations:
             description: This should fire after an interval
+            template_test: '{{title "this part"}} {{toUpper "is testing"}} {{toLower "THE STRINGS"}}. {{if match "[0-9]+" "1234"}}{{reReplaceAll "r.*d" "replaced" "rpld text"}}{{end}}. {{if match "[0-9]+$" "1234a"}}WRONG{{end}}.'
     - name: NewAlerts_OrderCheck
       interval: 10s
       rules:
