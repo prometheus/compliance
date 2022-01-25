@@ -403,12 +403,17 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 		endsAtDelta = 4 * tc.groupInterval
 	}
 
-	resendDelayMs := int64(ResendDelay / time.Millisecond)
+	orderingID := 0
+	addAlert := func(ea ExpectedAlert) {
+		orderingID++
+		ea.OrderingID = orderingID
+		exp = append(exp, ea)
+	}
 
+	resendDelayMs := int64(ResendDelay / time.Millisecond)
 	// Zero for.
 	for ts := _8th; ts < _21st; ts += resendDelayMs {
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -433,8 +438,7 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			// based on this first resolved alert.
 			tolerance = 2 * tc.groupInterval
 		}
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,
@@ -450,8 +454,7 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 		})
 	}
 	for ts := _93rd; ts < _106th; ts += resendDelayMs {
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -476,8 +479,7 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			// based on this first resolved alert.
 			tolerance = 2 * tc.groupInterval
 		}
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,
@@ -494,8 +496,7 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 
 	// Small for.
 	for ts := _8th_plus_gi; ts < _21st; ts += resendDelayMs {
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -520,8 +521,7 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			// based on this first resolved alert.
 			tolerance = 2 * tc.groupInterval
 		}
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,

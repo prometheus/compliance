@@ -83,7 +83,7 @@ func (tc *pendingAndFiringAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
 				Labels: map[string]string{"foo": "bar", "rulegroup": tc.groupName},
 				Annotations: map[string]string{
 					"description": "SimpleAlert is firing",
-					"summary":     "The value is {{$value}}",
+					"summary":     "The value is {{$value}} {{.Value}}",
 				},
 			},
 		},
@@ -162,7 +162,7 @@ func (tc *pendingAndFiringAndResolved) expAlerts(ts int64, alerts []v1.Alert) (e
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 11"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 11 11"),
 				State:       "pending",
 				Value:       "11",
 				ActiveAt:    &activeAt,
@@ -178,7 +178,7 @@ func (tc *pendingAndFiringAndResolved) expAlerts(ts int64, alerts []v1.Alert) (e
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15 15"),
 				State:       "pending",
 				Value:       "15",
 				ActiveAt:    &aa,
@@ -194,7 +194,7 @@ func (tc *pendingAndFiringAndResolved) expAlerts(ts int64, alerts []v1.Alert) (e
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15 15"),
 				State:       "firing",
 				Value:       "15",
 				ActiveAt:    &aa,
@@ -206,7 +206,7 @@ func (tc *pendingAndFiringAndResolved) expAlerts(ts int64, alerts []v1.Alert) (e
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19 19"),
 				State:       "firing",
 				Value:       "19",
 				ActiveAt:    &activeAt,
@@ -238,7 +238,7 @@ func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.Rule
 					Query:       tc.query,
 					Duration:    float64(time.Duration(tc.forDuration) / time.Second),
 					Labels:      labels.FromStrings("foo", "bar", "rulegroup", tc.groupName),
-					Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is {{$value}}"),
+					Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is {{$value}} {{.Value}}"),
 					Alerts:      alerts,
 					Health:      "ok",
 					Type:        "alerting",
@@ -254,7 +254,7 @@ func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.Rule
 		expRgs = append(expRgs, getRg("pending", []*v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 11"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 11 11"),
 				State:       "pending",
 				Value:       "11",
 				ActiveAt:    &activeAt,
@@ -269,7 +269,7 @@ func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.Rule
 		expRgs = append(expRgs, getRg("pending", []*v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15 15"),
 				State:       "pending",
 				Value:       "15",
 				ActiveAt:    &aa,
@@ -284,7 +284,7 @@ func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.Rule
 		expRgs = append(expRgs, getRg("firing", []*v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15 15"),
 				State:       "firing",
 				Value:       "15",
 				ActiveAt:    &aa,
@@ -295,7 +295,7 @@ func (tc *pendingAndFiringAndResolved) expRuleGroups(ts int64) (expRgs []v1.Rule
 		expRgs = append(expRgs, getRg("firing", []*v1.Alert{
 			{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19 19"),
 				State:       "firing",
 				Value:       "19",
 				ActiveAt:    &activeAt,
@@ -379,10 +379,16 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 		endsAtDelta = 4 * tc.groupInterval
 	}
 
+	orderingID := 0
+	addAlert := func(ea ExpectedAlert) {
+		orderingID++
+		ea.OrderingID = orderingID
+		exp = append(exp, ea)
+	}
+
 	resendDelayMs := int64(ResendDelay / time.Millisecond)
 	for ts := _32nd; ts < _53rd; ts += resendDelayMs {
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -392,15 +398,14 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15 15"),
 				StartsAt:    timestamp.Time(tc.zeroTime + _32nd),
 			},
 		})
 	}
 	// Value change.
 	for ts := _53rd; ts < _69th; ts += resendDelayMs {
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -410,7 +415,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19 19"),
 				StartsAt:    timestamp.Time(tc.zeroTime + _32nd),
 			},
 		})
@@ -426,8 +431,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			// based on this first resolved alert.
 			tolerance = 2 * tc.groupInterval
 		}
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,
@@ -437,7 +441,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 19 19"),
 				StartsAt:    timestamp.Time(tc.zeroTime + _32nd),
 			},
 		})
@@ -445,8 +449,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 
 	// Firing again.
 	for ts := _113th; ts < _134th; ts += resendDelayMs {
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -456,7 +459,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15 15"),
 				StartsAt:    timestamp.Time(tc.zeroTime + _113th),
 			},
 		})
@@ -472,8 +475,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			// based on this first resolved alert.
 			tolerance = 2 * tc.groupInterval
 		}
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,
@@ -482,7 +484,7 @@ func (tc *pendingAndFiringAndResolved) ExpectedAlerts() []ExpectedAlert {
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
 				Labels:      labels.FromStrings("alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15"),
+				Annotations: labels.FromStrings("description", "SimpleAlert is firing", "summary", "The value is 15 15"),
 				StartsAt:    timestamp.Time(tc.zeroTime + _113th),
 			},
 		})

@@ -10,7 +10,7 @@ groups:
             rulegroup: PendingAndFiringAndResolved
           annotations:
             description: SimpleAlert is firing
-            summary: The value is {{$value}}
+            summary: The value is {{$value}} {{.Value}}
     - name: PendingAndResolved_AlwaysInactive
       interval: 10s
       rules:
@@ -66,4 +66,4 @@ groups:
             foo: baz
             rulegroup: NewAlerts_OrderCheck
           annotations:
-            description: Based on ALERTS. Old alertname was {{$labels.alertname}}. foo was {{$labels.foo}}.
+            description: Based on ALERTS. Old alertname was {{$labels.alertname}}. foo was {{.Labels.foo}}.
