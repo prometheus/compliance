@@ -3,6 +3,7 @@ package testsuite
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/prometheus/prometheus/model/labels"
 	"io/ioutil"
 	"net/http"
 	"sort"
@@ -147,6 +148,7 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 						continue
 					}
 					lastResendWasIgnored = false
+					fmt.Println("Missed 1")
 					missedAlerts = append(missedAlerts, ma)
 				} else {
 					lastResendWasIgnored = ma.Resend
@@ -167,12 +169,15 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	// between the first alert sent and Nth resend can be upto N*(ResendDelay+GroupInterval), and not N*ResendDelay.
 	// Hence, we adjust our time expectation for the next alert if it is supposed to be a resend.
 Outer2:
-	for id, _ := range success {
+	for id, sa := range success {
 		eas := as.expectedAlerts[id]
 		if len(eas.alerts) == 0 {
 			continue
 		}
 		for i := range eas.alerts {
+			if labels.Compare(eas.alerts[i].Alert.Labels, sa.Alert.Labels) != 0 {
+				continue
+			}
 			if !eas.alerts[i].Resend {
 				continue Outer2
 			}
@@ -234,6 +239,7 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 				continue
 			}
 			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
+				fmt.Println("Missed 2")
 				if !ea.CanBeIgnored() {
 					missedAlerts = append(missedAlerts, ea)
 				}

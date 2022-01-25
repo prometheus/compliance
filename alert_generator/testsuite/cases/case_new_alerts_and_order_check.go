@@ -94,7 +94,7 @@ func (tc *newAlertsAndOrderCheck) RuleGroup() (rulefmt.RuleGroup, error) {
 				Expr:   r2Expr,
 				Labels: map[string]string{"foo": "baz", "ba_dum": "tss", "rulegroup": tc.groupName},
 				// The expression also has alertname. So this template variable should result in r1AlertName.
-				Annotations: map[string]string{"description": "Based on ALERTS. Old alertname was {{$labels.alertname}}. foo was {{$labels.foo}}."},
+				Annotations: map[string]string{"description": "Based on ALERTS. Old alertname was {{$labels.alertname}}. foo was {{.Labels.foo}}."},
 			},
 		},
 	}, nil
@@ -297,7 +297,7 @@ func (tc *newAlertsAndOrderCheck) expRuleGroups(ts int64) (expRgs []v1.RuleGroup
 					Name:        tc.r2AlertName,
 					Query:       tc.r2Query,
 					Labels:      labels.FromStrings("foo", "baz", "ba_dum", "tss", "rulegroup", tc.groupName),
-					Annotations: labels.FromStrings("description", "Based on ALERTS. Old alertname was {{$labels.alertname}}. foo was {{$labels.foo}}."),
+					Annotations: labels.FromStrings("description", "Based on ALERTS. Old alertname was {{$labels.alertname}}. foo was {{.Labels.foo}}."),
 					Alerts:      a2,
 					Health:      "ok",
 					Type:        "alerting",
@@ -490,13 +490,19 @@ func (tc *newAlertsAndOrderCheck) ExpectedAlerts() []ExpectedAlert {
 
 	resendDelayMs := int64(ResendDelay / time.Millisecond)
 
+	orderingID := 0
+	addAlert := func(ea ExpectedAlert) {
+		orderingID++
+		ea.OrderingID = orderingID
+		exp = append(exp, ea)
+	}
+
 	// r11.
 	_20th := 20 * int64(tc.rwInterval/time.Millisecond) // Firing.
 	_73rd := 73 * int64(tc.rwInterval/time.Millisecond) // Resolved.
 	_73rdPlus15m := _73rd + int64(15*time.Minute/time.Millisecond)
 	for ts := _20th; ts < _73rd; ts += resendDelayMs {
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -521,8 +527,7 @@ func (tc *newAlertsAndOrderCheck) ExpectedAlerts() []ExpectedAlert {
 			// based on this first resolved alert.
 			tolerance = 2 * tc.groupInterval
 		}
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,
@@ -543,8 +548,7 @@ func (tc *newAlertsAndOrderCheck) ExpectedAlerts() []ExpectedAlert {
 	_65thPlus15m := _65th + int64(15*time.Minute/time.Millisecond)
 	//_8th_plus_gi := _8th + int64(tc.groupInterval/time.Millisecond) // Small for firing.
 	for ts := _44th; ts < _65th; ts += resendDelayMs {
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -560,8 +564,7 @@ func (tc *newAlertsAndOrderCheck) ExpectedAlerts() []ExpectedAlert {
 		})
 
 		// r2.
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tc.groupInterval,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      false,
@@ -586,8 +589,7 @@ func (tc *newAlertsAndOrderCheck) ExpectedAlerts() []ExpectedAlert {
 			// based on this first resolved alert.
 			tolerance = 2 * tc.groupInterval
 		}
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,
@@ -601,8 +603,7 @@ func (tc *newAlertsAndOrderCheck) ExpectedAlerts() []ExpectedAlert {
 			},
 		})
 
-		exp = append(exp, ExpectedAlert{
-			OrderingID:    int(ts),
+		addAlert(ExpectedAlert{
 			TimeTolerance: tolerance,
 			Ts:            timestamp.Time(tc.zeroTime + ts),
 			Resolved:      true,

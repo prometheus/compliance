@@ -459,12 +459,13 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 					if ma.Resolved {
 						state = "resolved"
 					}
-					describe += fmt.Sprintf("\t\t%d: Expected time: %s, Labels: %s, Annotations: %s, State: %s\n",
+					describe += fmt.Sprintf("\t\t%d: Expected time: %s, Labels: %s, Annotations: %s, State: %s, Resend: %t\n",
 						i+1,
 						ma.Ts.Format(time.RFC3339Nano),
 						ma.Alert.Labels.String(),
 						ma.Alert.Annotations.String(),
 						state,
+						ma.Resend,
 					)
 				}
 			}
