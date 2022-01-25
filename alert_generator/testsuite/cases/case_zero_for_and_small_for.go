@@ -22,6 +22,7 @@ import (
 //   after the second evaluation of the rule and not before.
 // * Alert that becomes active after having fired already and gone into inactive state where for duration
 //   is zero and the inactive alert was not being sent anymore.
+// * Alert goes into inactive when there is no more data when in firing.
 func ZeroFor_SmallFor() TestCase {
 	groupName := "ZeroFor_SmallFor"
 	zfAlertName := groupName + "_ZeroFor"
@@ -60,7 +61,8 @@ func (tc *zeroAndSmallFor) Describe() (title string, description string) {
 	return tc.groupName,
 		"(1) Alert that goes directly to firing state (skipping the pending state) because of zero for duration. " +
 			"(2) When the for duration is non-zero and less than the evaluation interval, firing alert must be sent after the second evaluation of the rule and not before. " +
-			"(3) Alert that becomes active after having fired already and gone into inactive state where 'for' duration is zero and the inactive alert was not being sent anymore."
+			"(3) Alert that becomes active after having fired already and gone into inactive state where 'for' duration is zero and the inactive alert was not being sent anymore." +
+			"(4) Alert goes into inactive when there is no more data when in firing."
 }
 
 func (tc *zeroAndSmallFor) RuleGroup() (rulefmt.RuleGroup, error) {
@@ -110,7 +112,7 @@ func (tc *zeroAndSmallFor) SamplesToRemoteWrite() []prompb.TimeSeries {
 		"11", "0x12", // Zero 'for' alert goes into firing again. ~3m of this.
 		"9", // Resolved again.
 	)
-	tc.totalSamples = len(samples) + 20 // We want to wait for 5m more to see inavtive alerts.
+	tc.totalSamples = len(samples) + 20 // We want to wait for 5m more to see inactive alerts.
 	return []prompb.TimeSeries{
 		{
 			Labels:  toProtoLabels(tc.zfMetricLabels),
