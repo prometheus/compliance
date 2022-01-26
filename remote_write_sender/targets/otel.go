@@ -5,10 +5,10 @@ import (
 	"os"
 )
 
-const otelDownloadURL = "https://github.com/open-telemetry/opentelemetry-collector/releases/download/v0.37.0/otelcol_{{.OS}}_{{.Arch}}"
+const otelDownloadURL = "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.42.0/otelcol_0.42.0_{{.OS}}_{{.Arch}}.tar.gz"
 
 func RunOtelCollector(opts TargetOptions) error {
-	binary, err := downloadBinary(otelDownloadURL, "")
+	binary, err := downloadBinary(otelDownloadURL, "otelcol")
 	if err != nil {
 		return err
 	}
@@ -43,5 +43,5 @@ service:
 	}
 	defer os.Remove(configFileName)
 
-	return runCommand(binary, opts.Timeout, `--metrics-addr=:0`, fmt.Sprintf("--config=%s", configFileName))
+	return runCommand(binary, opts.Timeout, `--set=service.telemetry.metrics.address=:0`, fmt.Sprintf("--config=%s", configFileName))
 }
