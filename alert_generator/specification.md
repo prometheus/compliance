@@ -62,7 +62,7 @@ An alert in JSON MUST follow the following format:
 
 ### The Format
 
-The alert-generator MUST accept the Prometheus style alerting rules configuration as described in the [v2.30 docs for Alerting Rules](https://prometheus.io/docs/prometheus/2.30/configuration/alerting_rules/) with the following structure. It MUST be in either YAML format or an equivalent JSON format. Alert-generator MAY accept them as files on disk or via an API.
+The alert-generator MUST accept the Prometheus style alerting rules configuration as described in the [v2.33 docs for Alerting Rules](https://prometheus.io/docs/prometheus/2.33/configuration/alerting_rules/) with the following structure. It MUST be in either YAML format or an equivalent JSON format. Alert-generator MAY accept them as files on disk or via an API.
 
 ```yaml
 groups:
@@ -122,7 +122,13 @@ groups:
 ### Constraints
 
 1. Results of a rule evaluation MUST be available for any subsequent rules in the group during the same evaluation cycle that depend on these results. The order of rules MUST be the same as provided in the config.
-2. Labels and annotations in alerting rules MUST support all template variables and functions as described in the [v2.30 template reference](https://prometheus.io/docs/prometheus/2.30/configuration/template_reference/) for the values except `graphLink` and `tableLink`. `graphLink` and `tableLink` MAY be supported if the sample querier supports having a UI link for graph and table respectively. The config MUST NOT be rejected if it contains the optional template functions `graphLink` and `tableLink`; those functions MUST result in an empty string if not supported.
+2. Labels and annotations in alerting rules MUST support all template variables and functions as described in the [v2.33 template reference](https://prometheus.io/docs/prometheus/2.33/configuration/template_reference/) for the values with the following exceptions:
+   * `graphLink`, `tableLink`: MAY be supported if the sample querier supports having a UI link for graph and table respectively.
+   * `tmpl`, `pathPrefix`: MAY be supported if the software supports console templates.
+   * `strvalue`: MAY be supported if there is a use case.
+   * `.ExternalLabels`/`$externalLabels`, `.ExternalURL`/`$externalURL`: MAY be supported if the software supports configuring external labels and external URL.
+  
+    The config MUST NOT be rejected if it contains the optional template variables and/or functions; those MUST result in an empty string if not supported.
 
 ## Executing an Alerting Rule
 
