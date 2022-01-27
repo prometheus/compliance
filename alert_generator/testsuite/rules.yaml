@@ -40,6 +40,7 @@ groups:
             rulegroup: ZeroFor_SmallFor
           annotations:
             description: This should immediately fire
+            template_query_test: '{{ define "testtemplate" }}Args are: {{.arg0}} {{.arg1}} {{.arg2}}. {{ with query "alert_generator_test_suite{rulegroup=''ZeroFor_SmallFor'',for=''template''}" }}first_id:{{ . | sortByLabel "id" | first | label "id"}},{{ range $v := sortByLabel "id" .}}{{ . | label "id" }}:{{ . | value }},{{end}}{{end}}{{ end }}{{ template "testtemplate" (args "foo" "bar" 99) }}'
             template_test: '{{humanize 1048576}} {{humanize1024 1048576}} {{humanizeDuration 135.3563}} {{humanizePercentage 0.959}} {{humanizeTimestamp 1643114203}}'
         - alert: ZeroFor_SmallFor_SmallFor
           expr: '{__name__="alert_generator_test_suite", alertname="ZeroFor_SmallFor_SmallFor", rulegroup="ZeroFor_SmallFor"} > 13'
@@ -49,7 +50,7 @@ groups:
             rulegroup: ZeroFor_SmallFor
           annotations:
             description: This should fire after an interval
-            template_test: '{{title "this part"}} {{toUpper "is testing"}} {{toLower "THE STRINGS"}}. {{if match "[0-9]+" "1234"}}{{reReplaceAll "r.*d" "replaced" "rpld text"}}{{end}}. {{if match "[0-9]+$" "1234a"}}WRONG{{end}}.'
+            template_test: '{{title "this part"}} {{toUpper "is testing"}} {{toLower "THE STRINGS"}}. {{ stripPort "[::1]:6006"}} {{ stripPort "127.0.0.1:4004"}}. {{parseDuration "2h10m15s"}}. {{if match "[0-9]+" "1234"}}{{reReplaceAll "r.*d" "replaced" "rpld text"}}{{end}}. {{if match "[0-9]+$" "1234a"}}WRONG{{end}}.'
     - name: NewAlerts_OrderCheck
       interval: 10s
       rules:

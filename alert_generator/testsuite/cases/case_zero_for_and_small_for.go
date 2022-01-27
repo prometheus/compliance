@@ -91,6 +91,9 @@ func (tc *zeroAndSmallFor) RuleGroup() (rulefmt.RuleGroup, error) {
 				Annotations: map[string]string{
 					"description":   "This should immediately fire",
 					"template_test": "{{humanize 1048576}} {{humanize1024 1048576}} {{humanizeDuration 135.3563}} {{humanizePercentage 0.959}} {{humanizeTimestamp 1643114203}}",
+					"template_query_test": fmt.Sprintf(`{{ define "testtemplate" }}Args are: {{.arg0}} {{.arg1}} {{.arg2}}. {{ with query "%s{rulegroup='%s',for='template'}" }}first_id:{{ . | sortByLabel "id" | first | label "id"}},{{ range $v := sortByLabel "id" .}}{{ . | label "id" }}:{{ . | value }},{{end}}{{end}}{{ end }}{{ template "testtemplate" (args "foo" "bar" 99) }}`,
+						sourceTimeSeriesName, tc.groupName,
+					),
 				},
 			},
 			{ // Small for.
@@ -100,7 +103,7 @@ func (tc *zeroAndSmallFor) RuleGroup() (rulefmt.RuleGroup, error) {
 				Labels: map[string]string{"ba_dum": "tss", "rulegroup": tc.groupName},
 				Annotations: map[string]string{
 					"description":   "This should fire after an interval",
-					"template_test": `{{title "this part"}} {{toUpper "is testing"}} {{toLower "THE STRINGS"}}. {{if match "[0-9]+" "1234"}}{{reReplaceAll "r.*d" "replaced" "rpld text"}}{{end}}. {{if match "[0-9]+$" "1234a"}}WRONG{{end}}.`,
+					"template_test": `{{title "this part"}} {{toUpper "is testing"}} {{toLower "THE STRINGS"}}. {{ stripPort "[::1]:6006"}} {{ stripPort "127.0.0.1:4004"}}. {{parseDuration "2h10m15s"}}. {{if match "[0-9]+" "1234"}}{{reReplaceAll "r.*d" "replaced" "rpld text"}}{{end}}. {{if match "[0-9]+$" "1234a"}}WRONG{{end}}.`,
 				},
 			},
 		},
@@ -119,7 +122,8 @@ func (tc *zeroAndSmallFor) SamplesToRemoteWrite() []prompb.TimeSeries {
 		"9", // Resolved again.
 	)
 	tc.totalSamples = len(samples) + 20 // We want to wait for 5m more to see inactive alerts.
-	return []prompb.TimeSeries{
+
+	series := []prompb.TimeSeries{
 		{
 			Labels:  toProtoLabels(tc.zfMetricLabels),
 			Samples: samples,
@@ -129,6 +133,25 @@ func (tc *zeroAndSmallFor) SamplesToRemoteWrite() []prompb.TimeSeries {
 			Samples: samples,
 		},
 	}
+
+	// Samples for the template query.
+	for i := 1; i <= 3; i++ {
+		series = append(series, prompb.TimeSeries{
+			Labels: toProtoLabels(labels.FromStrings(
+				"__name__", sourceTimeSeriesName,
+				"rulegroup", tc.groupName,
+				"for", "template",
+				"id", fmt.Sprintf("%d", 100+i),
+				"__value__", fmt.Sprintf("val%d", i),
+			)),
+			Samples: sampleSlice(tc.rwInterval,
+				fmt.Sprintf("%d", i), "0x27", // 7m of this.
+				fmt.Sprintf("%d", 2*i), "0x200", // Rest of the time technically.
+			),
+		})
+	}
+
+	return series
 }
 
 func (tc *zeroAndSmallFor) Init(zt int64) {
@@ -175,15 +198,19 @@ func (tc *zeroAndSmallFor) expAlerts(ts int64, alerts []v1.Alert) (expAlerts [][
 	if zfFiring && sfPending {
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
-				Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-				State:       "firing",
-				Value:       "15",
-				ActiveAt:    &activeAt,
+				Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings(
+					"description", "This should immediately fire",
+					"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+					"template_query_test", "Args are: foo bar 99. first_id:101,101:1,102:2,103:3,",
+				),
+				State:    "firing",
+				Value:    "15",
+				ActiveAt: &activeAt,
 			},
 			{
 				Labels:      labels.FromStrings("alertname", tc.sfAlertName, "ba_dum", "tss", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. replaced text. ."),
+				Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. ::1 127.0.0.1. 7815. replaced text. ."),
 				State:       "pending",
 				Value:       "15",
 				ActiveAt:    &activeAt,
@@ -194,15 +221,19 @@ func (tc *zeroAndSmallFor) expAlerts(ts int64, alerts []v1.Alert) (expAlerts [][
 	if zfFiring && sfFiring {
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
-				Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-				State:       "firing",
-				Value:       "15",
-				ActiveAt:    &activeAt,
+				Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings(
+					"description", "This should immediately fire",
+					"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+					"template_query_test", "Args are: foo bar 99. first_id:101,101:1,102:2,103:3,",
+				),
+				State:    "firing",
+				Value:    "15",
+				ActiveAt: &activeAt,
 			},
 			{
 				Labels:      labels.FromStrings("alertname", tc.sfAlertName, "ba_dum", "tss", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. replaced text. ."),
+				Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. ::1 127.0.0.1. 7815. replaced text. ."),
 				State:       "firing",
 				Value:       "15",
 				ActiveAt:    &activeAt,
@@ -213,11 +244,15 @@ func (tc *zeroAndSmallFor) expAlerts(ts int64, alerts []v1.Alert) (expAlerts [][
 	if zfFiringAgain {
 		expAlerts = append(expAlerts, []v1.Alert{
 			{
-				Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-				State:       "firing",
-				Value:       "11",
-				ActiveAt:    &activeAt2,
+				Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings(
+					"description", "This should immediately fire",
+					"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+					"template_query_test", "Args are: foo bar 99. first_id:101,101:2,102:4,103:6,",
+				),
+				State:    "firing",
+				Value:    "11",
+				ActiveAt: &activeAt2,
 			},
 		})
 		desc += "/firing_again"
@@ -248,6 +283,9 @@ func (tc *zeroAndSmallFor) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
 					Annotations: labels.FromStrings(
 						"description", "This should immediately fire",
 						"template_test", "{{humanize 1048576}} {{humanize1024 1048576}} {{humanizeDuration 135.3563}} {{humanizePercentage 0.959}} {{humanizeTimestamp 1643114203}}",
+						"template_query_test", fmt.Sprintf(`{{ define "testtemplate" }}Args are: {{.arg0}} {{.arg1}} {{.arg2}}. {{ with query "%s{rulegroup='%s',for='template'}" }}first_id:{{ . | sortByLabel "id" | first | label "id"}},{{ range $v := sortByLabel "id" .}}{{ . | label "id" }}:{{ . | value }},{{end}}{{end}}{{ end }}{{ template "testtemplate" (args "foo" "bar" 99) }}`,
+							sourceTimeSeriesName, tc.groupName,
+						),
 					),
 					Alerts: a1,
 					Health: "ok",
@@ -261,7 +299,7 @@ func (tc *zeroAndSmallFor) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
 					Labels:   labels.FromStrings("ba_dum", "tss", "rulegroup", tc.groupName),
 					Annotations: labels.FromStrings(
 						"description", "This should fire after an interval",
-						"template_test", `{{title "this part"}} {{toUpper "is testing"}} {{toLower "THE STRINGS"}}. {{if match "[0-9]+" "1234"}}{{reReplaceAll "r.*d" "replaced" "rpld text"}}{{end}}. {{if match "[0-9]+$" "1234a"}}WRONG{{end}}.`,
+						"template_test", `{{title "this part"}} {{toUpper "is testing"}} {{toLower "THE STRINGS"}}. {{ stripPort "[::1]:6006"}} {{ stripPort "127.0.0.1:4004"}}. {{parseDuration "2h10m15s"}}. {{if match "[0-9]+" "1234"}}{{reReplaceAll "r.*d" "replaced" "rpld text"}}{{end}}. {{if match "[0-9]+$" "1234a"}}WRONG{{end}}.`,
 					),
 					Alerts: a2,
 					Health: "ok",
@@ -278,17 +316,21 @@ func (tc *zeroAndSmallFor) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
 		expRgs = append(expRgs, getRg("firing", "pending",
 			[]*v1.Alert{
 				{
-					Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-					Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-					State:       "firing",
-					Value:       "15",
-					ActiveAt:    &activeAt,
+					Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+					Annotations: labels.FromStrings(
+						"description", "This should immediately fire",
+						"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+						"template_query_test", "Args are: foo bar 99. first_id:101,101:1,102:2,103:3,",
+					),
+					State:    "firing",
+					Value:    "15",
+					ActiveAt: &activeAt,
 				},
 			},
 			[]*v1.Alert{
 				{
 					Labels:      labels.FromStrings("alertname", tc.sfAlertName, "ba_dum", "tss", "rulegroup", tc.groupName),
-					Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. replaced text. ."),
+					Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. ::1 127.0.0.1. 7815. replaced text. ."),
 					State:       "pending",
 					Value:       "15",
 					ActiveAt:    &activeAt,
@@ -300,17 +342,21 @@ func (tc *zeroAndSmallFor) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
 		expRgs = append(expRgs, getRg("firing", "firing",
 			[]*v1.Alert{
 				{
-					Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-					Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-					State:       "firing",
-					Value:       "15",
-					ActiveAt:    &activeAt,
+					Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+					Annotations: labels.FromStrings(
+						"description", "This should immediately fire",
+						"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+						"template_query_test", "Args are: foo bar 99. first_id:101,101:1,102:2,103:3,",
+					),
+					State:    "firing",
+					Value:    "15",
+					ActiveAt: &activeAt,
 				},
 			},
 			[]*v1.Alert{
 				{
 					Labels:      labels.FromStrings("alertname", tc.sfAlertName, "ba_dum", "tss", "rulegroup", tc.groupName),
-					Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. replaced text. ."),
+					Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. ::1 127.0.0.1. 7815. replaced text. ."),
 					State:       "firing",
 					Value:       "15",
 					ActiveAt:    &activeAt,
@@ -322,11 +368,15 @@ func (tc *zeroAndSmallFor) expRuleGroups(ts int64) (expRgs []v1.RuleGroup) {
 		expRgs = append(expRgs, getRg("firing", "inactive",
 			[]*v1.Alert{
 				{
-					Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-					Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-					State:       "firing",
-					Value:       "11",
-					ActiveAt:    &activeAt2,
+					Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+					Annotations: labels.FromStrings(
+						"description", "This should immediately fire",
+						"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+						"template_query_test", "Args are: foo bar 99. first_id:101,101:2,102:4,103:6,",
+					),
+					State:    "firing",
+					Value:    "11",
+					ActiveAt: &activeAt2,
 				},
 			}, nil,
 		))
@@ -397,15 +447,16 @@ func (tc *zeroAndSmallFor) allPossibleStates(ts int64) (canBeInactive, zfFiring,
 
 	sfPending = between(_8th-1, _8th+(2*grpItvlSecFloat))
 	sfFiring = between(_8th+grpItvlSecFloat, _21st+grpItvlSecFloat)
+
 	return
 }
 
 func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
-	_8th := 8 * int64(tc.rwInterval/time.Millisecond)               // Zero for firing.
-	_8th_plus_gi := _8th + int64(tc.groupInterval/time.Millisecond) // Small for firing.
-	_21st := 21 * int64(tc.rwInterval/time.Millisecond)             // Resolved.
+	_8th := 8 * int64(tc.rwInterval/time.Millisecond)               // Zero 'for' firing.
+	_8th_plus_gi := _8th + int64(tc.groupInterval/time.Millisecond) // Small 'for' firing.
+	_21st := 21 * int64(tc.rwInterval/time.Millisecond)             // All resolved.
 	_21stPlus15m := _21st + int64(15*time.Minute/time.Millisecond)
-	_93rd := 93 * int64(tc.rwInterval/time.Millisecond)   // Firing again.
+	_93rd := 93 * int64(tc.rwInterval/time.Millisecond)   // Zero 'for' firing again.
 	_106th := 106 * int64(tc.rwInterval/time.Millisecond) // Resolved again.
 	_106thPlus15m := _106th + int64(15*time.Minute/time.Millisecond)
 
@@ -434,9 +485,13 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			ResolvedTime:  timestamp.Time(tc.zeroTime + _21st),
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
-				Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-				StartsAt:    timestamp.Time(tc.zeroTime + _8th),
+				Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings(
+					"description", "This should immediately fire",
+					"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+					"template_query_test", "Args are: foo bar 99. first_id:101,101:1,102:2,103:3,",
+				),
+				StartsAt: timestamp.Time(tc.zeroTime + _8th),
 			},
 		})
 	}
@@ -459,9 +514,13 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			ResolvedTime:  timestamp.Time(tc.zeroTime + _21st),
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
-				Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-				StartsAt:    timestamp.Time(tc.zeroTime + _8th),
+				Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings(
+					"description", "This should immediately fire",
+					"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+					"template_query_test", "Args are: foo bar 99. first_id:101,101:1,102:2,103:3,",
+				),
+				StartsAt: timestamp.Time(tc.zeroTime + _8th),
 			},
 		})
 	}
@@ -475,9 +534,13 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			ResolvedTime:  timestamp.Time(tc.zeroTime + _106th),
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
-				Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-				StartsAt:    timestamp.Time(tc.zeroTime + _93rd),
+				Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings(
+					"description", "This should immediately fire",
+					"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+					"template_query_test", "Args are: foo bar 99. first_id:101,101:2,102:4,103:6,",
+				),
+				StartsAt: timestamp.Time(tc.zeroTime + _93rd),
 			},
 		})
 	}
@@ -499,9 +562,13 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			ResolvedTime:  timestamp.Time(tc.zeroTime + _106th),
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
-				Labels:      labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should immediately fire", "template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC"),
-				StartsAt:    timestamp.Time(tc.zeroTime + _93rd),
+				Labels: labels.FromStrings("alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
+				Annotations: labels.FromStrings(
+					"description", "This should immediately fire",
+					"template_test", "1.049M 1Mi 2m 15s 95.9% 2022-01-25 12:36:43 +0000 UTC",
+					"template_query_test", "Args are: foo bar 99. first_id:101,101:2,102:4,103:6,",
+				),
+				StartsAt: timestamp.Time(tc.zeroTime + _93rd),
 			},
 		})
 	}
@@ -518,7 +585,7 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
 				Labels:      labels.FromStrings("alertname", tc.sfAlertName, "ba_dum", "tss", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. replaced text. ."),
+				Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. ::1 127.0.0.1. 7815. replaced text. ."),
 				StartsAt:    timestamp.Time(tc.zeroTime + _8th_plus_gi),
 			},
 		})
@@ -542,7 +609,7 @@ func (tc *zeroAndSmallFor) ExpectedAlerts() []ExpectedAlert {
 			EndsAtDelta:   endsAtDelta,
 			Alert: &notifier.Alert{
 				Labels:      labels.FromStrings("alertname", tc.sfAlertName, "ba_dum", "tss", "rulegroup", tc.groupName),
-				Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. replaced text. ."),
+				Annotations: labels.FromStrings("description", "This should fire after an interval", "template_test", "This Part IS TESTING the strings. ::1 127.0.0.1. 7815. replaced text. ."),
 				StartsAt:    timestamp.Time(tc.zeroTime + _8th_plus_gi),
 			},
 		})

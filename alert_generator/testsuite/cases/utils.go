@@ -129,7 +129,7 @@ func checkExpectedAlerts(expAlerts [][]v1.Alert, actAlerts []v1.Alert, interval 
 
 	errMsg := "one of the following errors happened in alerts:"
 	for i, err := range errs {
-		errMsg += fmt.Sprintf(" (%d) %s", i+1, err.Error())
+		errMsg += fmt.Sprintf("\n\t\t(%d) %s", i+1, err.Error())
 	}
 
 	return errors.New(errMsg)
@@ -216,22 +216,21 @@ func checkExpectedRuleGroup(now time.Time, expRgs []v1.RuleGroup, actRg v1.RuleG
 		return l.Name < r.Name
 	})
 
-	var firstErr error
-	markErr := func(err error) {
-		if firstErr == nil {
-			firstErr = err
+	var errs []error
+	collectErr := func(err error) {
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
 
 	for _, rg := range expRgs {
-
 		if rg.Name != actRg.Name {
-			markErr(fmt.Errorf("wrong group name, expected: %q, got: %q", rg.Name, actRg.Name))
+			collectErr(fmt.Errorf("wrong group name, expected: %q, got: %q", rg.Name, actRg.Name))
 			continue
 		}
 
 		if rg.Interval != actRg.Interval {
-			markErr(fmt.Errorf("wrong group interval, expected: %f, got: %f", rg.Interval, actRg.Interval))
+			collectErr(fmt.Errorf("wrong group interval, expected: %f, got: %f", rg.Interval, actRg.Interval))
 			continue
 		}
 
@@ -239,13 +238,13 @@ func checkExpectedRuleGroup(now time.Time, expRgs []v1.RuleGroup, actRg v1.RuleG
 		itvl := time.Duration(rg.Interval * float64(time.Second))
 		cutOff := now.Add(-MaxRTT).Add(-itvl)
 		if actRg.LastEvaluation.Before(cutOff) {
-			markErr(fmt.Errorf("expected a group evaluation after %s, but the last evaluation was on %s",
+			collectErr(fmt.Errorf("expected a group evaluation after %s, but the last evaluation was on %s",
 				cutOff.Format(time.RFC3339Nano), actRg.LastEvaluation.UTC().Format(time.RFC3339Nano)))
 			continue
 		}
 
 		if len(rg.Rules) != len(actRg.Rules) {
-			markErr(fmt.Errorf("different number of rules, expected: %d, got: %d", len(rg.Rules), len(actRg.Rules)))
+			collectErr(fmt.Errorf("different number of rules, expected: %d, got: %d", len(rg.Rules), len(actRg.Rules)))
 			continue
 		}
 
@@ -254,10 +253,19 @@ func checkExpectedRuleGroup(now time.Time, expRgs []v1.RuleGroup, actRg v1.RuleG
 			// This rule group matched.
 			return nil
 		}
-		markErr(err)
+		collectErr(err)
 	}
 
-	return errors.Wrap(firstErr, "error in rules")
+	if len(errs) == 1 {
+		return errors.Wrap(errs[0], "error in rules")
+	}
+
+	errMsg := "one of the following errors happened in rules:"
+	for i, err := range errs {
+		errMsg += fmt.Sprintf("\n\t\t(%d) %s", i+1, err.Error())
+	}
+
+	return errors.New(errMsg)
 }
 
 func areRulesEqual(now time.Time, itvl time.Duration, exp []v1.Rule, actRules []v1.AlertingRule, actAlerts []v1.Alert) error {
