@@ -128,7 +128,7 @@ groups:
    * `strvalue`: MAY be supported if there is a use case.
    * `.ExternalLabels`/`$externalLabels`, `.ExternalURL`/`$externalURL`: MAY be supported if the software supports configuring external labels and external URL.
   
-    The config MUST NOT be rejected if it contains the optional template variables and/or functions; those MUST result in an empty string if not supported.
+    The config MUST NOT be rejected if it contains the optional template variables and/or functions listed above. They MUST result in an empty string if not supported.
 
 ## Executing an Alerting Rule
 
