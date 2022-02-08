@@ -1,10 +1,10 @@
 groups:
     - name: PendingAndFiringAndResolved
-      interval: 10s
+      interval: 30s
       rules:
         - alert: PendingAndFiringAndResolved_SimpleAlert
           expr: '{__name__="alert_generator_test_suite", alertname="PendingAndFiringAndResolved_SimpleAlert", rulegroup="PendingAndFiringAndResolved"} > 10'
-          for: 2m
+          for: 6m
           labels:
             foo: bar
             rulegroup: PendingAndFiringAndResolved
@@ -12,11 +12,11 @@ groups:
             description: SimpleAlert is firing
             summary: The value is {{$value}} {{.Value}}
     - name: PendingAndResolved_AlwaysInactive
-      interval: 10s
+      interval: 30s
       rules:
         - alert: PendingAndResolved_AlwaysInactive_PendingAlert
           expr: '{__name__="alert_generator_test_suite", alertname="PendingAndResolved_AlwaysInactive_PendingAlert", rulegroup="PendingAndResolved_AlwaysInactive"} > 10'
-          for: 1m
+          for: 3m
           labels:
             foo: bar
             rulegroup: PendingAndResolved_AlwaysInactive
@@ -24,14 +24,14 @@ groups:
             description: SimpleAlert is firing
         - alert: PendingAndResolved_AlwaysInactive_InactiveAlert
           expr: '{__name__="alert_generator_test_suite", alertname="PendingAndResolved_AlwaysInactive_InactiveAlert", rulegroup="PendingAndResolved_AlwaysInactive"} > 99'
-          for: 1m
+          for: 3m
           labels:
             ba_dum: tss
             rulegroup: PendingAndResolved_AlwaysInactive
           annotations:
             description: This should never fire
     - name: ZeroFor_SmallFor
-      interval: 10s
+      interval: 30s
       rules:
         - alert: ZeroFor_SmallFor_ZeroFor
           expr: '{__name__="alert_generator_test_suite", alertname="ZeroFor_SmallFor_ZeroFor", rulegroup="ZeroFor_SmallFor"} > 10'
@@ -44,7 +44,7 @@ groups:
             template_test: '{{humanize 1048576}} {{humanize1024 1048576}} {{humanizeDuration 135.3563}} {{humanizePercentage 0.959}} {{humanizeTimestamp 1643114203}}'
         - alert: ZeroFor_SmallFor_SmallFor
           expr: '{__name__="alert_generator_test_suite", alertname="ZeroFor_SmallFor_SmallFor", rulegroup="ZeroFor_SmallFor"} > 13'
-          for: 5s
+          for: 15s
           labels:
             ba_dum: tss
             rulegroup: ZeroFor_SmallFor
@@ -52,11 +52,11 @@ groups:
             description: This should fire after an interval
             template_test: '{{title "this part"}} {{toUpper "is testing"}} {{toLower "THE STRINGS"}}. {{ stripPort "[::1]:6006"}} {{ stripPort "127.0.0.1:4004"}}. {{parseDuration "2h10m15s"}}. {{if match "[0-9]+" "1234"}}{{reReplaceAll "r.*d" "replaced" "rpld text"}}{{end}}. {{if match "[0-9]+$" "1234a"}}WRONG{{end}}.'
     - name: NewAlerts_OrderCheck
-      interval: 10s
+      interval: 30s
       rules:
         - alert: NewAlerts_OrderCheck_Rule1
           expr: '{__name__="alert_generator_test_suite", alertname="NewAlerts_OrderCheck_Rule1", rulegroup="NewAlerts_OrderCheck"} > 10'
-          for: 1m
+          for: 3m
           labels:
             foo: bar
             rulegroup: NewAlerts_OrderCheck

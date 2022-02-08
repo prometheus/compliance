@@ -13,8 +13,7 @@ const (
 	ResendDelay = time.Minute
 
 	// MaxRTT is the max request time for alert-generator sending the alert or making GET requests to the API.
-	// TODO: make it 5s for final use.
-	MaxRTT = 2 * time.Second
+	MaxRTT = 5 * time.Second
 )
 
 // TestCase defines a single test case for the alert generator.

@@ -15,7 +15,7 @@ import (
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
 
-	"github.com/prometheus/compliance/alert_generator/testsuite/cases"
+	"github.com/prometheus/compliance/alert_generator/cases"
 )
 
 // TestSuite runs the entire test suite from start to end.
@@ -428,7 +428,9 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 	}
 
 	groupsFacingErrors := ts.as.groupsFacingErrors()
-	if len(ts.ruleGroupTestErrors) == 0 && len(groupsFacingErrors) == 0 {
+	expectedAlertsError := ts.as.expectedAlertsError()
+
+	if len(ts.ruleGroupTestErrors) == 0 && len(groupsFacingErrors) == 0 && len(expectedAlertsError) == 0 {
 		return true, "Congrats! All tests passed"
 	}
 
@@ -443,7 +445,6 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 		}
 	}
 
-	// TODO: check if there were more alerts that were expected and if they can be ignored.
 	alertServerErrors := ts.as.groupError()
 	if len(groupsFacingErrors) > 0 {
 		describe += "------------------------------------------\n"
@@ -473,9 +474,14 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 			if len(errs.matchingErrs) > 0 {
 				describe += "\tReason: Alerts mismatch while received at right time\n"
 				for i, err := range errs.matchingErrs {
-					describe += fmt.Sprintf("\t\t%d: At %s, Labels: %s, Annotations: %s, Error: %s\n",
+					state := "firing"
+					if err.expectedAlert.Resolved {
+						state = "resolved"
+					}
+					describe += fmt.Sprintf("\t\t%d: At %s, Expected State: %s, Labels: %s, Annotations: %s, Error: %s\n",
 						i+1,
 						err.t.Format(time.RFC3339Nano),
+						state,
 						err.alert.Labels.String(),
 						err.alert.Annotations.String(),
 						err.err.Error(),
@@ -497,6 +503,37 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 					)
 				}
 			}
+
+		}
+	}
+
+	if len(expectedAlertsError) > 0 {
+		desc := ""
+		for gn, eas := range expectedAlertsError {
+			if groupsFacingErrors[gn] {
+				// This group had some other error above.
+				continue
+			}
+			desc += "\nGroup Name: " + gn + "\n"
+			for i, ea := range eas {
+				state := "firing"
+				if ea.Resolved {
+					state = "resolved"
+				}
+				desc += fmt.Sprintf("\t%d: Expected time: %s, Labels: %s, Annotations: %s, State: %s, Resend: %t\n",
+					i+1,
+					ea.Ts.Format(time.RFC3339Nano),
+					ea.Alert.Labels.String(),
+					ea.Alert.Annotations.String(),
+					state,
+					ea.Resend,
+				)
+			}
+		}
+		if desc != "" {
+			describe += "------------------------------------------\n"
+			describe += "The following alerts were still expected but were not received in time:\n"
+			describe += desc
 
 		}
 	}

@@ -36,9 +36,8 @@ func NewAlerts_OrderCheck() TestCase {
 		r2Query: fmt.Sprintf(
 			`(ALERTS{alertstate="firing", alertname="%s", foo="bar", rulegroup="%s", variant="one"} + ignoring(variant) ALERTS{alertstate="firing", alertname="%s", foo="bar", rulegroup="%s", variant="two"}) == 2`,
 			r1AlertName, groupName, r1AlertName, groupName),
-		// TODO: make this 15 and 30 for final use.
-		rwInterval:    5 * time.Second,
-		groupInterval: 10 * time.Second,
+		rwInterval:    15 * time.Second,
+		groupInterval: 30 * time.Second,
 	}
 	tc.forDuration = model.Duration(12 * tc.rwInterval) // 3m with 15s rw interval.
 	return tc
@@ -156,7 +155,7 @@ func (tc *newAlertsAndOrderCheck) CheckAlerts(ts int64, alerts []v1.Alert) error
 }
 
 func (tc *newAlertsAndOrderCheck) CheckRuleGroup(ts int64, rg *v1.RuleGroup) error {
-	if ts-tc.zeroTime < int64(tc.groupInterval/time.Millisecond) {
+	if ts-tc.zeroTime < 2*int64(tc.groupInterval/time.Millisecond) {
 		// We wait till 1 evaluation is done.
 		return nil
 	}

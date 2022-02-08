@@ -29,13 +29,12 @@ func PendingAndFiringAndResolved() TestCase {
 	lbls := metricLabels(groupName, alertName)
 	query := fmt.Sprintf("%s > 10", lbls.String())
 	tc := &pendingAndFiringAndResolved{
-		groupName:    groupName,
-		alertName:    alertName,
-		query:        query,
-		metricLabels: lbls,
-		// TODO: make this 15 and 30 for final use.
-		rwInterval:    5 * time.Second,
-		groupInterval: 10 * time.Second,
+		groupName:     groupName,
+		alertName:     alertName,
+		query:         query,
+		metricLabels:  lbls,
+		rwInterval:    15 * time.Second,
+		groupInterval: 30 * time.Second,
 	}
 	tc.forDuration = model.Duration(24 * tc.rwInterval)
 	return tc
@@ -131,7 +130,7 @@ func (tc *pendingAndFiringAndResolved) CheckAlerts(ts int64, alerts []v1.Alert) 
 }
 
 func (tc *pendingAndFiringAndResolved) CheckRuleGroup(ts int64, rg *v1.RuleGroup) error {
-	if ts-tc.zeroTime < int64(tc.groupInterval/time.Millisecond) {
+	if ts-tc.zeroTime < 2*int64(tc.groupInterval/time.Millisecond) {
 		// We wait till 1 evaluation is done.
 		return nil
 	}
