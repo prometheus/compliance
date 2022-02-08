@@ -33,9 +33,8 @@ func PendingAndResolved_AlwaysInactive() TestCase {
 		inactiveAlertName:    inactiveAlertName,
 		inactiveQuery:        fmt.Sprintf("%s > 99", inactiveLabels.String()),
 		inactiveMetricLabels: inactiveLabels,
-		// TODO: make this 15 and 30 for final use.
-		rwInterval:    5 * time.Second,
-		groupInterval: 10 * time.Second,
+		rwInterval:           15 * time.Second,
+		groupInterval:        30 * time.Second,
 	}
 	tc.forDuration = model.Duration(12 * tc.rwInterval)
 	return tc
@@ -134,7 +133,7 @@ func (tc *pendingAndResolved) CheckAlerts(ts int64, alerts []v1.Alert) error {
 }
 
 func (tc *pendingAndResolved) CheckRuleGroup(ts int64, rg *v1.RuleGroup) error {
-	if ts-tc.zeroTime < int64(tc.groupInterval/time.Millisecond) {
+	if ts-tc.zeroTime < 2*int64(tc.groupInterval/time.Millisecond) {
 		// We wait till 1 evaluation is done.
 		return nil
 	}

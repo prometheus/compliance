@@ -2,7 +2,6 @@ package testsuite
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/prometheus/prometheus/model/labels"
 	"io/ioutil"
 	"net/http"
@@ -13,7 +12,7 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
-	"github.com/prometheus/compliance/alert_generator/testsuite/cases"
+	"github.com/prometheus/compliance/alert_generator/cases"
 	"github.com/prometheus/prometheus/notifier"
 )
 
@@ -23,6 +22,7 @@ type alertsServer struct {
 	server         *http.Server
 	serverErr      error
 	serverCloseErr error
+	closeC         chan struct{}
 
 	expectedAlertsMtx sync.Mutex
 	expectedAlerts    map[string]*expectedAlerts
@@ -34,8 +34,7 @@ type alertsServer struct {
 }
 
 type expectedAlerts struct {
-	lastSeen time.Time
-	alerts   []cases.ExpectedAlert
+	alerts []cases.ExpectedAlert
 }
 
 type allErrs struct {
@@ -49,9 +48,10 @@ type allErrs struct {
 }
 
 type matchingErr struct {
-	t     time.Time
-	alert notifier.Alert
-	err   error
+	t             time.Time
+	expectedAlert cases.ExpectedAlert
+	alert         notifier.Alert
+	err           error
 }
 
 type unexpectedErr struct {
@@ -65,6 +65,7 @@ func newAlertsServer(port string, logger log.Logger) *alertsServer {
 		logger:         log.With(logger, "component", "alertsServer"),
 		errs:           make(map[string]*allErrs),
 		expectedAlerts: make(map[string]*expectedAlerts),
+		closeC:         make(chan struct{}),
 	}
 	as.server = &http.Server{
 		Addr:         ":" + port, // TODO: take this as a config.
@@ -101,7 +102,6 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	// Alerts that matched. This will be used to adjust the time for the next resend.
 	success := make(map[string]cases.ExpectedAlert)
 	for _, al := range alerts {
-		fmt.Println("GOT ALERT", al)
 		id := al.Labels.String()
 		exp := as.getPossibleAlert(now, id)
 		errs := as.getErr(al.Labels.Get("rulegroup"))
@@ -127,9 +127,10 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			if me == nil {
 				// We only report the first matching error.
 				me = &matchingErr{
-					t:     now,
-					alert: al,
-					err:   err,
+					t:             now,
+					expectedAlert: ex,
+					alert:         al,
+					err:           err,
 				}
 			}
 		}
@@ -148,7 +149,6 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 						continue
 					}
 					lastResendWasIgnored = false
-					fmt.Println("Missed 1")
 					missedAlerts = append(missedAlerts, ma)
 				} else {
 					lastResendWasIgnored = ma.Resend
@@ -234,16 +234,16 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 	for id, eas := range as.expectedAlerts {
 		var newExpAlerts []cases.ExpectedAlert
 		for _, ea := range eas.alerts {
-			// TODO: 2*cases.MaxAlertSendDelay because of some edge case. Like missed by some milli/micro seconds. Fix it.
 			if ea.ShouldBeIgnored() {
 				continue
 			}
-			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
-				fmt.Println("Missed 2")
+			// For the first alert that comes, the remote write RTT can add to some delay. Hence 2*RTT.
+			tolerance := ea.TimeTolerance + (2 * cases.MaxRTT)
+			if ea.Ts.Add(tolerance).Before(now) {
 				if !ea.CanBeIgnored() {
 					missedAlerts = append(missedAlerts, ea)
 				}
-			} else if id == lblsString && now.After(ea.Ts) && now.Before(ea.Ts.Add(ea.TimeTolerance+(2*cases.MaxRTT))) {
+			} else if id == lblsString && now.After(ea.Ts) && now.Before(ea.Ts.Add(tolerance)) {
 				alerts = append(alerts, ea)
 			} else {
 				newExpAlerts = append(newExpAlerts, ea)
@@ -257,6 +257,31 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 	return alerts
 }
 
+// missedAlertCleanup cleans up the missed alerts.
+func (as *alertsServer) missedAlertCleanup(now time.Time) {
+	var missedAlerts []cases.ExpectedAlert
+
+	for id, eas := range as.expectedAlerts {
+		var newExpAlerts []cases.ExpectedAlert
+		for _, ea := range eas.alerts {
+			if ea.ShouldBeIgnored() {
+				continue
+			}
+			// For the first alert that comes, the remote write RTT can add to some delay. Hence 2*RTT.
+			if ea.Ts.Add(ea.TimeTolerance + (2 * cases.MaxRTT)).Before(now) {
+				if !ea.CanBeIgnored() {
+					missedAlerts = append(missedAlerts, ea)
+				}
+			} else {
+				newExpAlerts = append(newExpAlerts, ea)
+			}
+		}
+		as.expectedAlerts[id].alerts = newExpAlerts
+	}
+
+	as.addMissedAlerts(missedAlerts)
+}
+
 func (as *alertsServer) addMissedAlerts(missedAlerts []cases.ExpectedAlert) {
 	for _, sa := range missedAlerts {
 		errs := as.getErr(sa.Alert.Labels.Get("rulegroup"))
@@ -265,15 +290,26 @@ func (as *alertsServer) addMissedAlerts(missedAlerts []cases.ExpectedAlert) {
 }
 
 func (as *alertsServer) Start() {
-	as.wg.Add(1)
+	as.wg.Add(2)
 	go func() {
 		defer as.wg.Done()
 		as.serverErr = as.server.ListenAndServe()
 	}()
+	go func() {
+		defer as.wg.Done()
+		for {
+			select {
+			case <-as.closeC:
+				return
+			case <-time.After(1 * time.Minute):
+				as.missedAlertCleanup(time.Now().UTC())
+			}
+		}
+	}()
 }
 
 func (as *alertsServer) Stop() {
-	// TODO: add pending alerts in missed alerts.
+	close(as.closeC)
 	as.serverCloseErr = as.server.Close()
 }
 
@@ -309,4 +345,20 @@ func (as *alertsServer) groupsFacingErrors() map[string]bool {
 	}
 
 	return g
+}
+
+func (as *alertsServer) expectedAlertsError() map[string][]cases.ExpectedAlert {
+	as.expectedAlertsMtx.Lock()
+	defer as.expectedAlertsMtx.Unlock()
+
+	eae := make(map[string][]cases.ExpectedAlert)
+	for rg, ea := range as.expectedAlerts {
+		for _, al := range ea.alerts {
+			if !al.Resend {
+				eae[rg] = append(eae[rg], al)
+			}
+		}
+	}
+
+	return eae
 }

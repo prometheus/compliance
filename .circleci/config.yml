@@ -16,6 +16,7 @@ workflows:
               dir:
                 - promql
                 - remote_write_sender
+                - alert_generator
 
 jobs:
   test:

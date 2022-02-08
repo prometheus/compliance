@@ -2,7 +2,6 @@ package cases
 
 import (
 	"fmt"
-	"github.com/prometheus/prometheus/notifier"
 	"time"
 
 	"github.com/pkg/errors"
@@ -10,6 +9,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/web/api/v1"
@@ -37,9 +37,8 @@ func ZeroFor_SmallFor() TestCase {
 		sfAlertName:    sfAlertName,
 		sfQuery:        fmt.Sprintf("%s > 13", sfLabels.String()),
 		sfMetricLabels: sfLabels,
-		// TODO: make this 15 and 30 for final use.
-		rwInterval:    5 * time.Second,
-		groupInterval: 10 * time.Second,
+		rwInterval:     15 * time.Second,
+		groupInterval:  30 * time.Second,
 	}
 	tc.forDuration = model.Duration(tc.groupInterval / 2)
 	return tc
@@ -168,7 +167,7 @@ func (tc *zeroAndSmallFor) CheckAlerts(ts int64, alerts []v1.Alert) error {
 }
 
 func (tc *zeroAndSmallFor) CheckRuleGroup(ts int64, rg *v1.RuleGroup) error {
-	if ts-tc.zeroTime < int64(tc.groupInterval/time.Millisecond) {
+	if ts-tc.zeroTime < 2*int64(tc.groupInterval/time.Millisecond) {
 		// We wait till 1 evaluation is done.
 		return nil
 	}

@@ -2,3 +2,4 @@ vendor
 *.yaml
 !rules.yaml
 alert_generator_compliance_tester
+!cmd/alert_generator_compliance_tester

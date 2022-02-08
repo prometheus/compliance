@@ -85,7 +85,7 @@ func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) (err error) {
 
 		// Since EndsAt is w.r.t. the current time for a firing alert, if it does not match the expEndsAt,
 		// we need to consider any delay in sending the alert in case the alert was firing.
-		if !ea.matchesWithinTolerance(expEndsAt, a.EndsAt) &&
+		if !(ea.matchesWithinTolerance(expEndsAt, a.EndsAt) || ea.matchesWithinTolerance(expEndsAt.Add(-2*MaxRTT), a.EndsAt)) &&
 			(ea.Resolved || !ea.matchesWithinTolerance(expEndsAt.Add(-MaxRTT), a.EndsAt)) {
 			return fmt.Errorf("mismatch in EndsAt, expected range: [%s, %s], got: %s",
 				expEndsAt.Format(time.RFC3339Nano),
@@ -107,10 +107,6 @@ func (ea *ExpectedAlert) Matches(now time.Time, a notifier.Alert) (err error) {
 
 func (ea *ExpectedAlert) matchesWithinTolerance(exp, act time.Time) bool {
 	return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance))
-}
-
-func (ea *ExpectedAlert) matchesWithinToleranceAndSendDelay(exp, act time.Time) bool {
-	return act.After(exp) && act.Before(exp.Add(ea.TimeTolerance+MaxRTT))
 }
 
 func (ea *ExpectedAlert) matchesWithinToleranceAndTwiceSendDelay(exp, act time.Time) bool {
