@@ -124,7 +124,7 @@ groups:
 1. Results of a rule evaluation MUST be available for any subsequent rules in the group during the same evaluation cycle that depend on these results. The order of rules MUST be the same as provided in the config.
 2. Labels and annotations in alerting rules MUST support all template variables and functions as described in the [v2.33 template reference](https://prometheus.io/docs/prometheus/2.33/configuration/template_reference/) for the values with the following exceptions:
    * `graphLink`, `tableLink`: MAY be supported if the sample querier supports having a UI link for graph and table respectively.
-   * `tmpl`, `pathPrefix`: MAY be supported if the software supports console templates.
+   * `tmpl`, `pathPrefix`, `safeHtml`: MAY be supported if the software supports console template files.
    * `strvalue`: MAY be supported if there is a use case.
    * `.ExternalLabels`/`$externalLabels`, `.ExternalURL`/`$externalURL`: MAY be supported if the software supports configuring external labels and external URL.
   
