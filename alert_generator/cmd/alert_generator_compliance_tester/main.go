@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"time"
 
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/common/promlog"
@@ -53,6 +54,9 @@ func main() {
 
 	level.Info(log).Log("msg", "Starting the test suite")
 	t.Start()
+
+	tu := t.TestUntil()
+	level.Info(log).Log("msg", fmt.Sprintf("Test will run until %s approximately", tu.Format(time.RFC3339)), "time_remaining", tu.Sub(time.Now()).String())
 
 	var wg sync.WaitGroup
 	c := make(chan os.Signal, 1)

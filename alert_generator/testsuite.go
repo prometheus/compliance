@@ -560,3 +560,16 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 
 	return false, describe
 }
+
+func (ts *TestSuite) TestUntil() time.Time {
+	var tu int64
+	ts.ruleGroupTestsMtx.RLock()
+	for _, c := range ts.ruleGroupTests {
+		ctu := c.TestUntil()
+		if ctu > tu {
+			tu = ctu
+		}
+	}
+	ts.ruleGroupTestsMtx.RUnlock()
+	return timestamp.Time(tu)
+}
