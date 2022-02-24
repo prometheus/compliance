@@ -1,3 +1,7 @@
+# For testing Cortex.
+# The following URLs correspond to the provided development environment at
+# https://github.com/cortexproject/cortex/tree/master/development/tsdb-blocks-storage-s3
+
 settings:
   remote_write_url: http://localhost:8001/api/v1/push
   query_base_url: http://localhost:8007/api/prom

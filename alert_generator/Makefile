@@ -11,5 +11,5 @@ clean:
 	rm -f alert_generator_compliance_tester
 
 .PHONY: check-rules
-check-rules: build-rules
+check-rules: rules
 	@git diff --exit-code -- ./*.yaml
