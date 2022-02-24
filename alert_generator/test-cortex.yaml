@@ -1,0 +1,5 @@
+settings:
+  remote_write_url: http://localhost:8001/api/v1/push
+  query_base_url: http://localhost:8007/api/prom
+  rules_and_alerts_api_base_url: http://localhost:8021/api/prom
+  alert_reception_server_port: 8080

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/url"
 	"path"
-	"strconv"
 	"sync"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/prometheus/prometheus/model/timestamp"
 
 	"github.com/prometheus/compliance/alert_generator/cases"
+	"github.com/prometheus/compliance/alert_generator/config"
 )
 
 // TestSuite runs the entire test suite from start to end.
@@ -44,14 +44,8 @@ type TestSuiteOptions struct {
 	Logger log.Logger
 	// All the test cases to test.
 	Cases []cases.TestCase
-	// RemoteWriteURL is URL to remote write samples.
-	RemoteWriteURL string
-	// BaseAPIURL is the URL to query the GET <BaseApiURL>/api/v1/rules and <BaseApiURL>/api/v1/alerts.
-	BaseAPIURL string
-	// PromQLBaseURL is the URL to query the database via PromQL via GET <PromQLBaseURL>/query and <PromQLBaseURL>/query_range.
-	PromQLBaseURL string
-	// AlertServerPort is the port at which the alert receiving server will be run.
-	AlertServerPort string
+
+	Config config.Config
 }
 
 func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
@@ -66,10 +60,10 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 		ruleGroupTests:      make(map[string]cases.TestCase, len(opts.Cases)),
 		ruleGroupTestErrors: make(map[string][]error),
 		stopc:               make(chan struct{}),
-		as:                  newAlertsServer(opts.AlertServerPort, opts.Logger),
+		as:                  newAlertsServer(opts.Config.Settings.AlertReceptionServerPort, opts.Config.Settings.DisableAlertsReceptionCheck, opts.Logger),
 	}
 
-	m.remoteWriter, err = NewRemoteWriter(opts.RemoteWriteURL, opts.Logger)
+	m.remoteWriter, err = NewRemoteWriter(opts.Config, opts.Logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "create remote writer")
 	}
@@ -89,7 +83,7 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 	}
 
 	{
-		u, err := url.Parse(m.opts.BaseAPIURL)
+		u, err := url.Parse(opts.Config.Settings.RulesAndAlertsAPIBaseURL)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +95,7 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 	}
 
 	{
-		u, err := url.Parse(opts.PromQLBaseURL)
+		u, err := url.Parse(opts.Config.Settings.QueryBaseURL)
 		if err != nil {
 			return nil, err
 		}
@@ -120,25 +114,11 @@ const minConfiguredGroupInterval = model.Duration(0 * time.Second)
 
 // TODO(codesome): verify the validation.
 func validateOpts(opts TestSuiteOptions) error {
-	if opts.RemoteWriteURL == "" {
-		return fmt.Errorf("no remote write URL found")
-	}
-	if opts.BaseAPIURL == "" {
-		return fmt.Errorf("no API URL found")
-	}
-	if opts.PromQLBaseURL == "" {
-		return fmt.Errorf("no PromQL URL found")
-	}
-	if opts.AlertServerPort == "" {
-		return fmt.Errorf("no alert server port found")
-	}
-
-	p, err := strconv.Atoi(opts.AlertServerPort)
-	if err != nil {
-		return fmt.Errorf("provided alert server port %q does not parse as an integer", opts.AlertServerPort)
-	}
-	if p > 65535 {
-		return fmt.Errorf("provided alert server port %q must be less than 65535", opts.AlertServerPort)
+	if opts.Config.Settings.DisableAlertsAPICheck &&
+		opts.Config.Settings.DisableRulesAPICheck &&
+		opts.Config.Settings.DisableAlertsMetricsCheck &&
+		opts.Config.Settings.DisableAlertsReceptionCheck {
+		return errors.New("all checks are disabled, at least one check should be enabled")
 	}
 
 	seenRuleGroups := make(map[string]bool)
@@ -199,10 +179,10 @@ func validateOpts(opts TestSuiteOptions) error {
 }
 
 func (ts *TestSuite) Start() {
-	level.Info(ts.logger).Log("msg", "Starting the alert receiving server", "port", ts.opts.AlertServerPort)
+	level.Info(ts.logger).Log("msg", "Starting the alert receiving server", "port", ts.opts.Config.Settings.AlertReceptionServerPort)
 	ts.as.Start()
 
-	level.Info(ts.logger).Log("msg", "Starting the remote writer", "url", ts.opts.RemoteWriteURL)
+	level.Info(ts.logger).Log("msg", "Starting the remote writer", "url", ts.opts.Config.Settings.RemoteWriteURL)
 	ts.remoteWriteStartTime = ts.remoteWriter.Start()
 	for _, c := range ts.ruleGroupTests {
 		gn, desc := c.Describe()
@@ -212,11 +192,24 @@ func (ts *TestSuite) Start() {
 		ts.as.addExpectedAlerts(c.ExpectedAlerts()...)
 	}
 
-	ts.wg.Add(4)
-	go ts.checkAlertsLoop()
-	go ts.checkRulesLoop()
-	go ts.checkMetricsLoop()
-	go ts.monitorAlertReception()
+	time.Sleep(15 * time.Second / 2)
+
+	if !ts.opts.Config.Settings.DisableAlertsAPICheck {
+		ts.wg.Add(1)
+		go ts.checkAlertsLoop()
+	}
+	if !ts.opts.Config.Settings.DisableRulesAPICheck {
+		ts.wg.Add(1)
+		go ts.checkRulesLoop()
+	}
+	if !ts.opts.Config.Settings.DisableAlertsMetricsCheck {
+		ts.wg.Add(1)
+		go ts.checkMetricsLoop()
+	}
+	if !ts.opts.Config.Settings.DisableAlertsReceptionCheck {
+		ts.wg.Add(1)
+		go ts.monitorAlertReception()
+	}
 }
 
 func (ts *TestSuite) checkAlertsLoop() {
@@ -225,7 +218,7 @@ func (ts *TestSuite) checkAlertsLoop() {
 	ts.loopTillItsOver(func() {
 		nowTs := timestamp.FromTime(time.Now())
 
-		b, err := DoGetRequest(ts.alertsAPIURL)
+		b, err := DoGetRequest(ts.alertsAPIURL, ts.opts.Config.Auth.RulesAndAlertsAPI)
 		if err != nil {
 			level.Error(ts.logger).Log("msg", "Error in fetching alerts", "url", ts.alertsAPIURL, "err", err)
 			return
@@ -261,7 +254,7 @@ func (ts *TestSuite) checkRulesLoop() {
 	ts.loopTillItsOver(func() {
 		nowTs := timestamp.FromTime(time.Now())
 
-		b, err := DoGetRequest(ts.rulesAPIURL)
+		b, err := DoGetRequest(ts.rulesAPIURL, ts.opts.Config.Auth.RulesAndAlertsAPI)
 		if err != nil {
 			level.Error(ts.logger).Log("msg", "Error in fetching rules", "url", ts.rulesAPIURL, "err", err)
 			return
@@ -303,7 +296,7 @@ func (ts *TestSuite) checkMetricsLoop() {
 		q.Set("time", timestamp.Time(nowTs).Format(time.RFC3339))
 		u.RawQuery = q.Encode()
 
-		b, err := DoGetRequest(u.String())
+		b, err := DoGetRequest(u.String(), ts.opts.Config.Auth.Query)
 		if err != nil {
 			level.Error(ts.logger).Log("msg", "Error in fetching metrics", "url", u.String(), "err", err)
 			return
@@ -337,10 +330,19 @@ func (ts *TestSuite) monitorAlertReception() {
 	defer ts.wg.Done()
 
 	ts.loopTillItsOver(func() {
+		nowTs := timestamp.FromTime(time.Now())
 		groupsToRemove := make(map[string]error)
 		for groupName := range ts.as.groupsFacingErrors() {
 			groupsToRemove[groupName] = errors.New("error in alert reception")
 		}
+
+		ts.ruleGroupTestsMtx.RLock()
+		for groupName, c := range ts.ruleGroupTests {
+			if c.TestUntil() < nowTs {
+				groupsToRemove[groupName] = nil
+			}
+		}
+		ts.ruleGroupTestsMtx.RUnlock()
 
 		ts.removeGroups(groupsToRemove)
 	})
@@ -423,14 +425,32 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 		return false, "test is still running"
 	}
 
-	if err := ts.Error(); err != nil {
-		return false, fmt.Sprintf("got some error in test execution: %q", err.Error())
-	}
-
 	groupsFacingErrors := ts.as.groupsFacingErrors()
 	expectedAlertsError := ts.as.expectedAlertsError()
 
 	if len(ts.ruleGroupTestErrors) == 0 && len(groupsFacingErrors) == 0 && len(expectedAlertsError) == 0 {
+		if ts.opts.Config.Settings.DisableAlertsAPICheck ||
+			ts.opts.Config.Settings.DisableRulesAPICheck ||
+			ts.opts.Config.Settings.DisableAlertsMetricsCheck ||
+			ts.opts.Config.Settings.DisableAlertsReceptionCheck {
+
+			describe = "Congrats! The following tests passed:"
+
+			if !ts.opts.Config.Settings.DisableAlertsAPICheck {
+				describe += " AlertsAPICheck"
+			}
+			if !ts.opts.Config.Settings.DisableRulesAPICheck {
+				describe += " RulesAPICheck"
+			}
+			if !ts.opts.Config.Settings.DisableAlertsMetricsCheck {
+				describe += " AlertsMetricsCheck"
+			}
+			if !ts.opts.Config.Settings.DisableAlertsReceptionCheck {
+				describe += " AlertsReceptionCheck"
+			}
+
+			return true, describe
+		}
 		return true, "Congrats! All tests passed"
 	}
 
@@ -509,7 +529,8 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 
 	if len(expectedAlertsError) > 0 {
 		desc := ""
-		for gn, eas := range expectedAlertsError {
+		for _, eas := range expectedAlertsError {
+			gn := eas[0].Alert.Labels.Get("rulegroup")
 			if groupsFacingErrors[gn] {
 				// This group had some other error above.
 				continue
@@ -534,7 +555,6 @@ func (ts *TestSuite) WasTestSuccessful() (yes bool, describe string) {
 			describe += "------------------------------------------\n"
 			describe += "The following alerts were still expected but were not received in time:\n"
 			describe += desc
-
 		}
 	}
 

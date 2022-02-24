@@ -258,7 +258,7 @@ func (tc *zeroAndSmallFor) expAlerts(ts int64, alerts []v1.Alert) (expAlerts [][
 	}
 
 	// TODO: temporary for development.
-	fmt.Println(desc, alerts)
+	devPrint(desc, alerts)
 
 	return expAlerts
 }

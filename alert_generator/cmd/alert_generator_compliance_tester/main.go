@@ -12,26 +12,39 @@ import (
 
 	"github.com/prometheus/compliance/alert_generator"
 	"github.com/prometheus/compliance/alert_generator/cases"
+	"github.com/prometheus/compliance/alert_generator/config"
 )
 
 func main() {
-	// TODO: take auth credentials via config.
 	// TODO: give option to set log level.
-	remoteWriteURL := flag.String("remote-write-url", "http://localhost:9090/api/v1/write", "URL for remote writing samples.")
-	baseURL := flag.String("api-base-url", "http://localhost:9090", "Base URL including any prefix to request GET <base-url>/api/v1/rules and GET <base-url>/api/v1/alerts.")
-	promQLBaseURL := flag.String("promql-base-url", "http://localhost:9090", "URL where the test suite can access the time series data via PromQL including any prefix to request GET <promql-base-url>/api/v1/query and GET <promql-base-url>/api/v1/query_range.")
-	alertServerPort := flag.String("alert-server-port", "8080", "Port to run a server for accepting alerts.")
-	flag.Parse()
+	configFile := flag.String("config-file", "config.yaml", "Path to the config file.")
 
+	flag.Parse()
 	log := promlog.New(&promlog.Config{})
 
+	cfg, err := config.LoadFromFile(*configFile)
+	if err != nil {
+		level.Error(log).Log("msg", "Failed to load config file", "err", err)
+		os.Exit(1)
+	}
+
+	casesToRun := cases.AllCases()
+	if len(cfg.TestCases) > 0 {
+		casesToRun = []cases.TestCase{}
+		for _, cn := range cfg.TestCases {
+			tc, ok := cases.AllCasesMap[cn]
+			if !ok {
+				level.Error(log).Log("msg", "Test case not found", "test_case", cn)
+				os.Exit(1)
+			}
+			casesToRun = append(casesToRun, tc)
+		}
+	}
+
 	t, err := testsuite.NewTestSuite(testsuite.TestSuiteOptions{
-		Logger:          log,
-		Cases:           cases.AllCases,
-		RemoteWriteURL:  *remoteWriteURL,
-		BaseAPIURL:      *baseURL,
-		PromQLBaseURL:   *promQLBaseURL,
-		AlertServerPort: *alertServerPort,
+		Logger: log,
+		Cases:  casesToRun,
+		Config: *cfg,
 	})
 	if err != nil {
 		level.Error(log).Log("msg", "Failed to start the test suite", "err", err)
@@ -75,6 +88,10 @@ func main() {
 		exitCode = 1
 		stream = os.Stderr
 		describe = "Test was incomplete"
+	}
+
+	if len(casesToRun) != len(cases.AllCases()) {
+		describe += "\n\n**NOTE: Not all test cases were run**"
 	}
 
 	fmt.Fprintln(stream, describe)

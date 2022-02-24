@@ -20,9 +20,9 @@ func main() {
 	log := promlog.New(&promlog.Config{})
 
 	rgs := rulefmt.RuleGroups{
-		Groups: make([]rulefmt.RuleGroup, 0, len(cases.AllCases)),
+		Groups: make([]rulefmt.RuleGroup, 0, len(cases.AllCases())),
 	}
-	for _, c := range cases.AllCases {
+	for _, c := range cases.AllCases() {
 		rg, err := c.RuleGroup()
 		if err != nil {
 			title, _ := c.Describe()
