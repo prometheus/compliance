@@ -99,7 +99,9 @@ func sampleSlice(interval time.Duration, values ...string) []prompb.Sample {
 func betweenFunc(ts int64) func(start, end float64) bool {
 	return func(start, end float64) bool {
 		startTs := timestamp.FromFloatSeconds(start)
-		endTs := timestamp.FromFloatSeconds(end)
+		// The remote written sample could have been delayed. So we need to
+		// account for that as well.
+		endTs := timestamp.FromFloatSeconds(end + float64(2*MaxRTT/time.Second))
 		return ts > startTs && ts <= endTs
 	}
 }
@@ -176,7 +178,7 @@ func areAlertsEqual(exp, act []v1.Alert, interval time.Duration) error {
 			return errors.Errorf("ActiveAt not found for the alert - alert: %v", act[i])
 		}
 		t := *act[i].ActiveAt
-		if t.Before(*exp[i].ActiveAt) || exp[i].ActiveAt.Add(interval).Before(t) {
+		if t.Before(*exp[i].ActiveAt) || exp[i].ActiveAt.Add(interval+(2*MaxRTT)).Before(t) {
 			// Out of the range.
 			return errors.Errorf(
 				"ActiveAt mismatch - alert: %v, expected ActiveAT range: [%s, %s], actual ActiveAt: %s",
@@ -385,4 +387,9 @@ func areSamplesEqual(exp, act []promql.Sample) error {
 		}
 	}
 	return nil
+}
+
+// devPrint is used for printing stuff during development.
+func devPrint(s string, a []v1.Alert) {
+	//fmt.Println(s, a)
 }

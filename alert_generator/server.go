@@ -2,7 +2,6 @@ package testsuite
 
 import (
 	"encoding/json"
-	"github.com/prometheus/prometheus/model/labels"
 	"io/ioutil"
 	"net/http"
 	"sort"
@@ -13,6 +12,7 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/pkg/errors"
 	"github.com/prometheus/compliance/alert_generator/cases"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/notifier"
 )
 
@@ -31,6 +31,8 @@ type alertsServer struct {
 	errs    map[string]*allErrs
 
 	wg sync.WaitGroup
+
+	disabled bool
 }
 
 type expectedAlerts struct {
@@ -60,12 +62,13 @@ type unexpectedErr struct {
 }
 
 // TODO: assumes resend delay of 1m.
-func newAlertsServer(port string, logger log.Logger) *alertsServer {
+func newAlertsServer(port string, disabled bool, logger log.Logger) *alertsServer {
 	as := &alertsServer{
 		logger:         log.With(logger, "component", "alertsServer"),
 		errs:           make(map[string]*allErrs),
 		expectedAlerts: make(map[string]*expectedAlerts),
 		closeC:         make(chan struct{}),
+		disabled:       disabled,
 	}
 	as.server = &http.Server{
 		Addr:         ":" + port, // TODO: take this as a config.
@@ -290,6 +293,9 @@ func (as *alertsServer) addMissedAlerts(missedAlerts []cases.ExpectedAlert) {
 }
 
 func (as *alertsServer) Start() {
+	if as.disabled {
+		return
+	}
 	as.wg.Add(2)
 	go func() {
 		defer as.wg.Done()
@@ -309,6 +315,9 @@ func (as *alertsServer) Start() {
 }
 
 func (as *alertsServer) Stop() {
+	if as.disabled {
+		return
+	}
 	close(as.closeC)
 	as.serverCloseErr = as.server.Close()
 }
@@ -330,10 +339,16 @@ func (as *alertsServer) runningError() error {
 }
 
 func (as *alertsServer) groupError() map[string]*allErrs {
+	if as.disabled {
+		return map[string]*allErrs{}
+	}
 	return as.errs
 }
 
 func (as *alertsServer) groupsFacingErrors() map[string]bool {
+	if as.disabled {
+		return map[string]bool{}
+	}
 	as.errsMtx.Lock()
 	defer as.errsMtx.Unlock()
 
@@ -348,6 +363,9 @@ func (as *alertsServer) groupsFacingErrors() map[string]bool {
 }
 
 func (as *alertsServer) expectedAlertsError() map[string][]cases.ExpectedAlert {
+	if as.disabled {
+		return map[string][]cases.ExpectedAlert{}
+	}
 	as.expectedAlertsMtx.Lock()
 	defer as.expectedAlertsMtx.Unlock()
 

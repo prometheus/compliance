@@ -1,0 +1,16 @@
+settings:
+  remote_write_url: https://<cluster>.grafana.net/api/prom/push
+  query_base_url: https://<cluster>.grafana.net/api/prom
+  rules_and_alerts_api_base_url: https://<cluster>.grafana.net/api/prom
+  alert_reception_server_port: 8080
+
+auth:
+  remote_write:
+    basic_auth_user: '<user-id>'
+    basic_auth_pass: '<password>'
+  rules_and_alerts_api:
+    basic_auth_user: '<user-id>'
+    basic_auth_pass: '<password>'
+  query:
+    basic_auth_user: '<user-id>'
+    basic_auth_pass: '<password>'

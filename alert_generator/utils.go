@@ -10,20 +10,28 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/compliance/alert_generator/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 )
 
 // TODO: add retries and set some timeouts.
-func DoGetRequest(u string) ([]byte, error) {
-	resp, err := http.Get(u)
+func DoGetRequest(u string, auth config.BasicAuth) ([]byte, error) {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, err
+	}
+	if auth.BasicAuthUser != "" {
+		req.SetBasicAuth(auth.BasicAuthUser, auth.BasicAuthPass)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "get request")
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("non 200 response code %q", resp.StatusCode)
+		return nil, errors.Errorf("non 200 response code %d", resp.StatusCode)
 	}
 
 	b, err := ioutil.ReadAll(resp.Body)

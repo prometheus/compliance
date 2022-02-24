@@ -1,0 +1,43 @@
+# Config template.
+
+settings:
+  # URL to remote write samples.
+  remote_write_url: http://localhost:8001/api/v1/push
+  # URL to query the database via PromQL via GET <query_base_url>/query and <query_base_url>/query_range.
+  query_base_url: http://localhost:8007/api/prom
+  # URL to query the GET <rules_and_alerts_api_base_url>/api/v1/rules and <rules_and_alerts_api_base_url>/api/v1/alerts.
+  rules_and_alerts_api_base_url: http://localhost:8021/api/prom
+  # Port at which the alert receiving server will be run. Default: 8080.
+  alert_reception_server_port: 8080
+  # Set to true to disable <rules_and_alerts_api_base_url>/api/v1/rules checks.
+  disable_rules_api_check: false
+  # Set to true to disable <rules_and_alerts_api_base_url>/api/v1/alerts checks.
+  disable_alerts_api_check: false
+  # Set to true to disable ALERTS metrics check.
+  disable_alerts_metrics_check: false
+  # Set to true to disable the check of alert reception.
+  disable_alerts_reception_check: false
+
+auth:
+  # For remote writing.
+  remote_write:
+    basic_auth_user: '<user-id>'
+    basic_auth_pass: '<password>'
+  # To access <rules_and_alerts_api_base_url>/api/v1/rules and <rules_and_alerts_api_base_url>/api/v1/alerts.
+  rules_and_alerts_api:
+    basic_auth_user: '<user-id>'
+    basic_auth_pass: '<password>'
+  # To access <query_base_url>/query.
+  query:
+    basic_auth_user: '<user-id>'
+    basic_auth_pass: '<password>'
+
+# By default all test cases will be enabled and you don't need to set this.
+# But if you want to debug a particular or a set of rule groups, you can set this
+# to only test those rule groups.
+# You can find all the valid cases in ./cases/all_cases.go.
+test_cases:
+  - PendingAndFiringAndResolved
+  - PendingAndResolved_AlwaysInactive
+  - ZeroFor_SmallFor
+  - NewAlerts_OrderCheck

@@ -261,7 +261,7 @@ func (tc *newAlertsAndOrderCheck) expAlerts(ts int64, alerts []v1.Alert) (expAle
 	}
 
 	// TODO: temporary for development.
-	fmt.Println(desc, alerts)
+	devPrint(desc, alerts)
 
 	return expAlerts
 }

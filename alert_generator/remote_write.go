@@ -16,17 +16,31 @@ import (
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage/remote"
+	"go.uber.org/atomic"
+
+	agconfig "github.com/prometheus/compliance/alert_generator/config"
 )
 
-func NewRemoteWriter(rwURL string, logger log.Logger) (*RemoteWriter, error) {
-	u, err := url.Parse(rwURL)
+func NewRemoteWriter(cfg agconfig.Config, logger log.Logger) (*RemoteWriter, error) {
+	u, err := url.Parse(cfg.Settings.RemoteWriteURL)
 	if err != nil {
 		return nil, err
 	}
+
+	var baseAuth *config.BasicAuth
+	if cfg.Auth.RemoteWrite.BasicAuthUser != "" {
+		baseAuth = &config.BasicAuth{
+			Username: cfg.Auth.RemoteWrite.BasicAuthUser,
+			Password: config.Secret(cfg.Auth.RemoteWrite.BasicAuthPass),
+		}
+	}
 	client, err := remote.NewWriteClient("alert-generator-test-suite", &remote.ClientConfig{
 		URL:              &config.URL{URL: u},
-		Timeout:          model.Duration(1 * time.Second),
+		Timeout:          model.Duration(4 * time.Second),
 		RetryOnRateLimit: true,
+		HTTPClientConfig: config.HTTPClientConfig{
+			BasicAuth: baseAuth,
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -90,6 +104,7 @@ func (rw *RemoteWriter) Start() time.Time {
 		return rw.allSamples[i].s.Timestamp < rw.allSamples[j].s.Timestamp
 	})
 
+	var timesWritten atomic.Int32
 	rw.wg.Add(1)
 	go func(allSamples []sample) {
 		defer rw.wg.Done()
@@ -125,12 +140,13 @@ func (rw *RemoteWriter) Start() time.Time {
 				buf, err = buildWriteRequest(writeSeries, buf)
 				if err != nil {
 					rw.errc <- err
-					break
+					break // TODO: this breaks the select, should actually break the Outer.
 				}
 
-				level.Debug(rw.log).Log("msg", "Remote writing", "timestamp", currT, "total_series", len(writeSeries))
+				level.Debug(rw.log).Log("msg", "Remote writing", "timestamp", timestamp.Time(currT).Format(time.RFC3339Nano), "total_series", len(writeSeries))
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				err = rw.client.Store(ctx, buf)
+				err = rw.remoteWrite(ctx, buf)
+				timesWritten.Inc()
 				if err != nil {
 					cancel()
 					rw.errc <- err
@@ -141,7 +157,7 @@ func (rw *RemoteWriter) Start() time.Time {
 					cancel()
 					rw.errc <- err
 					level.Debug(rw.log).Log("msg", "Error in remote writing", "timestamp", currT, "total_series", len(writeSeries), "err", err)
-					break
+					break // TODO: fix error handling with this break
 				}
 				cancel()
 			}
@@ -149,7 +165,22 @@ func (rw *RemoteWriter) Start() time.Time {
 
 	}(rw.allSamples)
 
+	for timesWritten.Load() == 0 {
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	return now
+}
+
+func (rw *RemoteWriter) remoteWrite(ctx context.Context, buf []byte) error {
+	err := rw.client.Store(ctx, buf)
+	tries := 1
+	for err != nil && tries < 3 {
+		<-time.After(1 * time.Second)
+		tries++
+		err = rw.client.Store(ctx, buf)
+	}
+	return err
 }
 
 func (rw *RemoteWriter) Error() error {

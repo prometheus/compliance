@@ -43,7 +43,7 @@ require (
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/alertmanager v0.23.0 // indirect
+	github.com/prometheus/alertmanager v0.23.0
 	github.com/prometheus/client_golang v1.12.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1
@@ -67,10 +67,30 @@ require (
 )
 
 require (
+	github.com/armon/go-metrics v0.3.3 // indirect
+	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
+	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/felixge/httpsnoop v1.0.2 // indirect
+	github.com/gofrs/uuid v4.0.0+incompatible // indirect
+	github.com/google/btree v1.0.1 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/go-immutable-radix v1.2.0 // indirect
+	github.com/hashicorp/go-msgpack v0.5.3 // indirect
+	github.com/hashicorp/go-multierror v1.1.0 // indirect
+	github.com/hashicorp/go-sockaddr v1.0.2 // indirect
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/hashicorp/memberlist v0.3.0 // indirect
+	github.com/miekg/dns v1.1.45 // indirect
+	github.com/oklog/run v1.1.0 // indirect
+	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
+	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
+	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.26.1 // indirect
 	go.opentelemetry.io/otel v1.2.0 // indirect
 	go.opentelemetry.io/otel/internal/metric v0.24.0 // indirect
 	go.opentelemetry.io/otel/metric v0.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.2.0 // indirect
+	golang.org/x/mod v0.5.1 // indirect
+	golang.org/x/tools v0.1.9-0.20211209172050-90a85b2969be // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 )
