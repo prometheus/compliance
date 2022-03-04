@@ -7,9 +7,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/common/sigv4"
 	"github.com/prometheus/compliance/alert_generator/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
@@ -17,15 +19,28 @@ import (
 )
 
 // TODO: add retries and set some timeouts.
-func DoGetRequest(u string, auth config.BasicAuth) ([]byte, error) {
-	req, err := http.NewRequest("GET", u, nil)
+func DoGetRequest(u string, auth config.AuthConfig) ([]byte, error) {
+
+	// Give the GET request empty body instead of nil to avoid segmentation fault
+	// when doing sigv4 signing.
+	req, err := http.NewRequest("GET", u, strings.NewReader(""))
 	if err != nil {
 		return nil, err
 	}
-	if auth.BasicAuthUser != "" {
+
+	client := &http.Client{}
+	transport := client.Transport
+	if auth.SigV4Config != nil {
+		transport, err = sigv4.NewSigV4RoundTripper(auth.SigV4Config, transport)
+		if err != nil {
+			return nil, err
+		}
+	} else if auth.BasicAuthUser != "" {
 		req.SetBasicAuth(auth.BasicAuthUser, auth.BasicAuthPass)
 	}
-	resp, err := http.DefaultClient.Do(req)
+
+	client.Transport = transport
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "get request")
 	}
