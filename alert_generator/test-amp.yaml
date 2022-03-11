@@ -1,3 +1,4 @@
+# This is example configuration for Amazon Managed Service for Prometheus.
 settings:
   remote_write_url: https://aps-workspaces.us-west-2.amazonaws.com/workspaces/<workspace-id>/api/v1/remote_write
   query_base_url: https://aps-workspaces.us-west-2.amazonaws.com/workspaces/<workspace-id>
