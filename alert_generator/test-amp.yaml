@@ -1,0 +1,18 @@
+# This is example configuration for Amazon Managed Service for Prometheus.
+settings:
+  remote_write_url: https://aps-workspaces.us-west-2.amazonaws.com/workspaces/<workspace-id>/api/v1/remote_write
+  query_base_url: https://aps-workspaces.us-west-2.amazonaws.com/workspaces/<workspace-id>
+  rules_and_alerts_api_base_url: https://aps-workspaces.us-west-2.amazonaws.com/workspaces/<workspace-id>
+  # Currently it's too hard to perform alert reception check, so we disable it for now.
+  disable_alerts_reception_check: true
+
+auth:
+  remote_write:
+    sigv4:
+      region: us-west-2
+  rules_and_alerts_api:
+    sigv4:
+      region: us-west-2
+  query:
+    sigv4:
+      region: us-west-2

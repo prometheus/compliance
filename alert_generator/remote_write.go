@@ -41,6 +41,7 @@ func NewRemoteWriter(cfg agconfig.Config, logger log.Logger) (*RemoteWriter, err
 		HTTPClientConfig: config.HTTPClientConfig{
 			BasicAuth: baseAuth,
 		},
+		SigV4Config: cfg.Auth.RemoteWrite.SigV4Config,
 	})
 	if err != nil {
 		return nil, err

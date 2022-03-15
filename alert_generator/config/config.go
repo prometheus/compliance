@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/common/sigv4"
 	"gopkg.in/yaml.v2"
 )
 
@@ -37,14 +38,15 @@ type Settings struct {
 }
 
 type Auth struct {
-	RemoteWrite       BasicAuth `yaml:"remote_write"`
-	RulesAndAlertsAPI BasicAuth `yaml:"rules_and_alerts_api"`
-	Query             BasicAuth `yaml:"query"`
+	RemoteWrite       AuthConfig `yaml:"remote_write"`
+	RulesAndAlertsAPI AuthConfig `yaml:"rules_and_alerts_api"`
+	Query             AuthConfig `yaml:"query"`
 }
 
-type BasicAuth struct {
-	BasicAuthUser string `yaml:"basic_auth_user"`
-	BasicAuthPass string `yaml:"basic_auth_pass"`
+type AuthConfig struct {
+	SigV4Config   *sigv4.SigV4Config `yaml:"sigv4"`
+	BasicAuthUser string             `yaml:"basic_auth_user"`
+	BasicAuthPass string             `yaml:"basic_auth_pass"`
 }
 
 func validateConfig(cfg *Config) (*Config, error) {
