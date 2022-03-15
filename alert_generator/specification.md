@@ -292,12 +292,14 @@ This API returns all the rules along with its health and associated alerts. The 
 {
   "name": "<string>",
   "interval": <float>,
+  "lastEvaluation": "<RFC3339Millis time>",
   "rules": [ <rule>, ]
 }
 ```
 
 * `name` is the group name as present in the config.
 * `interval` is the group evaluation interval in float seconds as present in the file.
+* `lastEvaluation` is the timestamp of the last time the group was evaluated.
 
 An example for a custom field here that is used by Prometheus is `”file”: “<string>”`, which tells where on disk is the rule file that contains this group.
 
