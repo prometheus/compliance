@@ -32,6 +32,8 @@ type Settings struct {
 	DisableAlertsMetricsCheck   bool `yaml:"disable_alerts_metrics_check"`
 	DisableAlertsReceptionCheck bool `yaml:"disable_alerts_reception_check"`
 
+	AlertMessageParser string `yaml:"alert_message_parser"`
+
 	//APIHeaders         map[string]string `yaml:"api_headers"`
 	//QueryHeaders       map[string]string `yaml:"query_headers"`
 	//RemoteWriteHeaders map[string]string `yaml:"remote_write_headers"`

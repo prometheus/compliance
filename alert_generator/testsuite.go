@@ -46,6 +46,8 @@ type TestSuiteOptions struct {
 	Cases []cases.TestCase
 
 	Config config.Config
+
+	AlertMessageParser AlertMessageParser
 }
 
 func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
@@ -60,7 +62,7 @@ func NewTestSuite(opts TestSuiteOptions) (*TestSuite, error) {
 		ruleGroupTests:      make(map[string]cases.TestCase, len(opts.Cases)),
 		ruleGroupTestErrors: make(map[string][]error),
 		stopc:               make(chan struct{}),
-		as:                  newAlertsServer(opts.Config.Settings.AlertReceptionServerPort, opts.Config.Settings.DisableAlertsReceptionCheck, opts.Logger),
+		as:                  newAlertsServer(opts.Config.Settings.AlertReceptionServerPort, opts.Config.Settings.DisableAlertsReceptionCheck, opts.Logger, opts.AlertMessageParser),
 	}
 
 	m.remoteWriter, err = NewRemoteWriter(opts.Config, opts.Logger)
@@ -119,6 +121,10 @@ func validateOpts(opts TestSuiteOptions) error {
 		opts.Config.Settings.DisableAlertsMetricsCheck &&
 		opts.Config.Settings.DisableAlertsReceptionCheck {
 		return errors.New("all checks are disabled, at least one check should be enabled")
+	}
+
+	if opts.AlertMessageParser == nil {
+		return errors.New("AlertMessageParser is not set")
 	}
 
 	seenRuleGroups := make(map[string]bool)

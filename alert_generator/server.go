@@ -1,7 +1,6 @@
 package testsuite
 
 import (
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"sort"
@@ -16,6 +15,8 @@ import (
 	"github.com/prometheus/prometheus/notifier"
 )
 
+type AlertMessageParser func(b []byte) ([]notifier.Alert, error)
+
 type alertsServer struct {
 	logger log.Logger
 
@@ -26,6 +27,8 @@ type alertsServer struct {
 
 	expectedAlertsMtx sync.Mutex
 	expectedAlerts    map[string]*expectedAlerts
+
+	messageParser AlertMessageParser
 
 	errsMtx sync.Mutex
 	errs    map[string]*allErrs
@@ -62,13 +65,14 @@ type unexpectedErr struct {
 }
 
 // TODO: assumes resend delay of 1m.
-func newAlertsServer(port string, disabled bool, logger log.Logger) *alertsServer {
+func newAlertsServer(port string, disabled bool, logger log.Logger, messageParser AlertMessageParser) *alertsServer {
 	as := &alertsServer{
 		logger:         log.With(logger, "component", "alertsServer"),
 		errs:           make(map[string]*allErrs),
 		expectedAlerts: make(map[string]*expectedAlerts),
 		closeC:         make(chan struct{}),
 		disabled:       disabled,
+		messageParser:  messageParser,
 	}
 	as.server = &http.Server{
 		Addr:         ":" + port, // TODO: take this as a config.
@@ -88,10 +92,9 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var alerts []notifier.Alert
-	err = json.Unmarshal(b, &alerts)
+	alerts, err := as.messageParser(b)
 	if err != nil {
-		level.Error(as.logger).Log("msg", "Error in unmarshaling request body", "err", err.Error())
+		level.Error(as.logger).Log("msg", "Error in parsing request body", "err", err.Error())
 		res.WriteHeader(http.StatusBadRequest)
 		return
 	}

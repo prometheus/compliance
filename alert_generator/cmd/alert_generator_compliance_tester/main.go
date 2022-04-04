@@ -42,10 +42,21 @@ func main() {
 		}
 	}
 
+	if cfg.Settings.AlertMessageParser == "" {
+		cfg.Settings.AlertMessageParser = "default"
+	}
+
+	alertMessageParser, ok := testsuite.AlertMessageParsers[cfg.Settings.AlertMessageParser]
+	if !ok {
+		level.Error(log).Log("msg", "Alert message parser not found", "name", cfg.Settings.AlertMessageParser)
+		os.Exit(1)
+	}
+
 	t, err := testsuite.NewTestSuite(testsuite.TestSuiteOptions{
-		Logger: log,
-		Cases:  casesToRun,
-		Config: *cfg,
+		Logger:             log,
+		Cases:              casesToRun,
+		Config:             *cfg,
+		AlertMessageParser: alertMessageParser,
 	})
 	if err != nil {
 		level.Error(log).Log("msg", "Failed to start the test suite", "err", err)

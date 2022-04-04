@@ -17,6 +17,10 @@ settings:
   disable_alerts_metrics_check: false
   # Set to true to disable the check of alert reception.
   disable_alerts_reception_check: false
+  # Parser to use for the alert payload.
+  # Refer ./alert_message_parsers.go for available options, or implement your own in that file.
+  # The default value is `default` when not set.
+  alert_message_parser: default
 
 auth:
   # For remote writing.

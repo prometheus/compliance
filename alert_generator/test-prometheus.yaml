@@ -3,3 +3,4 @@ settings:
   query_base_url: http://localhost:9090
   rules_and_alerts_api_base_url: http://localhost:9090
   alert_reception_server_port: 8080
+  alert_message_parser: default

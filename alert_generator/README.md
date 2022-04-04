@@ -56,6 +56,10 @@ Note:
 
 #### Step 5
 
+If your software send alerts in a format that is not parsable by any of the provided parsers in [alert_message_parsers.go](./alert_message_parsers.go), you can extend that file to include your custom parser and mention that name in the config file.
+
+#### Step 6
+
 Now that everything is set up, you can run the test as follows
 
 ```bash
