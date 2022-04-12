@@ -1,0 +1,24 @@
+# For testing VictoriaMetrics vmalert
+# https://github.com/VictoriaMetrics/VictoriaMetrics/tree/master/app/vmalert
+#
+# vmalert is a stateless component for executing recording and alerting rules
+# against configured time series database which satisfies following requirements:
+# * metrics ingestion via Prometheus remote write protocol
+# * PromQL queries execution via /api/v1/query API handler
+# In this test, vmalert can be used with Prometheus when `--web.enable-remote-write-receiver`
+# is enabled.
+#
+# For the test suit the following requirements for vmalert should be satisfied:
+# * run vmalert of version 1.76 or higher https://github.com/VictoriaMetrics/VictoriaMetrics/releases
+# * set flag `-rule.resendDelay=1m` to set delay for resending active alerts to 1m;
+# * set flag `-datasource.queryTimeAlignment=false` to disable automatic `time` param;
+#   alignments. See more about alignment here https://github.com/VictoriaMetrics/VictoriaMetrics/pull/1257;
+# * set flag `-disableAlertgroupLabel=true` to disable extra label of rule's group name;
+# * set flag `-remoteWrite.maxBatchSize=1` to prevent vmalert from batching time series before
+#   flushing to remote storage.
+
+settings:
+  remote_write_url: http://localhost:9090/api/v1/write
+  query_base_url: http://localhost:9090
+  rules_and_alerts_api_base_url: http://localhost:8880
+  alert_reception_server_port: 9093
