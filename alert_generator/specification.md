@@ -248,8 +248,9 @@ This implies that the `inactive` alert MUST be sent continuously with a fixed in
 
 `ResendDelay` acts as a minimum interval while the actual interval MUST be the first >0 multiple of the group interval that is more than or equal to `ResendDelay`.
 
-### Payload Format to Send Alerts to Alertmanager
-The alerts MUST be sent in the following JSON format to the alertmanager
+### Payload Format to Send from the Alert Generator
+
+The alerts can be sent out in any format as required by the software while it MUST be translatable to the following JSON format
 
 ```
 [
