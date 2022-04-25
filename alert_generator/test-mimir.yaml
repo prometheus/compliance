@@ -1,0 +1,16 @@
+# For testing Cortex.
+# The following URLs correspond to the provided development environment at
+# https://github.com/grafana/mimir/tree/main/development/tsdb-blocks-storage-s3
+
+settings:
+  remote_write_url: http://localhost:8001/api/v1/push
+  query_base_url: http://localhost:8007/prometheus
+  rules_and_alerts_api_base_url: http://localhost:8021/prometheus
+  alert_reception_server_port: 8080
+  alert_message_parser: alertmanager
+
+test_cases:
+  - PendingAndFiringAndResolved
+  - PendingAndResolved_AlwaysInactive
+#  - ZeroFor_SmallFor
+  - NewAlerts_OrderCheck

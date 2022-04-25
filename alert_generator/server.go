@@ -27,6 +27,8 @@ type alertsServer struct {
 
 	expectedAlertsMtx sync.Mutex
 	expectedAlerts    map[string]*expectedAlerts
+	// Track's the last instance of an alert. Key is the alert label's String().
+	lastAlerts map[string]*lastAlert
 
 	messageParser AlertMessageParser
 
@@ -40,6 +42,11 @@ type alertsServer struct {
 
 type expectedAlerts struct {
 	alerts []cases.ExpectedAlert
+}
+
+type lastAlert struct {
+	alert notifier.Alert
+	time  time.Time
 }
 
 type allErrs struct {
@@ -70,6 +77,7 @@ func newAlertsServer(port string, disabled bool, logger log.Logger, messageParse
 		logger:         log.With(logger, "component", "alertsServer"),
 		errs:           make(map[string]*allErrs),
 		expectedAlerts: make(map[string]*expectedAlerts),
+		lastAlerts:     make(map[string]*lastAlert),
 		closeC:         make(chan struct{}),
 		disabled:       disabled,
 		messageParser:  messageParser,
@@ -112,6 +120,12 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		exp := as.getPossibleAlert(now, id)
 		errs := as.getErr(al.Labels.Get("rulegroup"))
 		if len(exp) == 0 {
+			if as.weGotThisRecently(now, al) {
+				// Duplicate sent within tolerable time. We can ignore this. It is possible
+				// if there was any network interruption.
+				continue
+			}
+
 			errs.unexpectedAlerts = append(errs.unexpectedAlerts, unexpectedErr{
 				t:     now,
 				alert: al,
@@ -141,7 +155,7 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		if me == nil {
+		if me == nil { // We got a match!
 			// We are expecting these alert to come later.
 			addBack = append(addBack, exp[idx+1:]...)
 			// These are missed, were expected before.
@@ -160,15 +174,29 @@ func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 					lastResendWasIgnored = ma.Resend
 				}
 			}
-
 		} else {
 			// None matches. Put back the alerts to match future alerts.
 			addBack = append(addBack, exp...)
-			errs.matchingErrs = append(errs.matchingErrs, *me)
+
+			// Let us first check if we got this recently. In which case we need not fail.
+			if as.weGotThisRecently(now, al) {
+				// Duplicate sent within tolerable time. We can ignore this. It is possible
+				// if there was any network interruption.
+			} else {
+				errs.matchingErrs = append(errs.matchingErrs, *me)
+			}
 		}
 	}
 	as.addExpectedAlerts(addBack...)
 	as.addMissedAlerts(missedAlerts)
+
+	// Update the last alerts.
+	for _, al := range alerts {
+		as.lastAlerts[al.Labels.String()] = &lastAlert{
+			alert: al,
+			time:  now,
+		}
+	}
 
 	// Since the alert is sent with a "resend delay" w.r.t. the last time the alert was sent,
 	// the delay might drift upto 1 group interval everytime. So for the Nth resend, the interval
@@ -261,6 +289,24 @@ func (as *alertsServer) getPossibleAlert(now time.Time, lblsString string) []cas
 	as.addMissedAlerts(missedAlerts)
 
 	return alerts
+}
+
+func (as *alertsServer) weGotThisRecently(ts time.Time, alert notifier.Alert) bool {
+	la, ok := as.lastAlerts[alert.Labels.String()]
+	if !ok {
+		return false
+	}
+
+	// Here "recently" means we got it within last 1min.
+	if ts.Sub(la.time) > time.Minute {
+		return false
+	}
+
+	return labels.Compare(alert.Labels, la.alert.Labels) == 0 &&
+		labels.Compare(alert.Annotations, la.alert.Annotations) == 0 &&
+		alert.StartsAt == la.alert.StartsAt &&
+		alert.EndsAt == la.alert.EndsAt &&
+		alert.GeneratorURL == la.alert.GeneratorURL
 }
 
 // missedAlertCleanup cleans up the missed alerts.
