@@ -1,0 +1,26 @@
+# For testing Mimir.
+#
+# We will use the ready developement enviroment that exists in Mimir:
+# https://github.com/grafana/mimir/tree/main/development/tsdb-blocks-storage-s3
+#
+# As suggested in the README of alert_generator, get a webhook URL from https://webhook.site/.
+# Go to the above `development/tsdb-blocks-storage-s3` directory and set that URL for 'alertmanager_url' in this file:
+# https://github.com/grafana/mimir/blob/52992841ba0a9405ec88045935ce493c2269dd01/development/tsdb-blocks-storage-s3/config/mimir.yaml#L87
+# You can remove the other URLs mentioned here.
+#
+# On the webhook.site page, set the redirect to http://localhost:8080 as described in the README.
+#
+# Start Mimir by running `./compose-up.sh`. Wait for 15-20s after containers are up.
+#
+# Use the mimirtool binary from the last release and run the following command to load the rules:
+# ./mimirtool rules load ./rules.yaml --address="http://0.0.0.0:8021" --id="anonymous"
+#
+# Now wait for up to 30s and start the test suite.
+#
+# Once test has finished, use `./compose-down.sh` to properly clean up the containers. Ctrl+C is not enough.
+
+settings:
+  remote_write_url: http://localhost:8001/api/v1/push
+  query_base_url: http://localhost:8007/prometheus
+  rules_and_alerts_api_base_url: http://localhost:8021/prometheus
+  alert_reception_server_port: 8080
