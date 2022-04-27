@@ -59,7 +59,6 @@ test_cases:
     variant_args: ['offset']
   - query: 'demo_memory_usage_bytes offset -{{.offset}}'
     variant_args: ['offset']
-    should_fail: true
   # Test staleness handling.
   - query: demo_intermittent_metric
 
