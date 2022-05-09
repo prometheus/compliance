@@ -47,7 +47,7 @@ If you are testing a cloud offering, or if the local software setup cannot acces
 
 ##### Step 4a
 
-You can run `./cmd/alert_generator_compliance_tester` in docker and run it inside your infrastructure as a batch job. To do so, build image with `make docker` and instead of step 6, simply run `alert_generator_compliance_tester:latest` with `-config-file=<config file you have done in step 3>`.
+You can run `./cmd/alert_generator_compliance_tester` in docker and run it inside your infrastructure as a batch job. To do so, build the image with `make docker` and instead of step 6, simply run `alert_generator_compliance_tester:latest` with `-config-file=<config file you have done in step 3>`.
 
 See example [here](https://github.com/thanos-io/thanos/blob/89077c9df109dac8dbe6c979ebc181071c5e0db8/test/e2e/compatibility_test.go#L132) 
 

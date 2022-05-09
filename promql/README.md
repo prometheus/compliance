@@ -28,7 +28,7 @@ go build ./cmd/promql-compliance-tester
 
 ## Executing
 
-Tool allows setting following flags:
+The tool allows setting the following flags:
 
 ```
 $ ./promql-compliance-tester -h
@@ -47,7 +47,7 @@ Usage of ./promql-compliance-tester:
 
 Running the tool will execute all test cases in `-config-file` and compare results between reference and target provided in the same file.
 
-At the end of run, the output is provided in form or number of executed tests and errors if any. Example output can be seen here:
+At the end of the run, the output is provided in the form of the number of executed tests and errors if any. Example output can be seen here:
 
 ```bash
 ./promql-compliance-tester -config-file config.yaml -config-file ./promql-test-queries.yml
@@ -55,7 +55,7 @@ At the end of run, the output is provided in form or number of executed tests an
 Total: 529 / 529 (100.00%) passed, 0 unsupported
 ```
 
-If all tests were executed correctly and passing the tool returns 0 code, otherwise it returns 1.
+If all tests were executed correctly and passing the tool returns a 0 exit code, otherwise it returns 1.
 
 ## Configuration
 
@@ -86,7 +86,7 @@ If the tool reports a test score of 100% without any cross-cutting query tweaks,
 
 ## Contributing
 
-Help wanted to improve the PromQL Compliance Tester. In particular, we would love to add and improve the following points:
+Help is wanted to improve the PromQL Compliance Tester. In particular, we would love to add and improve the following points:
 
 * Test instant queries in addition to range queries.
 * Add more variation and configurability to input timestamps.
