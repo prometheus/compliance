@@ -12,7 +12,7 @@ If you have docker installed, you can build the tool using docker.
 make docker
 ```
 
-## Build from source
+## Building from source
 
 ### Requirements
 
