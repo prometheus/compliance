@@ -3,7 +3,7 @@
 settings:
   # URL to remote write samples.
   remote_write_url: http://localhost:8001/api/v1/push
-  # URL to query the database via PromQL via GET <query_base_url>/query and <query_base_url>/query_range.
+  # URL to query the database via PromQL via GET <query_base_url>/api/v1/query and <query_base_url>/api/v1/query_range.
   query_base_url: http://localhost:8007/api/prom
   # URL to query the GET <rules_and_alerts_api_base_url>/api/v1/rules and <rules_and_alerts_api_base_url>/api/v1/alerts.
   rules_and_alerts_api_base_url: http://localhost:8021/api/prom
