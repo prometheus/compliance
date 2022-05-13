@@ -1,0 +1,58 @@
+# For testing Promscale.
+# 
+# We will use the Promscale version from the master branch by cloning
+# the repository from https://github.com/timescale/promscale
+# Build the Promscale binary using `go build ./cmd/promscale`
+# 
+# Next, we need to start TimescaleDB database that contains promscale_extension.
+# Promscale_extension is a Postgres extension that contains support functions
+# to improve the performance of Promscale. This extension is required for
+# running Promscale.
+#
+# Let's start the TimescaleDB container by running
+# docker run -d --name timescaledb -p 5432:5432 -e POSTGRES_PASSWORD=password timescale/timescaledb-ha:pg14-latest
+# Wait for few seconds till the container is up.
+# 
+# Promscale uses a configuration file that contains a `rule_files` and an
+# optional `alerting`, `global` fields. These fields should be like the ones described in
+# https://prometheus.io/docs/prometheus/latest/configuration/configuration/
+#
+# Promscale uses these fields to discover the alertmanager and alerting/recording rules.
+# 
+# For this test, we need a configuration that contains:
+# 1. Alertmanager config of the compliance test
+# 2. Alerting/Recording rules
+# 
+# Let's call this config.yaml
+# 
+# config.yaml
+# ---------------
+# 
+# global:
+#   evaluation_interval: 10s
+#
+# alerting:
+#   alertmanagers:
+#   - static_configs:
+#     - targets:
+#       - 'localhost:8080'
+#
+# rule_files:
+# - rules.yaml
+# 
+# 
+# Now, let's start Promscale.
+# ./promscale -db.name=postgres -db.password=password -db.port=5432 -db.ssl-mode=allow -metrics.rules.config-file=config.yaml
+#
+# Wait for 30s and then start the compliance test.
+
+
+settings:
+  # URL to remote write samples.
+  remote_write_url: http://localhost:9201/write
+  # URL to query the database via PromQL via GET <query_base_url>/api/v1/query and <query_base_url>/api/v1/query_range.
+  query_base_url: http://localhost:9201
+  # URL to query the GET <rules_and_alerts_api_base_url>/api/v1/rules and <rules_and_alerts_api_base_url>/api/v1/alerts.
+  rules_and_alerts_api_base_url: http://localhost:9201
+  # Port at which the alert receiving server will be run. Default: 8080.
+  alert_reception_server_port: 8080
