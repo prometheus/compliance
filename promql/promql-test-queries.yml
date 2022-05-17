@@ -48,6 +48,8 @@ test_cases:
   # Check for spacing.
   - query: ' { __name__ = "demo_memory_usage_bytes" } '
   - query: 'demo_memory_usage_bytes{type="free"}'
+  - query: 'demo_memory_usage_bytes{type=`free`}'
+  - query: "demo_memory_usage_bytes{type='free'}"
   - query: 'demo_memory_usage_bytes{type!="free"}'
   - query: 'demo_memory_usage_bytes{instance=~"demo.promlabs.com:.*"}'
   # Check for anchored regexes.
