@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -44,7 +43,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = ioutil.WriteFile(path, b, fs.ModePerm)
+	err = os.WriteFile(path, b, fs.ModePerm)
 	if err != nil {
 		level.Error(log).Log("msg", "Failed to write the rules file", "err", err)
 		os.Exit(1)

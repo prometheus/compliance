@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -98,7 +98,7 @@ func validateConfig(cfg *Config) (*Config, error) {
 
 // LoadFromFile parses the given YAML file into a Config.
 func LoadFromFile(fname string) (*Config, error) {
-	content, err := ioutil.ReadFile(fname)
+	content, err := os.ReadFile(fname)
 	if err != nil {
 		return nil, errors.Wrapf(err, "reading config file %s", fname)
 	}
