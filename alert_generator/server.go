@@ -1,7 +1,7 @@
 package testsuite
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"sync"
@@ -85,7 +85,7 @@ func newAlertsServer(port string, disabled bool, logger log.Logger, messageParse
 
 func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	now := time.Now().UTC()
-	b, err := ioutil.ReadAll(req.Body)
+	b, err := io.ReadAll(req.Body)
 	if err != nil {
 		level.Error(as.logger).Log("msg", "Error in reading request body", "err", err.Error())
 		res.WriteHeader(http.StatusBadRequest) // Or is it 500?
