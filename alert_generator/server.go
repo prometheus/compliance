@@ -84,6 +84,13 @@ func newAlertsServer(port string, disabled bool, logger log.Logger, messageParse
 }
 
 func (as *alertsServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	// some proxies/sinks like webhook.site might use a preflight check
+	if req.Method == http.MethodOptions {
+		res.Header().Set("Access-Control-Allow-Origin", "*")
+		res.Header().Set("Access-Control-Allow-Method", "POST")
+		res.WriteHeader(http.StatusOK)
+		return
+	}
 	now := time.Now().UTC()
 	b, err := io.ReadAll(req.Body)
 	if err != nil {
@@ -193,6 +200,7 @@ Outer2:
 
 	as.expectedAlertsMtx.Unlock()
 
+	res.Header().Set("Access-Control-Allow-Origin", "*")
 	res.WriteHeader(http.StatusOK)
 }
 
