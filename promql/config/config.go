@@ -39,7 +39,7 @@ type QueryTweak struct {
 	NoBug                  bool                  `yaml:"no_bug,omitempty" json:"noBug,omitempty"`
 	TruncateTimestampsToMS int64                 `yaml:"truncate_timestamps_to_ms" json:"truncateTimestampsToMS,omitempty"`
 	AlignTimestampsToStep  bool                  `yaml:"align_timestamps_to_step" json:"alignTimestampsToStep,omitempty"`
-	AlignTimestampsToMS    int64                 `yaml:"align_timestamps_to_ms" json:"alignTimestampsToMS,omitempty"`
+	OffsetTimestampsByMS   int64                 `yaml:"offset_timestamps_by_ms" json:"offsetTimestampsByMS,omitempty"`
 	DropResultLabels       []model.LabelName     `yaml:"drop_result_labels" json:"dropResultLabels,omitempty"`
 	IgnoreFirstStep        bool                  `yaml:"ignore_first_step" json:"ignoreFirstStep,omitempty"`
 	IgnoreCase             bool                  `yaml:"ignore_case" json:"ignoreCase,omitempty"`

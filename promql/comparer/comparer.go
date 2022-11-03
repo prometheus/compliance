@@ -176,10 +176,10 @@ func addCaseInsensitiveCompareOptions(queryTweaks []*config.QueryTweak, options 
 		if rt.IgnoreCase {
 			*options = append(
 				*options,
-				// Translate sample values into lowercase.
+				// Translate metric names and labels into lowercase.
 				cmp.Transformer("TranslateToLowerCase",
 					func(in model.Metric) model.Metric {
-						m := make(map[model.LabelName]model.LabelValue)
+						m := map[model.LabelName]model.LabelValue{}
 						for key, val := range in {
 							m[model.LabelName(strings.ToLower(string(key)))] = model.LabelValue(strings.ToLower(string(val)))
 						}
