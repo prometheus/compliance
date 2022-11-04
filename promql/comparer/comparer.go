@@ -51,6 +51,7 @@ func New(refAPI, testAPI PromAPI, queryTweaks []*config.QueryTweak) *Comparer {
 	var options cmp.Options
 	addFloatCompareOptions(queryTweaks, &options)
 	addDropResultLabelsOptions(queryTweaks, &options)
+	addCaseInsensitiveCompareOptions(queryTweaks, &options)
 	return &Comparer{
 		refAPI:         refAPI,
 		testAPI:        testAPI,
@@ -161,6 +162,26 @@ func addDropResultLabelsOptions(queryTweaks []*config.QueryTweak, options *cmp.O
 						m := in.Clone()
 						for _, ln := range localRt.DropResultLabels {
 							delete(m, ln)
+						}
+						return m
+					},
+				),
+			)
+		}
+	}
+}
+
+func addCaseInsensitiveCompareOptions(queryTweaks []*config.QueryTweak, options *cmp.Options) {
+	for _, rt := range queryTweaks {
+		if rt.IgnoreCase {
+			*options = append(
+				*options,
+				// Translate metric names and labels into lowercase.
+				cmp.Transformer("TranslateToLowerCase",
+					func(in model.Metric) model.Metric {
+						m := map[model.LabelName]model.LabelValue{}
+						for key, val := range in {
+							m[model.LabelName(strings.ToLower(string(key)))] = model.LabelValue(strings.ToLower(string(val)))
 						}
 						return m
 					},

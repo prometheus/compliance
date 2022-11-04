@@ -124,6 +124,10 @@ func applyQueryTweaks(tc *comparer.TestCase, tweaks []*config.QueryTweak) *compa
 			resTC.Start = resTC.Start.Truncate(resTC.Resolution)
 			resTC.End = resTC.End.Truncate(resTC.Resolution)
 		}
+		if d := time.Duration(t.OffsetTimestampsByMS) * time.Millisecond; d != 0 {
+			resTC.Start = resTC.Start.Add(d)
+			resTC.End = resTC.End.Add(d)
+		}
 	}
 	return &resTC
 }
