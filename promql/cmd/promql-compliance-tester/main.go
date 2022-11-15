@@ -113,7 +113,7 @@ func main() {
 
 	comp := comparer.New(refAPI, testAPI, cfg.QueryTweaks)
 
-	end := getTime(cfg.QueryTimeParameters.EndTime, time.Now().UTC().Add(-2*time.Minute))
+	end := getTime(cfg.QueryTimeParameters.EndTime, time.Now().UTC().Add(-12*time.Minute))
 	start := end.Add(
 		-getNonZeroDuration(cfg.QueryTimeParameters.RangeInSeconds, 10*time.Minute))
 	resolution := getNonZeroDuration(
