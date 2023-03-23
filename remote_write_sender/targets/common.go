@@ -58,16 +58,10 @@ func downloadBinaryUnlocked(urlPattern string, filenameInArchivePattern string) 
 		return "", err
 	}
 
-	filename := path.Join(cwd, "bin", path.Base(parsed.Path))
-	decompressTgz := strings.HasSuffix(filename, ".tar.gz")
-	if decompressTgz {
-		filename = strings.TrimSuffix(filename, ".tar.gz")
-	}
-
-	decompressZip := strings.HasSuffix(filename, ".zip")
-	if decompressZip {
-		filename = strings.TrimSuffix(filename, ".zip")
-	}
+	filename := path.Join(cwd, "bin", filenameInArchive)
+	publishedArtifactName := path.Base(parsed.Path)
+	decompressTgz := strings.HasSuffix(publishedArtifactName, ".tar.gz")
+	decompressZip := strings.HasSuffix(publishedArtifactName, ".zip")
 
 	// If we've already downloaded it, then skip.
 	if _, err := os.Stat(filename); !os.IsNotExist(err) {
