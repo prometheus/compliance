@@ -35,6 +35,8 @@ The repo tests the following remote write senders:
 - The [VictoriaMetrics Agent](https://github.com/VictoriaMetrics/VictoriaMetrics/tree/master/app/vmagent), unless you're on [Mac OS X](https://github.com/VictoriaMetrics/VictoriaMetrics/issues/1042).
 - [Timber.io Vector](https://github.com/timberio/vector).
 
-If you want to test a dev version of your sender, simply put your binary in `bin/`.
+If you want to test a dev version of your sender, simply put your binary in `bin/` using the same name of the binary that is in the published artifact.
+
+Example: for OpenTelemetry collector, the published artifact is `otelcol_0.42.0_linux_amd64.tar.gz` and the binary inside of it is `otelcol`.
 
 To add another sender, see the examples in [the targets director](targets/) and recreate that pattern in a PR.
