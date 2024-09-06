@@ -18,6 +18,6 @@ The [openmetrics](openmetrics/README.md) directory contains a reference to the [
 
 The [promql](promql/README.md) directory contains code to test compliance with the [native Prometheus PromQL implementation](https://github.com/prometheus/prometheus/tree/main/promql).
 
-## Remote Write Sender
+## Remote Write: Sender
 
-The [remote_write_sender](remote_write_sender/README.md) directory contains code to test compliance with the [Prometheus Remote Write specification](https://docs.google.com/document/d/1LPhVRSFkGNSuU1fBd81ulhsCPR4hkSZyyBj1SZ8fWOM/edit#heading=h.n0d0vphea3fe) as a sender.
+The [remotewrite/sender](remotewrite/sender/README.md) directory contains code to test compliance with the [Prometheus Remote Write specification](https://prometheus.io/docs/specs/remote_write_spec/) as a sender.

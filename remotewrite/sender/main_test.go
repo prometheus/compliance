@@ -1,6 +1,6 @@
 // +build compliance
 
-package main
+package sender
 
 import (
 	"fmt"
