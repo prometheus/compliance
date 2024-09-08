@@ -1,4 +1,4 @@
-module github.com/prometheus/compliance/remote_write
+module github.com/prometheus/compliance/remotewrite/sender
 
 go 1.16
 

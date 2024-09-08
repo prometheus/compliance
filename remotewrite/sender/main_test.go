@@ -1,3 +1,4 @@
+//go:build compliance
 // +build compliance
 
 package sender
@@ -11,8 +12,8 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/log"
-	"github.com/prometheus/compliance/remote_write/cases"
-	"github.com/prometheus/compliance/remote_write/targets"
+	"github.com/prometheus/compliance/remotewrite/sender/cases"
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/stretchr/testify/require"
 )
