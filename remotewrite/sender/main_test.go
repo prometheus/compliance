@@ -14,6 +14,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/compliance/remotewrite/sender/cases"
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/stretchr/testify/require"
 )
@@ -77,7 +78,7 @@ func TestRemoteWrite(t *testing.T) {
 
 func runTest(t *testing.T, tc cases.Test, runner targets.Target) {
 	ap := cases.Appendable{}
-	writeHandler := remote.NewWriteHandler(logger, &ap)
+	writeHandler := remote.NewWriteHandler(logger, nil, &ap, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1})
 	if tc.Writes != nil {
 		writeHandler = tc.Writes(writeHandler)
 	}
