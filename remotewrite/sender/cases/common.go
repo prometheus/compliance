@@ -8,8 +8,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/prometheus/pkg/exemplar"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/model/exemplar"
+	"github.com/prometheus/prometheus/model/histogram"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -61,7 +63,7 @@ func (m *Appendable) Appender(_ context.Context) storage.Appender {
 	return b
 }
 
-func (m *Batch) Append(_ uint64, l labels.Labels, t int64, v float64) (uint64, error) {
+func (m *Batch) Append(_ storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
 	m.samples = append(m.samples, sample{l, t, v})
 	return 0, nil
 }
@@ -77,6 +79,22 @@ func (*Batch) Rollback() error {
 	return nil
 }
 
-func (*Batch) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
+func (*Batch) AppendExemplar(_ storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
+	// TODO(bwplotka): Implement for v2.
+	return 0, nil
+}
+
+func (*Batch) AppendHistogram(_ storage.SeriesRef, l labels.Labels, t int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
+	// TODO(bwplotka): Implement for v2.
+	return 0, nil
+}
+
+func (*Batch) UpdateMetadata(_ storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
+	// TODO(bwplotka): Implement for v2.
+	return 0, nil
+}
+
+func (*Batch) AppendCTZeroSample(_ storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
+	// TODO(bwplotka): Implement for v2.
 	return 0, nil
 }

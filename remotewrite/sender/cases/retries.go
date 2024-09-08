@@ -9,7 +9,8 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/stretchr/testify/require"
 )
@@ -106,7 +107,7 @@ func Retries400Test() Test {
 
 func getFirstTimestamp(w http.ResponseWriter, r *http.Request) int64 {
 	ap := Appendable{}
-	h := remote.NewWriteHandler(log.NewNopLogger(), &ap)
+	h := remote.NewWriteHandler(log.NewNopLogger(), nil, &ap, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
 	if rec.Code/100 != 2 {
