@@ -29,6 +29,7 @@ processors:
 exporters:
   prometheusremotewrite:
     endpoint: '%s'
+    add_metric_suffixes: false
 
 service:
   pipelines:
