@@ -9,7 +9,7 @@ require (
 	github.com/prometheus/client_golang v1.8.1-0.20201120195816-39b478e90c0b
 	github.com/prometheus/common v0.14.0
 	go.uber.org/atomic v1.11.0
-	gopkg.in/yaml.v2 v2.3.0
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
