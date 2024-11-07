@@ -8,15 +8,16 @@ workflows:
           matrix:
             parameters:
               dir:
+                - alert_generator
                 - promql
                 - remotewrite/sender
       - test:
           matrix:
             parameters:
               dir:
+                - alert_generator
                 - promql
                 - remotewrite/sender
-                - alert_generator
 
 jobs:
   test:
@@ -25,7 +26,7 @@ jobs:
         type: string
     working_directory: ~/project/<< parameters.dir >>
     docker:
-      - image: cimg/go:1.22.6
+      - image: cimg/go:1.23
     steps:
       - checkout:
           path: ~/project/
@@ -52,7 +53,7 @@ jobs:
         type: string
     working_directory: ~/project/<< parameters.dir >>
     docker:
-      - image: cimg/go:1.16.3
+      - image: cimg/go:1.23
     steps:
       - checkout:
           path: ~/project/
@@ -68,10 +69,10 @@ jobs:
             - "/go/pkg/mod"
       - run:
           name: Install golangci-lint
-          command: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.39.0
+          command: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
       - run:
           name: Run lint
           command: |
-            golangci-lint run ./...
+            golangci-lint run --verbose ./...
       - store_test_results:
           path: /tmp/test-reports

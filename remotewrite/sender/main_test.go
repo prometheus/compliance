@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kit/kit/log"
+	"github.com/go-kit/log"
 	"github.com/prometheus/compliance/remotewrite/sender/cases"
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"github.com/prometheus/prometheus/config"

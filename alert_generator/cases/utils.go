@@ -301,7 +301,7 @@ func areRulesEqual(now time.Time, itvl time.Duration, exp []v1.Rule, actRules []
 		}
 		aq, err := parser.ParseExpr(a.Query)
 		if err != nil {
-			return fmt.Errorf("error in parsing query: " + err.Error())
+			return fmt.Errorf("error in parsing query: %w ", err)
 		}
 		switch {
 		case e.State != a.State:
