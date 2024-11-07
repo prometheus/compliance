@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/cheggaaa/pb/v3 v3.1.5
-	github.com/google/go-cmp v0.5.2
+	github.com/google/go-cmp v0.6.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.1-0.20201120195816-39b478e90c0b
 	github.com/prometheus/common v0.14.0
@@ -27,6 +27,5 @@ require (
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
 	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 )
