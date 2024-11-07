@@ -8,7 +8,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.1-0.20201120195816-39b478e90c0b
 	github.com/prometheus/common v0.14.0
-	go.uber.org/atomic v1.5.0
+	go.uber.org/atomic v1.11.0
 	gopkg.in/yaml.v2 v2.3.0
 )
 
@@ -26,9 +26,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
-	golang.org/x/lint v0.0.0-20190930215403-16217165b5de // indirect
 	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/tools v0.0.0-20200103221440-774c71fcf114 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 )
