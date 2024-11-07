@@ -1,6 +1,6 @@
 module github.com/prometheus/compliance/alert_generator
 
-go 1.17
+go 1.22
 
 require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
@@ -54,11 +54,11 @@ require (
 	go.mongodb.org/mongo-driver v1.7.5 // indirect
 	go.uber.org/atomic v1.9.0
 	go.uber.org/goleak v1.1.12 // indirect
-	golang.org/x/net v0.0.0-20220105145211-5b0dc2dfae98 // indirect
+	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
@@ -90,7 +90,6 @@ require (
 	go.opentelemetry.io/otel/internal/metric v0.24.0 // indirect
 	go.opentelemetry.io/otel/metric v0.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.2.0 // indirect
-	golang.org/x/mod v0.5.1 // indirect
-	golang.org/x/tools v0.1.9-0.20211209172050-90a85b2969be // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	golang.org/x/mod v0.17.0 // indirect
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 )

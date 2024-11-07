@@ -2,7 +2,7 @@ package config
 
 import (
 	"bytes"
-	"io/ioutil"
+	"os"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
@@ -63,7 +63,7 @@ type TestCase struct {
 func LoadFromFiles(filenames []string) (*Config, error) {
 	var buf bytes.Buffer
 	for _, f := range filenames {
-		content, err := ioutil.ReadFile(f)
+		content, err := os.ReadFile(f)
 		if err != nil {
 			return nil, errors.Wrapf(err, "reading config file %s", f)
 		}

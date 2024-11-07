@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/promql"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "gomod"
+    directory: "/remotewrite/sender"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "gomod"
+    directory: "/alert_generator"
+    schedule:
+      interval: "monthly"

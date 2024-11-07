@@ -67,7 +67,7 @@ func main() {
 	t.Start()
 
 	tu := t.TestUntil()
-	level.Info(log).Log("msg", fmt.Sprintf("Test will run until %s approximately", tu.Format(time.RFC3339)), "time_remaining", tu.Sub(time.Now()).String())
+	level.Info(log).Log("msg", fmt.Sprintf("Test will run until %s approximately", tu.Format(time.RFC3339)), "time_remaining", time.Until(tu))
 
 	var wg sync.WaitGroup
 	c := make(chan os.Signal, 1)
