@@ -12,7 +12,7 @@ require (
 	github.com/prometheus/common/sigv4 v0.1.0
 	github.com/prometheus/prometheus v1.8.2-0.20220125113948-fe06f16c116a
 	github.com/stretchr/testify v1.9.0
-	go.uber.org/atomic v1.9.0
+	go.uber.org/atomic v1.11.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )
