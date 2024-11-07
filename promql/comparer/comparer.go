@@ -23,9 +23,9 @@ const (
 // PromAPI allows running instant and range queries against a Prometheus-compatible API.
 type PromAPI interface {
 	// Query performs a query for the given time.
-	Query(ctx context.Context, query string, ts time.Time) (model.Value, v1.Warnings, error)
+	Query(ctx context.Context, query string, ts time.Time, opts ...v1.Option) (model.Value, v1.Warnings, error)
 	// QueryRange performs a query for the given range.
-	QueryRange(ctx context.Context, query string, r v1.Range) (model.Value, v1.Warnings, error)
+	QueryRange(ctx context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, error)
 }
 
 // TestCase represents a fully expanded query to be tested.
