@@ -1,4 +1,4 @@
-FROM golang:1.18 as build-env
+FROM golang:1.23 as build-env
 
 WORKDIR /go/src/promql
 COPY . /go/src/promql

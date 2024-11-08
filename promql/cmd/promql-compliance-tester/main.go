@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -14,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/prometheus/common/log"
 	"github.com/prometheus/compliance/promql/comparer"
 	"github.com/prometheus/compliance/promql/config"
 	"github.com/prometheus/compliance/promql/output"
