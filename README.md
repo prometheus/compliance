@@ -12,7 +12,7 @@ The [alert_generator](alert_generator/README.md) directory contains a shim at th
 
 ## OpenMetrics
 
-The [openmetrics](openmetrics/README.md) directory contains a reference to the [OpenMetrics](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md) test suite.
+The [openmetrics](openmetrics/README.md) directory contains a reference to the [OpenMetrics](https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md) test suite.
 
 ## PromQL
 
