@@ -20,6 +20,7 @@ receivers:
       scrape_configs:
         - job_name: 'test'
           scrape_interval: 1s
+          fallback_scrape_protocol: "PrometheusText1.0.0"
           static_configs:
             - targets: [ '%s' ]
 
