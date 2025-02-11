@@ -6,7 +6,7 @@ require (
 	github.com/cheggaaa/pb/v3 v3.1.5
 	github.com/google/go-cmp v0.6.0
 	github.com/prometheus/client_golang v1.20.5
-	github.com/prometheus/common v0.60.1
+	github.com/prometheus/common v0.62.0
 	go.uber.org/atomic v1.11.0
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -23,6 +23,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	google.golang.org/protobuf v1.36.1 // indirect
 )
