@@ -5,7 +5,6 @@ go 1.22
 require (
 	github.com/cheggaaa/pb/v3 v3.1.5
 	github.com/google/go-cmp v0.6.0
-	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/common v0.60.1
 	go.uber.org/atomic v1.11.0
