@@ -40,6 +40,9 @@ service:
               prometheus:
                 host: 'localhost'
                 port: 0
+				without_scope_info: true
+				without_type_suffix: true
+				without_units: true
   pipelines:
     metrics:
       receivers: [prometheus]
