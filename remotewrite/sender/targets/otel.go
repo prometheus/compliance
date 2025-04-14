@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const otelDownloadURL = "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.42.0/otelcol_0.42.0_{{.OS}}_{{.Arch}}.tar.gz"
+const otelDownloadURL = "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.123.1/otelcol_0.123.1_{{.OS}}_{{.Arch}}.tar.gz"
 
 func RunOtelCollector(opts TargetOptions) error {
 	binary, err := downloadBinary(otelDownloadURL, "otelcol")
@@ -31,7 +31,18 @@ exporters:
     endpoint: '%s'
     add_metric_suffixes: false
 
-service:
+service:  
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 'localhost'
+                port: 0
+				without_scope_info: true
+				without_type_suffix: true
+				without_units: true
   pipelines:
     metrics:
       receivers: [prometheus]
@@ -44,5 +55,5 @@ service:
 	}
 	defer os.Remove(configFileName)
 
-	return runCommand(binary, opts.Timeout, `--set=service.telemetry.metrics.address=:0`, fmt.Sprintf("--config=%s", configFileName))
+	return runCommand(binary, opts.Timeout, fmt.Sprintf("--config=%s", configFileName))
 }
