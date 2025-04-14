@@ -38,7 +38,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/timestamp"
-	p "golang.org/x/exp/apidiff/testdata"
 )
 
 // Backend represents a metric backend pipeline that can be started.
@@ -463,4 +462,37 @@ func (r *IngestByScrapeReplayer) IngestSamples(ctx context.Context, t testing.TB
 	}); err != nil {
 		t.Fatal(t.Name(), err, "within expected time")
 	}
+}
+
+type runningScrapeReplayBasedBackend struct {
+	replayer         *IngestByScrapeReplayer
+	collectionLabels map[string]string
+
+	api v1.API
+}
+
+// NewRunningScrapeReplayBasedBackend is a helper function for crafting
+// RunningBackend from scrape replayer, expected collection labels and Prometheus API client.
+func NewRunningScrapeReplayBasedBackend(
+		replayer *IngestByScrapeReplayer,
+		collectionLabels map[string]string,
+		api v1.API,
+) RunningBackend {
+	return &runningScrapeReplayBasedBackend{
+		replayer:         replayer,
+		collectionLabels: collectionLabels,
+		api:              api,
+	}
+}
+
+func (b *runningScrapeReplayBasedBackend) API() v1.API {
+	return b.api
+}
+
+func (b *runningScrapeReplayBasedBackend) CollectionLabels() map[string]string {
+	return b.collectionLabels
+}
+
+func (b *runningScrapeReplayBasedBackend) IngestSamples(ctx context.Context, t testing.TB, recorded [][]*dto.MetricFamily) {
+	b.replayer.IngestSamples(ctx, t, recorded)
 }

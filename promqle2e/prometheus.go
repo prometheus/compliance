@@ -14,7 +14,6 @@
 package promqle2e
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,7 +24,6 @@ import (
 	e2emon "github.com/efficientgo/e2e/monitoring"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	dto "github.com/prometheus/client_model/go"
 )
 
 var _ Backend = PrometheusBackend{}
@@ -60,14 +58,6 @@ func (opts PrometheusBackend) Ref() string {
 	return opts.Name
 }
 
-type runningPrometheusBackend struct {
-	replayer         *IngestByScrapeReplayer
-	collectionLabels map[string]string
-
-	api v1.API
-	p   *e2emon.Prometheus
-}
-
 func (opts PrometheusBackend) StartAndWaitReady(t testing.TB, env e2e.Environment) RunningBackend {
 	if opts.Image == "" {
 		opts.Image = defaultPrometheusBackend.Image
@@ -79,32 +69,30 @@ func (opts PrometheusBackend) StartAndWaitReady(t testing.TB, env e2e.Environmen
 		opts.Mode = defaultPrometheusBackend.Mode
 	}
 
-	p := &runningPrometheusBackend{}
 	switch opts.Mode {
 	case PrometheusBackendModeOM:
-		p.replayer = StartIngestByScrapeReplayer(t, env)
-
-		// Create Prometheus container that scrapes our server.
-		p.p = newPrometheus(env, opts.Name, opts.Image, p.replayer.Endpoint(env), nil)
-
-		// Because of scrape config, we expect a job label on top of app labels.
-		p.collectionLabels = map[string]string{"job": "test"}
 	case PrometheusBackendModeRW2:
 		t.Fatal("not implemeted yet")
 	default:
 		t.Fatal("unknown mode", opts.Mode)
 	}
 
-	if err := e2e.StartAndWaitReady(p.p); err != nil {
+	replayer := StartIngestByScrapeReplayer(t, env)
+
+	// Create Prometheus container that scrapes our server.
+	p := newPrometheus(env, opts.Name, opts.Image, replayer.Endpoint(env), nil)
+	if err := e2e.StartAndWaitReady(p); err != nil {
 		t.Fatalf("can't start %v: %v", opts.Name, err)
 	}
 
-	cl, err := api.NewClient(api.Config{Address: "http://" + p.p.Endpoint("http")})
+	// Because of scrape config, we expect a job label on top of app labels.
+	collectionLabels := map[string]string{"job": "test"}
+
+	cl, err := api.NewClient(api.Config{Address: "http://" + p.Endpoint("http")})
 	if err != nil {
 		t.Fatalf("failed to create Prometheus client for %v: %s", opts.Name, err)
 	}
-	p.api = v1.NewAPI(cl)
-	return p
+	return NewRunningScrapeReplayBasedBackend(replayer, collectionLabels, v1.NewAPI(cl))
 }
 
 func newPrometheus(env e2e.Environment, name string, image string, scrapeTargetAddress string, flagOverride map[string]string) *e2emon.Prometheus {
@@ -159,16 +147,4 @@ scrape_configs:
 		Runnable:     p,
 		Instrumented: p,
 	}
-}
-
-func (p *runningPrometheusBackend) API() v1.API {
-	return p.api
-}
-
-func (p *runningPrometheusBackend) CollectionLabels() map[string]string {
-	return p.collectionLabels
-}
-
-func (p *runningPrometheusBackend) IngestSamples(ctx context.Context, t testing.TB, recorded [][]*dto.MetricFamily) {
-	p.replayer.IngestSamples(ctx, t, recorded)
 }
