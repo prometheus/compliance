@@ -109,7 +109,7 @@ func NewScrapeStyleTest(t *testing.T, opts ...e2e.EnvironmentOption) *ScrapeStyl
 		registry:               prometheus.NewRegistry(),
 		opts:                   opts,
 
-		// testID is a unique ID for the test. It will also appear as "test" Prometheus
+		// testID is a unique ID for the test. It will also appear as "promqle2e_test" Prometheus
 		// label. Cardinality of this is obvious, but even for 100 test runs a day with
 		// 100 cases, 10 samples each, that's "only" 10k series / 0.1 million samples a day.
 		testID: fmt.Sprintf("%v: %v", t.Name(), ulid.MustNew(ulid.Now(), rand.New(rand.NewSource(time.Now().UnixNano()))).String()),
@@ -132,7 +132,7 @@ func (t *ScrapeStyleTest) SetCurrentTime(currTime time.Time) {
 }
 
 func (t *ScrapeStyleTest) Registerer() prometheus.Registerer {
-	return prometheus.WrapRegistererWith(map[string]string{"test": t.testID}, t.registry)
+	return prometheus.WrapRegistererWith(map[string]string{"promqle2e_test": t.testID}, t.registry)
 }
 
 // RegisterBackends registers new backends for the test.
@@ -154,6 +154,8 @@ func (t *ScrapeStyleTest) RegisterBackends(bs ...Backend) {
 // TODO(bwplotka): Add histogram support.
 type ExpectationsRecorder interface {
 	// Expect sets an expectation for metric to have a float value of val for backend b.
+	// NOTE(bwplotka): For multiple backends on the same test that reuse the same PromQL storage, CollectionLabels
+	// has to be unique.
 	Expect(metric prometheus.Metric, val float64, b Backend) ExpectationsRecorder
 }
 
@@ -244,58 +246,68 @@ func (t *ScrapeStyleTest) Expect(metric prometheus.Metric, val float64, b Backen
 	return t
 }
 
+// Transform allows performing any transformations on top of the scrape recorded data e.g. adding/removing CT.
+func (t *ScrapeStyleTest) Transform(transformFn func([][]*dto.MetricFamily) [][]*dto.MetricFamily) {
+	t.scrapeRecordings = transformFn(t.scrapeRecordings)
+}
+
 // Run performs the test, by actually injecting the recorded data and expecting
 // the PromQL output based on RecordScrape(...).Expect(...) methods.
 // Only once and one of this can be run per NewScrapeStyleTest.
 func (t *ScrapeStyleTest) Run(ctx context.Context) {
-	t.t.Helper()
+	tt := t.t
+	tt.Helper()
 
 	if len(t.backends) == 0 {
-		t.t.Fatal("no backends specified, at least has to be registered, either on RecordScrape(...).Expect or on RegisterBackends e.g. promqe2e.PrometheusBackend")
+		tt.Fatal("no backends specified, at least has to be registered, either on RecordScrape(...).Expect or on RegisterBackends e.g. promqe2e.PrometheusBackend")
 	}
 
 	e, err := e2e.New(t.opts...)
-	t.t.Cleanup(e.Close)
+	tt.Cleanup(e.Close)
 	if err != nil {
-		t.t.Fatal(err)
+		tt.Fatal(err)
 	}
 
 	// Start backends.
 	running := map[string]RunningBackend{}
 	for _, b := range t.backends {
-		running[b.Ref()] = b.StartAndWaitReady(t.t, e)
+		running[b.Ref()] = b.StartAndWaitReady(tt, e)
 	}
 
 	// Inject recorded data to our backends. This might take a while, depending on the
 	// backend implementations.
-	// TODO(bwplotka): Potential for concurrency here.
 	for ref, b := range running {
-		fmt.Printf("%v: Injecting samples to backend %q\n", t.t.Name(), ref)
-		b.IngestSamples(ctx, t.t, t.scrapeRecordings)
-	}
+		tt.Run(fmt.Sprintf("backend=%v", ref), func(tt *testing.T) {
+			tt.Parallel()
 
-	for ref, b := range running {
-		t.t.Run(fmt.Sprintf("backend=%v", ref), func(tt *testing.T) {
+			tLogf(tt, "Injecting samples to backend %q\n", ref)
+			b.IngestSamples(ctx, tt, t.scrapeRecordings)
+
 			exp := t.expectationsPerBackend[ref]
 			for _, m := range exp {
 				metric := m.Metric
-				t.t.Run(fmt.Sprintf("metric=%v", metric.String()), func(tt *testing.T) {
+				tt.Run(fmt.Sprintf("metric=%v", metric.String()), func(tt *testing.T) {
 					tt.Parallel()
-					t.fatalOnUnexpectedPromQLResults(ctx, ref, b, m)
+					t.fatalOnUnexpectedPromQLResults(ctx, tt, ref, b, m)
 				})
 			}
 		})
 	}
 }
 
+func tLogf(tt testing.TB, format string, args ...any) {
+	// TODO(bwplotka): Is this trully streaming? Consider tee-ing to std as well?
+	tt.Logf(format, args...)
+}
+
 // fatalOnUnexpectedPromQLResults fails the test if gathered expected samples for given non histogram,
 // non-summary metrics does not match <metric>[10h] samples from given backend PromQL API for
 // instant query.
-func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, ref string, b RunningBackend, expected *model.SampleStream) {
-	t.t.Helper()
+func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, tt testing.TB, ref string, b RunningBackend, expected *model.SampleStream) {
+	tt.Helper()
 
 	expectedMetric := expected.Metric.Clone()
-	expectedMetric["test"] = model.LabelValue(t.testID)
+	expectedMetric["promqle2e_test"] = model.LabelValue(t.testID)
 	for k, v := range b.CollectionLabels() {
 		expectedMetric[model.LabelName(k)] = model.LabelValue(v)
 	}
@@ -305,7 +317,7 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, re
 	}}
 
 	query := fmt.Sprintf(`%s[10h]`, expectedMetric.String())
-	fmt.Printf("%v: Checking if PromQL instant query for %v at %v matches expected samples for %v backend\n", t.t.Name(), query, t.maxTime, ref)
+	tLogf(tt, "Checking if PromQL instant query for %v at %v matches expected samples for %v backend\n", query, t.maxTime, ref)
 	var lastDiff string
 	var sameDiffTimes int
 	if err := runutil.RetryWithLog(log.NewJSONLogger(os.Stderr), 10*time.Second, ctx.Done(), func() error {
@@ -314,7 +326,7 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, re
 			return fmt.Errorf("instant query %s at %v: %w", query, t.maxTime, err)
 		}
 		if len(warns) > 0 {
-			fmt.Println(t.t.Name(), "Got query warnings:", warns)
+			tLogf(tt, "Got query warnings: %v\n", warns)
 		}
 
 		if value.Type() != model.ValMatrix {
@@ -329,8 +341,8 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, re
 		if lastDiff == diff {
 			if sameDiffTimes > 3 {
 				// Likely nothing will change, abort.
-				fmt.Println(t.t.Name(), ":", lastDiff)
-				t.t.Error(errors.New("resulted Matrix is different than expected (see printed diff)"))
+				tLogf(tt, "%v\n", lastDiff)
+				tt.Error(errors.New("resulted Matrix is different than expected (see printed diff)"))
 				return nil
 			}
 			sameDiffTimes++
@@ -342,9 +354,9 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, re
 		return errors.New("resulted Matrix is different than expected (diff, if any, will be printed at the end)")
 	}); err != nil {
 		if lastDiff != "" {
-			fmt.Println(t.t.Name(), ":", lastDiff)
+			tLogf(tt, "%v\n", lastDiff)
 		}
-		t.t.Error(err)
+		tt.Error(err)
 	}
 }
 
