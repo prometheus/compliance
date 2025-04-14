@@ -318,8 +318,11 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, tt
 
 	query := fmt.Sprintf(`%s[10h]`, expectedMetric.String())
 	tLogf(tt, "Checking if PromQL instant query for %v at %v matches expected samples for %v backend\n", query, t.maxTime, ref)
-	var lastDiff string
-	var sameDiffTimes int
+	var (
+		lastDiff      string
+		sameDiffTimes int
+		got           model.Matrix
+	)
 	if err := runutil.RetryWithLog(log.NewJSONLogger(os.Stderr), 10*time.Second, ctx.Done(), func() error {
 		value, warns, err := b.API().Query(ctx, query, t.maxTime)
 		if err != nil {
@@ -333,16 +336,20 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, tt
 			return fmt.Errorf("expected matrix, got %v", value.Type())
 		}
 
-		if cmp.Equal(exp, value.(model.Matrix)) {
+		got = value.(model.Matrix)
+		if cmp.Equal(exp, got) {
 			return nil
 		}
 
-		diff := cmp.Diff(exp, value.(model.Matrix))
+		diff := cmp.Diff(exp, got)
+		if exp.Len() > 0 && got.Len() == 0 {
+			return errors.New("resulted Matrix is empty, but expected some data")
+		}
 		if lastDiff == diff {
 			if sameDiffTimes > 3 {
 				// Likely nothing will change, abort.
-				tLogf(tt, "%v\n", lastDiff)
-				tt.Error(errors.New("resulted Matrix is different than expected (see printed diff)"))
+				tLogf(tt, "got %v; diff %v\n", got, lastDiff)
+				tt.Error(fmt.Errorf("resulted Matrix is different than expected: %v\n", diff))
 				return nil
 			}
 			sameDiffTimes++
@@ -350,11 +357,10 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, tt
 			lastDiff = diff
 			sameDiffTimes = 0
 		}
-
 		return errors.New("resulted Matrix is different than expected (diff, if any, will be printed at the end)")
 	}); err != nil {
 		if lastDiff != "" {
-			tLogf(tt, "%v\n", lastDiff)
+			tLogf(tt, "got %v; diff %v\n", got, lastDiff)
 		}
 		tt.Error(err)
 	}
