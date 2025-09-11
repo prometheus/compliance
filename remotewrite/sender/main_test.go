@@ -62,7 +62,6 @@ var (
 		// - Test labels have valid characters.
 	}
 
-	// V2-specific tests - placeholder implementations
 	testsV2 = []func() cases.Test{
 		// V2 feature tests
 		v2.ExemplarTest,
