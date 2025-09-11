@@ -30,7 +30,7 @@ func UpTest() Test {
 func InvalidTest() Test {
 	return Test{
 		Name: "Invalid",
-		Metrics: staticHandler([]byte(`
+		Metrics: StaticHandler([]byte(`
 # this is not valid prometheus
 1234notvali}{ 444
 `)),

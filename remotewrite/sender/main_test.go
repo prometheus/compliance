@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/compliance/remotewrite/sender/cases"
+	v2 "github.com/prometheus/compliance/remotewrite/sender/cases/v2"
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/storage/remote"
@@ -60,25 +61,50 @@ var (
 		// TODO:
 		// - Test labels have valid characters.
 	}
+
+	// V2-specific tests - placeholder implementations
+	testsV2 = []func() cases.Test{
+		// V2 feature tests
+		v2.ExemplarTest,
+		v2.HistogramTest,
+		v2.MetadataTest,
+		v2.CTZeroSampleTest,
+	}
 )
 
 func TestRemoteWrite(t *testing.T) {
+	runTestSuite(t, tests, runTestV1)
+}
+
+func TestRemoteWriteV2(t *testing.T) {
+	runTestSuite(t, testsV2, runTestV2)
+}
+
+func runTestSuite(t *testing.T, testFunctions []func() cases.Test, testRunner func(*testing.T, cases.Test, targets.Target)) {
 	for name, runner := range runners {
 		t.Run(name, func(t *testing.T) {
-			for _, fn := range tests {
+			for _, fn := range testFunctions {
 				tc := fn()
 				t.Run(tc.Name, func(t *testing.T) {
 					t.Parallel()
-					runTest(t, tc, runner)
+					testRunner(t, tc, runner)
 				})
 			}
 		})
 	}
 }
 
-func runTest(t *testing.T, tc cases.Test, runner targets.Target) {
+func runTestV1(t *testing.T, tc cases.Test, runner targets.Target) {
+	runTest(t, tc, runner, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1})
+}
+
+func runTestV2(t *testing.T, tc cases.Test, runner targets.Target) {
+	runTest(t, tc, runner, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1, config.RemoteWriteProtoMsgV2})
+}
+
+func runTest(t *testing.T, tc cases.Test, runner targets.Target, protocols []config.RemoteWriteProtoMsg) {
 	ap := cases.Appendable{}
-	writeHandler := remote.NewWriteHandler(logger, nil, &ap, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1})
+	writeHandler := remote.NewWriteHandler(logger, nil, &ap, protocols)
 	if tc.Writes != nil {
 		writeHandler = tc.Writes(writeHandler)
 	}
