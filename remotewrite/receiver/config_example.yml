@@ -1,0 +1,16 @@
+# Example configuration file for Prometheus Remote-Write Receiver compliance tests.
+#
+# Place this file as `config.yml` in the root of your repository,
+# or set the PROMETHEUS_RW2_COMPLIANCE_CONFIG_FILE environment variable
+# to point to its location.
+#
+# This sample config allows compliance tests to discover how to connect to your
+# Remote-Write Receiver.
+#
+# This example should point to a Prometheus server with Remote-Write Receiver
+# and Native Histograms enabled:
+# --web.enable-remote-write-receiver --enable-feature=native-histograms
+remote_write:
+  - name: local-prometheus
+    url: http://127.0.0.1:9090/api/v1/write
+
