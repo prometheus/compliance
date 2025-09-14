@@ -13,7 +13,6 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/prometheus/compliance/remotewrite/sender/cases"
-	v2 "github.com/prometheus/compliance/remotewrite/sender/cases/v2"
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/storage/remote"
@@ -64,10 +63,10 @@ var (
 
 	testsV2 = []func() cases.Test{
 		// V2 feature tests
-		v2.ExemplarTest,
-		v2.HistogramTest,
-		v2.MetadataTest,
-		v2.CTZeroSampleTest,
+		cases.ExemplarTest,
+		cases.HistogramTest,
+		cases.MetadataTest,
+		cases.CTZeroSampleTest,
 	}
 )
 
