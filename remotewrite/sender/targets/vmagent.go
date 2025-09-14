@@ -30,8 +30,15 @@ scrape_configs:
 	}
 	defer os.Remove(configFileName)
 
-	return runCommand(binary, opts.Timeout,
+	args := []string{
 		`-httpListenAddr=:0`, `-influxListenAddr=:0`,
 		fmt.Sprintf("-promscrape.config=%s", configFileName),
-		fmt.Sprintf("-remoteWrite.url=%s", opts.ReceiveEndpoint))
+		fmt.Sprintf("-remoteWrite.url=%s", opts.ReceiveEndpoint),
+	}
+
+	if opts.ProtocolVersion == 2 {
+		args = append(args, "-remoteWrite.protoMsgVersion=io.prometheus.write.v2.Request")
+	}
+
+	return runCommand(binary, opts.Timeout, args...)
 }

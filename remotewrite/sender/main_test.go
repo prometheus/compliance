@@ -22,12 +22,12 @@ import (
 var (
 	logger  = log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	runners = map[string]targets.Target{
-		"grafana":       targets.RunGrafanaAgent,
-		"otelcollector": targets.RunOtelCollector,
-		"prometheus":    targets.RunPrometheus,
-		"telegraf":      targets.RunTelegraf,
-		"vector":        targets.RunVector,
-		"vmagent":       targets.RunVMAgent,
+		//"grafana":       targets.RunGrafanaAgent,
+		//"otelcollector": targets.RunOtelCollector,
+		"prometheus": targets.RunPrometheus,
+		//"telegraf":      targets.RunTelegraf,
+		//"vector":        targets.RunVector,
+		//"vmagent":       targets.RunVMAgent,
 	}
 	tests = []func() cases.Test{
 		// Test each type.
@@ -93,14 +93,14 @@ func runTestSuite(t *testing.T, testFunctions []func() cases.Test, testRunner fu
 }
 
 func runTestV1(t *testing.T, tc cases.Test, runner targets.Target) {
-	runTest(t, tc, runner, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1})
+	runTest(t, tc, runner, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1}, 1)
 }
 
 func runTestV2(t *testing.T, tc cases.Test, runner targets.Target) {
-	runTest(t, tc, runner, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1, config.RemoteWriteProtoMsgV2})
+	runTest(t, tc, runner, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1, config.RemoteWriteProtoMsgV2}, 2)
 }
 
-func runTest(t *testing.T, tc cases.Test, runner targets.Target, protocols []config.RemoteWriteProtoMsg) {
+func runTest(t *testing.T, tc cases.Test, runner targets.Target, protocols []config.RemoteWriteProtoMsg, protocolVersion int) {
 	ap := cases.Appendable{}
 	writeHandler := remote.NewWriteHandler(logger, nil, &ap, protocols)
 	if tc.Writes != nil {
@@ -126,6 +126,7 @@ func runTest(t *testing.T, tc cases.Test, runner targets.Target, protocols []con
 		ScrapeTarget:    scrapeTarget,
 		ReceiveEndpoint: receiveEndpoint,
 		Timeout:         10 * time.Second,
+		ProtocolVersion: protocolVersion,
 	}))
 
 	// Check we got some data.

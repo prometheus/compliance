@@ -13,6 +13,13 @@ func RunTelegraf(opts TargetOptions) error {
 		return err
 	}
 
+	contentType := "application/x-protobuf"
+	version := "0.1.0"
+	if opts.ProtocolVersion == 2 {
+		contentType = "application/x-protobuf;proto=io.prometheus.write.v2.Request"
+		version = "2.0.0"
+	}
+
 	cfg := fmt.Sprintf(`
 [[inputs.prometheus]]
 	## An array of urls to scrape metrics from.
@@ -34,10 +41,10 @@ func RunTelegraf(opts TargetOptions) error {
 	url = "%s"
 	data_format = "prometheusremotewrite"
 	[outputs.http.headers]
-	   Content-Type = "application/x-protobuf"
+	   Content-Type = "%s"
 	   Content-Encoding = "snappy"
-	   X-Prometheus-Remote-Write-Version = "0.1.0"
-`, opts.ScrapeTarget, opts.ReceiveEndpoint)
+	   X-Prometheus-Remote-Write-Version = "%s"
+`, opts.ScrapeTarget, opts.ReceiveEndpoint, contentType, version)
 	configFileName, err := writeTempFile(cfg, "config-*.toml")
 	if err != nil {
 		return err

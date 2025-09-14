@@ -27,6 +27,7 @@ type TargetOptions struct {
 	ScrapeTarget    string
 	ReceiveEndpoint string
 	Timeout         time.Duration
+	ProtocolVersion int // 1 for v1, 2 for v2
 }
 
 var downloadMtx sync.Mutex

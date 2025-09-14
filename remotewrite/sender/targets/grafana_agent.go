@@ -14,6 +14,11 @@ func RunGrafanaAgent(opts TargetOptions) error {
 	}
 
 	// Write out config file.
+	protobufConfig := ""
+	if opts.ProtocolVersion == 2 {
+		protobufConfig = "      protobuf_message: 'io.prometheus.write.v2.Request'"
+	}
+
 	cfg := fmt.Sprintf(`
 prometheus:
   wal_directory: ./
@@ -23,11 +28,12 @@ prometheus:
   - name: test
     remote_write:
     - url: '%s'
+%s
     scrape_configs:
     - job_name: 'test'
       static_configs:
       - targets: ['%s']
-`, opts.ReceiveEndpoint, opts.ScrapeTarget)
+`, opts.ReceiveEndpoint, protobufConfig, opts.ScrapeTarget)
 	configFileName, err := writeTempFile(cfg, "config-*.yaml")
 	if err != nil {
 		return err
