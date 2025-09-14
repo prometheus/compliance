@@ -13,7 +13,7 @@ import (
 func SortedLabelsTest() Test {
 	return Test{
 		Name: "SortedLabels",
-		Metrics: StaticHandler([]byte(`
+		Metrics: staticHandler([]byte(`
 # HELP test A gauge
 # TYPE test gauge
 test{b="2",a="1"} 1.0
@@ -38,7 +38,7 @@ test{b="2",a="1"} 1.0
 func RepeatedLabelsTest() Test {
 	return Test{
 		Name: "RepeatedLabels",
-		Metrics: StaticHandler([]byte(`
+		Metrics: staticHandler([]byte(`
 # HELP test A gauge
 # TYPE test gauge
 test{a="1",a="1"} 1.0
@@ -65,7 +65,7 @@ test{a="1",a="1"} 1.0
 func EmptyLabelsTest() Test {
 	return Test{
 		Name: "EmptyLabels",
-		Metrics: StaticHandler([]byte(`
+		Metrics: staticHandler([]byte(`
 # HELP test A gauge
 # TYPE test gauge
 test{a=""} 1.0
@@ -88,7 +88,7 @@ test{a=""} 1.0
 func NameLabelTest() Test {
 	return Test{
 		Name: "NameLabel",
-		Metrics: StaticHandler([]byte(`
+		Metrics: staticHandler([]byte(`
 # HELP test A gauge
 # TYPE test gauge
 {label="value"} 1.0
@@ -115,7 +115,7 @@ func NameLabelTest() Test {
 func HonorLabelsTest() Test {
 	return Test{
 		Name: "HonorLabels",
-		Metrics: StaticHandler([]byte(`
+		Metrics: staticHandler([]byte(`
 # HELP test A gauge
 # TYPE test gauge
 test{job="original", instance="foo"} 1.0

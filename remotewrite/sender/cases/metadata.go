@@ -7,7 +7,7 @@ import (
 func MetadataTest() Test {
 	return Test{
 		Name: "MetadataV2",
-		Metrics: StaticHandler([]byte(`# HELP metadata_test_v2 V2 metadata placeholder test  
+		Metrics: staticHandler([]byte(`# HELP metadata_test_v2 V2 metadata placeholder test  
 # TYPE metadata_test_v2 counter
 metadata_test_v2 1.0
 `)),

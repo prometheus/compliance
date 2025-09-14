@@ -30,7 +30,7 @@ func metricHandler(c prometheus.Collector) http.Handler {
 	return promhttp.HandlerFor(r, promhttp.HandlerOpts{})
 }
 
-func StaticHandler(contents []byte) http.Handler {
+func staticHandler(contents []byte) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := w.Write(contents); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
