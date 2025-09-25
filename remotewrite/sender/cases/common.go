@@ -66,21 +66,17 @@ func (c *SampleCollector) addBatch(samples []sample) {
 }
 
 // Store implements the writeStorage interface from client_golang/exp/api/remote
-// This processes WriteRequest directly without TSDB storage abstractions
 func (c *SampleCollector) Store(req *http.Request, _ remote.WriteMessageType) (*remote.WriteResponse, error) {
-	// Read the request body (already decompressed by SnappyDecodeMiddleware)
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		return remote.NewWriteResponse(), err
 	}
 
-	// Parse protobuf WriteRequest based on message type
 	var writeReq prompb.WriteRequest
 	if err := writeReq.Unmarshal(body); err != nil {
 		return remote.NewWriteResponse(), err
 	}
 
-	// Convert to internal sample format
 	samples := make([]sample, 0)
 
 	for _, ts := range writeReq.Timeseries {
@@ -98,7 +94,6 @@ func (c *SampleCollector) Store(req *http.Request, _ remote.WriteMessageType) (*
 		}
 	}
 
-	// Add the samples to the collector
 	c.addBatch(samples)
 
 	return remote.NewWriteResponse(), nil
