@@ -18,10 +18,10 @@ The [openmetrics](openmetrics/README.md) directory contains a reference to the [
 
 The [promql](promql/README.md) directory contains code to test compliance with the [native Prometheus PromQL implementation](https://github.com/prometheus/prometheus/tree/main/promql).
 
-## PromQL Quick
+## PromQL E2E
 
-The [promql_quick](promql_quick/README.md) directory contains Go Module for performing
-compliance tests PromQL correctness. It's designed for smaller in-place quick unit tests, e.g. on per-PR basis, using docker based test framework. Useful as an acceptance tests
+The [promqle2e](promqle2e/README.md) directory contains a Go Module for performing
+compliance tests for PromQL correctness. It's designed for smaller in-place quick unit tests, e.g. on per-PR basis, using docker based test framework. Useful as an acceptance tests
 for vendors or those who wish to maintain high Prometheus compatibility over time.
 
 ## Remote Write: Sender
