@@ -1,0 +1,21 @@
+name: Compliance Tests
+
+on:
+  pull_request:
+
+jobs:
+  remotewrite-compliance:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.22'
+
+    - name: Run Remote Write Prometheus Compliance Tests
+      run: |
+        cd remotewrite/sender
+        go test --tags=compliance -run "TestRemoteWrite/prometheus/.+" -v ./
