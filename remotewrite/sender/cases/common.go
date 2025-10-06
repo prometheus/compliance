@@ -54,7 +54,7 @@ type sample struct {
 	v float64
 }
 
-// addBatch adds a batch of samples to the collector
+// addBatch adds a batch of samples to the collector.
 func (c *SampleCollector) addBatch(samples []sample) {
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
@@ -65,7 +65,7 @@ func (c *SampleCollector) addBatch(samples []sample) {
 	c.Batches = append(c.Batches, b)
 }
 
-// Store implements the writeStorage interface from client_golang/exp/api/remote
+// Store implements the writeStorage interface from client_golang/exp/api/remote.
 func (c *SampleCollector) Store(req *http.Request, _ remote.WriteMessageType) (*remote.WriteResponse, error) {
 	body, err := io.ReadAll(req.Body)
 	if err != nil {

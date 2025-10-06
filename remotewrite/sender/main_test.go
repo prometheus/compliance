@@ -77,8 +77,7 @@ func TestRemoteWrite(t *testing.T) {
 
 func runTest(t *testing.T, tc cases.Test, runner targets.Target) {
 	collector := cases.SampleCollector{}
-	messageTypes := remote.MessageTypes{remote.WriteV1MessageType}
-	writeHandler := remote.NewWriteHandler(&collector, messageTypes)
+	writeHandler := remote.NewWriteHandler(&collector, remote.MessageTypes{remote.WriteV1MessageType})
 	if tc.Writes != nil {
 		writeHandler = tc.Writes(writeHandler)
 	}
