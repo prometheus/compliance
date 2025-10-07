@@ -7,11 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kit/log"
+	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/stretchr/testify/require"
 )
 
@@ -106,8 +104,8 @@ func Retries400Test() Test {
 }
 
 func getFirstTimestamp(w http.ResponseWriter, r *http.Request) int64 {
-	ap := Appendable{}
-	h := remote.NewWriteHandler(log.NewNopLogger(), nil, &ap, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1})
+	collector := SampleCollector{}
+	h := remote.NewWriteHandler(&collector, remote.MessageTypes{remote.WriteV1MessageType})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
 	if rec.Code/100 != 2 {
@@ -117,7 +115,7 @@ func getFirstTimestamp(w http.ResponseWriter, r *http.Request) int64 {
 
 	// Find a sample for "now{}" and record its timestamp.
 	var ts int64 = -1
-	forAllSamples(ap.Batches, func(s sample) {
+	forAllSamples(collector.Batches, func(s sample) {
 		if labelsContain(s.l, labels.FromStrings("__name__", "now")) {
 			ts = s.t
 		}

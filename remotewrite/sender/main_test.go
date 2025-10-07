@@ -12,10 +12,9 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
+	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/compliance/remotewrite/sender/cases"
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
-	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/stretchr/testify/require"
 )
 
@@ -77,8 +76,8 @@ func TestRemoteWrite(t *testing.T) {
 }
 
 func runTest(t *testing.T, tc cases.Test, runner targets.Target) {
-	ap := cases.Appendable{}
-	writeHandler := remote.NewWriteHandler(logger, nil, &ap, []config.RemoteWriteProtoMsg{config.RemoteWriteProtoMsgV1})
+	collector := cases.SampleCollector{}
+	writeHandler := remote.NewWriteHandler(&collector, remote.MessageTypes{remote.WriteV1MessageType})
 	if tc.Writes != nil {
 		writeHandler = tc.Writes(writeHandler)
 	}
@@ -105,5 +104,5 @@ func runTest(t *testing.T, tc cases.Test, runner targets.Target) {
 	}))
 
 	// Check we got some data.
-	tc.Expected(t, ap.Batches)
+	tc.Expected(t, collector.Batches)
 }

@@ -1,18 +1,16 @@
 package cases
 
 import (
-	"context"
+	"io"
 	"net/http"
 	"sync"
 	"testing"
 
+	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/prometheus/model/exemplar"
-	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/model/metadata"
-	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/prompb"
 )
 
 type Test struct {
@@ -40,14 +38,14 @@ func staticHandler(contents []byte) http.Handler {
 
 type Validator func(t *testing.T, bs []Batch)
 
-type Appendable struct {
+type SampleCollector struct {
 	sync.Mutex
 	Batches []Batch
 }
 
 type Batch struct {
-	appender *Appendable
-	samples  []sample
+	collector *SampleCollector
+	samples   []sample
 }
 
 type sample struct {
@@ -56,45 +54,47 @@ type sample struct {
 	v float64
 }
 
-func (m *Appendable) Appender(_ context.Context) storage.Appender {
-	b := &Batch{
-		appender: m,
+// addBatch adds a batch of samples to the collector.
+func (c *SampleCollector) addBatch(samples []sample) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	b := Batch{
+		collector: c,
+		samples:   samples,
 	}
-	return b
+	c.Batches = append(c.Batches, b)
 }
 
-func (m *Batch) Append(_ storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
-	m.samples = append(m.samples, sample{l, t, v})
-	return 0, nil
-}
+// Store implements the writeStorage interface from client_golang/exp/api/remote.
+func (c *SampleCollector) Store(req *http.Request, _ remote.WriteMessageType) (*remote.WriteResponse, error) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return remote.NewWriteResponse(), err
+	}
 
-func (m *Batch) Commit() error {
-	m.appender.Mutex.Lock()
-	defer m.appender.Mutex.Unlock()
-	m.appender.Batches = append(m.appender.Batches, *m)
-	return nil
-}
+	var writeReq prompb.WriteRequest
+	if err := writeReq.Unmarshal(body); err != nil {
+		return remote.NewWriteResponse(), err
+	}
 
-func (*Batch) Rollback() error {
-	return nil
-}
+	samples := make([]sample, 0)
 
-func (*Batch) AppendExemplar(_ storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
-	// TODO(bwplotka): Implement for v2.
-	return 0, nil
-}
+	for _, ts := range writeReq.Timeseries {
+		lb := make(labels.Labels, len(ts.Labels))
+		for i, l := range ts.Labels {
+			lb[i] = labels.Label{Name: l.Name, Value: l.Value}
+		}
 
-func (*Batch) AppendHistogram(_ storage.SeriesRef, l labels.Labels, t int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
-	// TODO(bwplotka): Implement for v2.
-	return 0, nil
-}
+		for _, s := range ts.Samples {
+			samples = append(samples, sample{
+				l: lb,
+				t: s.Timestamp,
+				v: s.Value,
+			})
+		}
+	}
 
-func (*Batch) UpdateMetadata(_ storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
-	// TODO(bwplotka): Implement for v2.
-	return 0, nil
-}
+	c.addBatch(samples)
 
-func (*Batch) AppendCTZeroSample(_ storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
-	// TODO(bwplotka): Implement for v2.
-	return 0, nil
+	return remote.NewWriteResponse(), nil
 }
