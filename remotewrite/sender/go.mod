@@ -6,7 +6,7 @@ require (
 	github.com/go-kit/log v0.2.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_golang/exp v0.0.0-20251001094503-f962e7fca7e4
-	github.com/prometheus/prometheus v0.54.2-0.20240906155733-9f57f14d6c5e
+	github.com/prometheus/prometheus v0.306.0
 	github.com/stretchr/testify v1.11.1
 )
 
