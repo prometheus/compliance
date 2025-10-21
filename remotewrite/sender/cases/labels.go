@@ -21,9 +21,9 @@ test{b="2",a="1"} 1.0
 		Expected: func(t *testing.T, bs []Batch) {
 			forAllSamples(bs, func(s sample) {
 				names := []string{}
-				for i := range s.l {
-					names = append(names, s.l[i].Name)
-				}
+				s.l.Range(func(l labels.Label) {
+					names = append(names, l.Name)
+				})
 				require.True(t, sort.IsSorted(sort.StringSlice(names)), "'%s' is not sorted", s.l.String())
 			})
 
@@ -46,9 +46,9 @@ test{a="1",a="1"} 1.0
 		Expected: func(t *testing.T, bs []Batch) {
 			forAllSamples(bs, func(s sample) {
 				counts := map[string]int{}
-				for i := range s.l {
-					counts[s.l[i].Name]++
-				}
+				s.l.Range(func(l labels.Label) {
+					counts[l.Name]++
+				})
 				for name, count := range counts {
 					require.Equal(t, 1, count, "label '%s' is repeated %d times", name, count)
 				}
@@ -72,9 +72,9 @@ test{a=""} 1.0
 `)),
 		Expected: func(t *testing.T, bs []Batch) {
 			forAllSamples(bs, func(s sample) {
-				for i := range s.l {
-					require.NotEmpty(t, s.l[i].Value, "'%s' contains empty labels", s.l.String())
-				}
+				s.l.Range(func(l labels.Label) {
+					require.NotEmpty(t, l.Value, "'%s' contains empty labels", s.l.String())
+				})
 			})
 
 			tests := countMetricWithValue(t, bs, labels.FromStrings("__name__", "test"), 1.0)
@@ -95,13 +95,8 @@ func NameLabelTest() Test {
 `)),
 		Expected: func(t *testing.T, bs []Batch) {
 			forAllSamples(bs, func(s sample) {
-				for i := range s.l {
-					if s.l[i].Name == "__name__" {
-						return
-					}
-				}
-
-				require.True(t, false, "metric '%s' is missing name label", s.l.String())
+				hasName := s.l.Has("__name__")
+				require.True(t, hasName, "metric '%s' is missing name label", s.l.String())
 			})
 
 			samples := countMetricWithValue(t, bs, labels.FromStrings("label", "value"), 1.0)

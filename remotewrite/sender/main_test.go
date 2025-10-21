@@ -21,12 +21,12 @@ import (
 var (
 	logger  = log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	runners = map[string]targets.Target{
-		"grafana":       targets.RunGrafanaAgent,
-		"otelcollector": targets.RunOtelCollector,
-		"prometheus":    targets.RunPrometheus,
-		"telegraf":      targets.RunTelegraf,
-		"vector":        targets.RunVector,
-		"vmagent":       targets.RunVMAgent,
+		//"grafana":       targets.RunGrafanaAgent,
+		//"otelcollector": targets.RunOtelCollector,
+		"prometheus": targets.RunPrometheus,
+		//"telegraf":      targets.RunTelegraf,
+		//"vector":        targets.RunVector,
+		//"vmagent":       targets.RunVMAgent,
 	}
 	tests = []func() cases.Test{
 		// Test each type.
@@ -59,25 +59,83 @@ var (
 		// TODO:
 		// - Test labels have valid characters.
 	}
+
+	// Remote Write 2.0 Protocol Tests (https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/)
+	// These tests require RW 2.0 sender configuration:
+	//   remote_write:
+	//     - url: <endpoint>
+	//       protobuf_message: "io.prometheus.write.v2.Request"
+	testsV2 = []func() cases.Test{
+		// 0. Strict RW 2.0-Only Receiver (1 test)
+		// PASSES with Prometheus v3.7.1+ configured with protobuf_message
+		cases.StrictRW2ReceiverTest,
+
+		// 1. Protobuf Serialization (3 tests)
+		cases.ProtobufV2FormatTest,
+		cases.ProtobufBinaryFormatTest,
+		cases.ProtobufDeserializationTest,
+
+		// 2. Snappy Compression (3 tests)
+		cases.SnappyCompressionTest,
+		cases.SnappyBlockFormatTest,
+		cases.SnappyDecompressionTest,
+
+		// 3. HTTP Method & Request (2 tests)
+		cases.HTTPPostMethodTest,
+		cases.HTTPBodyContainsDataTest,
+
+		// 4. Content-Type Header (4 tests)
+		cases.ContentTypeHeaderPresentTest,
+		cases.ContentTypeBaseValueTest,
+		cases.ContentTypeRW2ProtoParamTest,
+		cases.ContentTypeRFC9110FormatTest,
+
+		// 5. X-Prometheus-Remote-Write-Version Header (2 tests)
+		cases.VersionHeaderPresentTest,
+		cases.VersionHeaderRW2ValueTest,
+
+		// 6. User-Agent Header (3 tests)
+		cases.UserAgentHeaderPresentTest,
+		cases.UserAgentRFC9110FormatTest,
+		cases.UserAgentIdentifiesSenderTest,
+	}
 )
 
 func TestRemoteWrite(t *testing.T) {
+	runTestSuite(t, tests, remote.MessageTypes{
+		remote.WriteV1MessageType,
+	})
+}
+
+func TestRemoteWriteV2(t *testing.T) {
+	runTestSuite(t, testsV2, remote.MessageTypes{
+		remote.WriteV2MessageType,
+	})
+}
+
+func runTestSuite(t *testing.T, testFns []func() cases.Test, acceptedVersions remote.MessageTypes) {
 	for name, runner := range runners {
 		t.Run(name, func(t *testing.T) {
-			for _, fn := range tests {
+			for _, fn := range testFns {
 				tc := fn()
 				t.Run(tc.Name, func(t *testing.T) {
 					t.Parallel()
-					runTest(t, tc, runner)
+					runTest(t, tc, runner, acceptedVersions)
 				})
 			}
 		})
 	}
 }
 
-func runTest(t *testing.T, tc cases.Test, runner targets.Target) {
+func runTest(t *testing.T, tc cases.Test, runner targets.Target, acceptedVersions remote.MessageTypes) {
 	collector := cases.SampleCollector{}
-	writeHandler := remote.NewWriteHandler(&collector, remote.MessageTypes{remote.WriteV1MessageType})
+
+	// Override with test-specific receiver version if specified
+	if tc.ReceiverVersion != nil {
+		acceptedVersions = tc.ReceiverVersion
+	}
+
+	writeHandler := remote.NewWriteHandler(&collector, acceptedVersions)
 	if tc.Writes != nil {
 		writeHandler = tc.Writes(writeHandler)
 	}

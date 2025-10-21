@@ -11,14 +11,14 @@ import (
 // on every sample.
 func labelMustMatch(t *testing.T, bs []Batch, label, pattern string) {
 	forAllSamples(bs, func(s sample) {
-		for i := range s.l {
-			if s.l[i].Name != label {
-				continue
+		found := false
+		s.l.Range(func(l labels.Label) {
+			if l.Name == label {
+				require.Regexp(t, pattern, l.Value)
+				found = true
 			}
-			require.Regexp(t, pattern, s.l[i].Value)
-			return
-		}
-		require.True(t, false, "label '%s' not found", label)
+		})
+		require.True(t, found, "label '%s' not found", label)
 	})
 }
 
@@ -56,27 +56,13 @@ func forAllSamples(bs []Batch, f func(s sample)) {
 
 // labelsContain returns true if inner is a subset of outer.
 func labelsContain(outer, inner labels.Labels) bool {
-	i, j := 0, 0
-	for i < len(outer) && j < len(inner) {
-		if outer[i].Name > inner[j].Name {
-			// We're missing an label from inner.
-			return false
-
-		} else if outer[i].Name < inner[j].Name {
-			// We've got extra labels in outer, which is fine.
-			i++
-
-		} else if outer[i].Value != inner[j].Value {
-			// Implicitly outer[i].Name == inner[j].Name.
-			// But the values are different.
-			return false
-
-		} else {
-			i++
-			j++
+	// Check that every label in inner exists in outer with the same value
+	allFound := true
+	inner.Range(func(innerLabel labels.Label) {
+		outerValue := outer.Get(innerLabel.Name)
+		if outerValue != innerLabel.Value {
+			allFound = false
 		}
-	}
-
-	// Did we find all the labels in inner?
-	return j == len(inner)
+	})
+	return allFound
 }

@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-const prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v2.30.3/prometheus-2.30.3.{{.OS}}-{{.Arch}}.tar.gz"
+const prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.7.1/prometheus-3.7.1.{{.OS}}-{{.Arch}}.tar.gz"
 
 func RunPrometheus(opts TargetOptions) error {
 	binary, err := downloadBinary(prometheusDownloadURL, "prometheus")
@@ -20,6 +20,7 @@ global:
 
 remote_write:
   - url: '%s'
+    protobuf_message: "io.prometheus.write.v2.Request"
 
 scrape_configs:
   - job_name: 'test'
