@@ -97,11 +97,6 @@ func runTestSuite(t *testing.T, testFns []func() cases.Test, acceptedVersions re
 func runTest(t *testing.T, tc cases.Test, runner targets.Target, acceptedVersions remote.MessageTypes) {
 	collector := cases.SampleCollector{}
 
-	// Override with test-specific receiver version if specified
-	if tc.ReceiverVersion != nil {
-		acceptedVersions = tc.ReceiverVersion
-	}
-
 	writeHandler := remote.NewWriteHandler(&collector, acceptedVersions)
 	if tc.Writes != nil {
 		writeHandler = tc.Writes(writeHandler)
