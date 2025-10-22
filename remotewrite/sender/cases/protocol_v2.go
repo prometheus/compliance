@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -43,7 +42,6 @@ func StrictRW2ReceiverTest() Test {
 		}, func() float64 {
 			return float64(time.Now().Unix())
 		})),
-		ReceiverVersion: []remote.WriteMessageType{remote.WriteV2MessageType},
 		Expected: func(t *testing.T, bs []Batch) {
 			if len(bs) == 0 {
 				t.Logf("FAILURE: Sender does not support RW 2.0 format")

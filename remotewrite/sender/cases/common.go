@@ -20,13 +20,6 @@ type Test struct {
 
 	// Optional "middleware" to intercept the write requests.
 	Writes func(http.Handler) http.Handler
-
-	// ReceiverVersion specifies which Remote Write version(s) the receiver supports.
-	// If nil, defaults to accepting both RW 1.0 and RW 2.0 for backward compatibility.
-	// Use this to test strict version compliance:
-	//   - []remote.WriteMessageType{remote.WriteV2MessageType} for RW 2.0-only receiver
-	//   - []remote.WriteMessageType{remote.WriteV1MessageType} for RW 1.0-only receiver
-	ReceiverVersion []remote.WriteMessageType
 }
 
 func metricHandler(c prometheus.Collector) http.Handler {

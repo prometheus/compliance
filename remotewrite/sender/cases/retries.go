@@ -105,11 +105,7 @@ func Retries400Test() Test {
 
 func getFirstTimestamp(w http.ResponseWriter, r *http.Request) int64 {
 	collector := SampleCollector{}
-	// Accept both RW 1.0 and RW 2.0 formats
-	h := remote.NewWriteHandler(&collector, remote.MessageTypes{
-		remote.WriteV1MessageType,
-		remote.WriteV2MessageType,
-	})
+	h := remote.NewWriteHandler(&collector, remote.MessageTypes{remote.WriteV1MessageType})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, r)
 	if rec.Code/100 != 2 {

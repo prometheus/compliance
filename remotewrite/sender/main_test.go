@@ -21,12 +21,12 @@ import (
 var (
 	logger  = log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	runners = map[string]targets.Target{
-		//"grafana":       targets.RunGrafanaAgent,
-		//"otelcollector": targets.RunOtelCollector,
-		"prometheus": targets.RunPrometheus,
-		//"telegraf":      targets.RunTelegraf,
-		//"vector":        targets.RunVector,
-		//"vmagent":       targets.RunVMAgent,
+		"grafana":       targets.RunGrafanaAgent,
+		"otelcollector": targets.RunOtelCollector,
+		"prometheus":    targets.RunPrometheus,
+		"telegraf":      targets.RunTelegraf,
+		"vector":        targets.RunVector,
+		"vmagent":       targets.RunVMAgent,
 	}
 	tests = []func() cases.Test{
 		// Test each type.
