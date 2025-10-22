@@ -15,7 +15,12 @@ jobs:
       with:
         go-version: '1.22'
 
-    - name: Run Remote Write Prometheus Compliance Tests
+    - name: Run Remote Write 1.0 Prometheus Compliance Tests
       run: |
         cd remotewrite/sender
         go test --tags=compliance -run "TestRemoteWrite/prometheus/.+" -v ./
+
+    - name: Run Remote Write 2.0 Protocol Compliance Tests
+      run: |
+        cd remotewrite/sender
+        go test --tags=compliance -run "TestRemoteWriteV2/prometheus/.+" -v ./

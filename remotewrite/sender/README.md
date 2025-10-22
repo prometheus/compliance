@@ -1,25 +1,35 @@
 # Prometheus Remote Write Sender Compliance Test
 
-This repo contains a set of tests to check compliance with the [Prometheus Remote Write 1.0 specification](https://prometheus.io/docs/specs/remote_write_spec/) for senders.
+This repo contains a set of tests to check compliance with the Prometheus Remote Write specifications for senders:
+- [Remote Write 1.0 specification](https://prometheus.io/docs/specs/remote_write_spec/)
+- [Remote Write 2.0 specification](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/)
 
-The test suit works by forking an instance of the sender with some config to scrape the test running itself and send remote write requests to the test suite for a fixed period of time.
-The test suit than examines the received requests for compliance.
+The test suite works by forking an instance of the sender with some config to scrape the test running itself and send remote write requests to the test suite for a fixed period of time.
+The test suite then examines the received requests for compliance.
 
-## Running the test
+## Running the tests
 
-The test is a vanilla Golang unit test, and can be run as such.  To run all the tests:
+The tests are vanilla Golang unit tests, and can be run as such.
+
+### Run all tests (RW 1.0 + RW 2.0):
 
 ```sh
 $ go test --tags=compliance -v ./
 ```
 
-To run all the tests for a single target:
+### Run Remote Write 1.0 tests only:
 
 ```sh
 $ go test --tags=compliance -run "TestRemoteWrite/prometheus/.+" -v ./
 ```
 
-To run a single test across all the targets:
+### Run Remote Write 2.0 protocol tests only:
+
+```sh
+$ go test --tags=compliance -run "TestRemoteWriteV2/prometheus/.+" -v ./
+```
+
+### Run a single test across all targets:
 
 ```sh
 $ go test --tags=compliance -run "TestRemoteWrite/.+/Counter" -v ./

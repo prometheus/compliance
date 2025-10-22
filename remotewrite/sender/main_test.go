@@ -65,40 +65,7 @@ var (
 	//   remote_write:
 	//     - url: <endpoint>
 	//       protobuf_message: "io.prometheus.write.v2.Request"
-	testsV2 = []func() cases.Test{
-		// 0. Strict RW 2.0-Only Receiver (1 test)
-		// PASSES with Prometheus v3.7.1+ configured with protobuf_message
-		cases.StrictRW2ReceiverTest,
-
-		// 1. Protobuf Serialization (3 tests)
-		cases.ProtobufV2FormatTest,
-		cases.ProtobufBinaryFormatTest,
-		cases.ProtobufDeserializationTest,
-
-		// 2. Snappy Compression (3 tests)
-		cases.SnappyCompressionTest,
-		cases.SnappyBlockFormatTest,
-		cases.SnappyDecompressionTest,
-
-		// 3. HTTP Method & Request (2 tests)
-		cases.HTTPPostMethodTest,
-		cases.HTTPBodyContainsDataTest,
-
-		// 4. Content-Type Header (4 tests)
-		cases.ContentTypeHeaderPresentTest,
-		cases.ContentTypeBaseValueTest,
-		cases.ContentTypeRW2ProtoParamTest,
-		cases.ContentTypeRFC9110FormatTest,
-
-		// 5. X-Prometheus-Remote-Write-Version Header (2 tests)
-		cases.VersionHeaderPresentTest,
-		cases.VersionHeaderRW2ValueTest,
-
-		// 6. User-Agent Header (3 tests)
-		cases.UserAgentHeaderPresentTest,
-		cases.UserAgentRFC9110FormatTest,
-		cases.UserAgentIdentifiesSenderTest,
-	}
+	testsV2 = cases.ProtocolTests
 )
 
 func TestRemoteWrite(t *testing.T) {
@@ -159,6 +126,7 @@ func runTest(t *testing.T, tc cases.Test, runner targets.Target, acceptedVersion
 		ScrapeTarget:    scrapeTarget,
 		ReceiveEndpoint: receiveEndpoint,
 		Timeout:         10 * time.Second,
+		UseRW2Protocol:  acceptedVersions[0] == remote.WriteV2MessageType,
 	}))
 
 	// Check we got some data.

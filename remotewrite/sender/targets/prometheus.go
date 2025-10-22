@@ -14,19 +14,25 @@ func RunPrometheus(opts TargetOptions) error {
 	}
 
 	// Write out config file.
+	// Conditionally add protobuf_message for RW 2.0 protocol
+	protobufConfig := ""
+	if opts.UseRW2Protocol {
+		protobufConfig = `    protobuf_message: "io.prometheus.write.v2.Request"`
+	}
+
 	cfg := fmt.Sprintf(`
 global:
   scrape_interval: 1s
 
 remote_write:
   - url: '%s'
-    protobuf_message: "io.prometheus.write.v2.Request"
+%s
 
 scrape_configs:
   - job_name: 'test'
     static_configs:
     - targets: ['%s']
-`, opts.ReceiveEndpoint, opts.ScrapeTarget)
+`, opts.ReceiveEndpoint, protobufConfig, opts.ScrapeTarget)
 	configFileName, err := writeTempFile(cfg, "config-*.yaml")
 	if err != nil {
 		return err

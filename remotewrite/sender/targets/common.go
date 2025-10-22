@@ -27,6 +27,7 @@ type TargetOptions struct {
 	ScrapeTarget    string
 	ReceiveEndpoint string
 	Timeout         time.Duration
+	UseRW2Protocol  bool // If true, configure sender to use Remote Write 2.0 protocol
 }
 
 var downloadMtx sync.Mutex
