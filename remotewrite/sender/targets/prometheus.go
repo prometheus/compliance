@@ -26,9 +26,16 @@ global:
 remote_write:
   - url: '%s'
     protobuf_message: "io.prometheus.write.v2.Request"
+    send_exemplars: true
+    metadata_config:
+      send: true
 
 scrape_configs:
   - job_name: 'test'
+    scrape_interval: 1s
+    scrape_protocols:
+      - OpenMetricsText1.0.0
+      - PrometheusText0.0.4
     static_configs:
     - targets: ['%s']
 `, opts.ReceiveEndpoint, scrapeTarget)

@@ -14,11 +14,12 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"math"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestEdgeCases validates sender behavior in edge case scenarios.
@@ -39,10 +40,10 @@ func TestEdgeCases(t *testing.T) {
 				// Empty scrape may result in no request, or empty request
 				// Both are acceptable
 				if req.Request != nil {
-					should(t).True(true, "Sender handled empty scrape")
+					should(t, true, "Sender handled empty scrape")
 					t.Logf("Empty scrape handled: %d timeseries", len(req.Request.Timeseries))
 				} else {
-					should(t).True(true, "Sender may skip empty scrapes")
+					should(t, true, "Sender may skip empty scrapes")
 					t.Logf("No request sent for empty scrape (acceptable)")
 				}
 			},
@@ -62,22 +63,20 @@ func TestEdgeCases(t *testing.T) {
 					for _, value := range labels {
 						if len(value) > 5000 {
 							foundLarge = true
-							should(t).GreaterOrEqual(len(value), 5000,
-								"Large label value should be preserved")
+							should(t, len(value) >= 5000, "Large label value should be preserved")
 							t.Logf("Found large label value: %d bytes", len(value))
 							break
 						}
 					}
 				}
-				should(t).True(foundLarge || len(req.Request.Timeseries) == 0,
-					"Large label values should be handled")
+				should(t, foundLarge || len(req.Request.Timeseries) == 0, "Large label values should be handled")
 			},
 		},
 		{
 			name:        "unicode_in_labels",
 			description: "Sender MUST preserve Unicode characters in labels",
 			rfcLevel:    "MUST",
-			scrapeData:  `test_metric{emoji="🚀",chinese="测试",arabic="مرحبا"} 42` + "\n",
+			scrapeData:  `test_metric{emoji="🚀",chinese="测试",arabic="مرحبا",vietnamese="việt nam"} 42` + "\n",
 			validator: func(t *testing.T, req *CapturedRequest) {
 				var foundUnicode bool
 				for _, ts := range req.Request.Timeseries {
@@ -99,8 +98,7 @@ func TestEdgeCases(t *testing.T) {
 						}
 					}
 				}
-				should(t).True(foundUnicode || len(req.Request.Timeseries) > 0,
-					"Unicode characters should be preserved")
+				should(t, foundUnicode || len(req.Request.Timeseries) > 0, "Unicode characters should be preserved")
 			},
 		},
 		{
@@ -122,12 +120,11 @@ func TestEdgeCases(t *testing.T) {
 			}(),
 			validator: func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
-				should(t).GreaterOrEqual(seriesCount, 10,
-					"Should handle multiple timeseries efficiently")
+				should(t, seriesCount >= 10, "Should handle multiple timeseries efficiently")
 
 				// Check symbol table efficiency
 				symbols := req.Request.Symbols
-				should(t).NotEmpty(symbols, "Symbol table should be used")
+				should(t, len(symbols) > 0, "Symbol table should be used")
 
 				t.Logf("Handled %d timeseries with %d symbols",
 					seriesCount, len(symbols))
@@ -152,8 +149,7 @@ func TestEdgeCases(t *testing.T) {
 			}(),
 			validator: func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
-				should(t).GreaterOrEqual(seriesCount, 20,
-					"Should handle high cardinality metrics")
+				should(t, seriesCount >= 20, "Should handle high cardinality metrics")
 
 				// Symbol table should deduplicate common strings
 				symbols := req.Request.Symbols
@@ -164,8 +160,7 @@ func TestEdgeCases(t *testing.T) {
 					}
 				}
 
-				should(t).NotEmpty(uniqueSymbols,
-					"Symbol table should deduplicate in high cardinality")
+				should(t, len(uniqueSymbols) > 0, "Symbol table should deduplicate in high cardinality")
 				t.Logf("High cardinality: %d series, %d unique symbols",
 					seriesCount, len(uniqueSymbols))
 			},
@@ -185,14 +180,12 @@ func TestEdgeCases(t *testing.T) {
 					metricName := labels["__name__"]
 					if len(metricName) > 100 {
 						foundLongName = true
-						should(t).NotEmpty(metricName,
-							"Long metric name should be preserved")
+						should(t, len(metricName) > 0, "Long metric name should be preserved")
 						t.Logf("Long metric name: %d chars", len(metricName))
 						break
 					}
 				}
-				should(t).True(foundLongName || len(req.Request.Timeseries) > 0,
-					"Long metric names should be handled")
+				should(t, foundLongName || len(req.Request.Timeseries) > 0, "Long metric names should be handled")
 			},
 		},
 		{
@@ -255,8 +248,7 @@ special_values{type="negative"} -123.45
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Samples) > 0 {
 						timestamp := ts.Samples[0].Timestamp
-						should(t).GreaterOrEqual(timestamp, int64(0),
-							"Timestamp should be non-negative")
+						should(t, timestamp >= int64(0), "Timestamp should be non-negative")
 						t.Logf("Timestamp handling: %d", timestamp)
 					}
 				}
@@ -280,8 +272,7 @@ special_values{type="negative"} -123.45
 						// Check if timestamp is in future
 						if timestamp > now {
 							diff := timestamp - now
-							should(t).GreaterOrEqual(diff, int64(0),
-								"Future timestamp should be handled")
+							should(t, diff >= int64(0), "Future timestamp should be handled")
 							t.Logf("Future timestamp: %d ms ahead", diff)
 						}
 					}
@@ -322,8 +313,7 @@ special_values{type="negative"} -123.45
 					if labels["__name__"] == "test_metric" && len(ts.Samples) > 0 {
 						value := ts.Samples[0].Value
 						// StaleNaN is represented as NaN
-						should(t).True(math.IsNaN(value),
-							"StaleNaN should be encoded as NaN")
+						should(t, math.IsNaN(value), "StaleNaN should be encoded as NaN")
 						t.Logf("Stale marker handled: NaN=%v", math.IsNaN(value))
 					}
 				}
@@ -377,16 +367,14 @@ rpc_duration_count 1000
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
+		t.Attr("rfcLevel", tt.rfcLevel)
+		t.Attr("description", tt.description)
 
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.scrapeData,
-					Validator:  tt.validator,
-					WaitTime:   6 * time.Second,
-				})
+		forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+			runSenderTest(t, targetName, target, SenderTestScenario{
+				ScrapeData: tt.scrapeData,
+				Validator:  tt.validator,
+				WaitTime:   6 * time.Second,
 			})
 		})
 	}
@@ -415,12 +403,10 @@ func TestRobustnessUnderLoad(t *testing.T) {
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: scrapeData.String(),
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				should(t).NotEmpty(req.Request.Timeseries,
-					"Should handle load test data")
+				should(t, len(req.Request.Timeseries) > 0, "Should handle load test data")
 
 				seriesCount := len(req.Request.Timeseries)
-				should(t).GreaterOrEqual(seriesCount, 50,
-					"Should batch substantial amount of data")
+				should(t, seriesCount >= 50, "Should batch substantial amount of data")
 
 				t.Logf("Load test: %d timeseries sent", seriesCount)
 			},

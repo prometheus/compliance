@@ -14,8 +14,10 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"fmt"
 	"testing"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestExemplarEncoding validates exemplar encoding in Remote Write 2.0.
@@ -46,14 +48,12 @@ http_request_duration_seconds_count 100
 						// Check if trace_id label is present
 						ex := ts.Exemplars[0]
 						exLabels := extractExemplarLabels(&ex, req.Request.Symbols)
-						may(t).Contains(exLabels, "trace_id",
-							"Exemplar may include trace_id label")
+						may(t, exLabels["trace_id"] != "", "Exemplar may include trace_id label")
 						t.Logf("Found exemplar with labels: %v", exLabels)
 						break
 					}
 				}
-				may(t).True(foundExemplar || len(req.Request.Timeseries) > 0,
-					"Exemplars may be present if supported by sender")
+				may(t, foundExemplar || len(req.Request.Timeseries) > 0, "Exemplars may be present if supported by sender")
 			},
 		},
 		{
@@ -71,15 +71,13 @@ http_requests_total 1000 # {trace_id="abc123",span_id="def456"} 999 1234567890.5
 							exLabels := extractExemplarLabels(&ex, req.Request.Symbols)
 							if _, ok := exLabels["span_id"]; ok {
 								foundSpanId = true
-								may(t).NotEmpty(exLabels["span_id"],
-									"Exemplar may include span_id label")
+								may(t, len(exLabels["span_id"]) > 0, "Exemplar may include span_id label")
 								break
 							}
 						}
 					}
 				}
-				may(t).True(foundSpanId || len(req.Request.Timeseries) > 0,
-					"Exemplar may include span_id if supported")
+				may(t, foundSpanId || len(req.Request.Timeseries) > 0, "Exemplar may include span_id if supported")
 			},
 		},
 		{
@@ -155,15 +153,13 @@ test_counter 50 # {user_id="user123",request_id="req456"} 49 1234567890.0
 						for key := range exLabels {
 							if key != "trace_id" && key != "span_id" {
 								foundCustom = true
-								may(t).NotEmpty(exLabels[key],
-									"Custom exemplar labels may be used: %s", key)
+								may(t, exLabels[key] != "", fmt.Sprintf("Custom exemplar labels may be used: %s", key))
 								break
 							}
 						}
 					}
 				}
-				may(t).True(foundCustom || len(req.Request.Timeseries) > 0,
-					"Custom exemplar labels may be present")
+				may(t, foundCustom || len(req.Request.Timeseries) > 0, "Custom exemplar labels may be present")
 			},
 		},
 		{
@@ -186,13 +182,11 @@ request_duration_count 100
 						labels["__name__"] == "request_duration") &&
 						len(ts.Exemplars) > 0 {
 						foundHistogramExemplar = true
-						may(t).NotEmpty(ts.Exemplars,
-							"Exemplars may be attached to histogram buckets")
+						may(t, len(ts.Exemplars) > 0, "Exemplars may be attached to histogram buckets")
 						break
 					}
 				}
-				may(t).True(foundHistogramExemplar || len(req.Request.Timeseries) > 0,
-					"Histogram exemplars may be present")
+				may(t, foundHistogramExemplar || len(req.Request.Timeseries) > 0, "Histogram exemplars may be present")
 			},
 		},
 		{
@@ -229,14 +223,12 @@ test_histogram_count 100
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Exemplars) > 1 {
 						foundMultiple = true
-						may(t).Greater(len(ts.Exemplars), 1,
-							"Multiple exemplars may be attached to a timeseries")
+						may(t, len(ts.Exemplars) > 1, "Multiple exemplars may be attached to a timeseries")
 						t.Logf("Found %d exemplars in timeseries", len(ts.Exemplars))
 						break
 					}
 				}
-				may(t).True(foundMultiple || len(req.Request.Timeseries) > 0,
-					"Multiple exemplars may be present")
+				may(t, foundMultiple || len(req.Request.Timeseries) > 0, "Multiple exemplars may be present")
 			},
 		},
 	}

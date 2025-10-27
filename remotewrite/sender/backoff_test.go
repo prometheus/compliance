@@ -14,11 +14,13 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TimestampTrackingReceiver wraps MockReceiver to track request timestamps.
@@ -77,8 +79,7 @@ func TestBackoffBehavior(t *testing.T) {
 
 				timestamps := ttr.GetTimestamps()
 				if len(timestamps) < 3 {
-					should(t).GreaterOrEqual(len(timestamps), 3,
-						"Need at least 3 requests to validate backoff pattern")
+					should(t, len(timestamps) >= 3, "Need at least 3 requests to validate backoff pattern")
 					t.Logf("Only %d requests observed, cannot validate backoff", len(timestamps))
 					return
 				}
@@ -97,8 +98,7 @@ func TestBackoffBehavior(t *testing.T) {
 						// Allow some tolerance for timing jitter
 						// Second interval should be >= first interval (or close)
 						ratio := float64(intervals[i]) / float64(intervals[i-1])
-						should(t).GreaterOrEqual(ratio, 0.8,
-							"Backoff intervals should increase or stay similar (exponential), got ratio %.2f", ratio)
+						should(t, ratio >= 0.8, fmt.Sprintf("Backoff intervals should increase or stay similar (exponential), got ratio %.2f", ratio))
 					}
 				}
 			},
@@ -129,8 +129,7 @@ func TestBackoffBehavior(t *testing.T) {
 					firstDelay := timestamps[1].Sub(timestamps[0])
 					secondDelay := timestamps[2].Sub(timestamps[1])
 
-					should(t).LessOrEqual(firstDelay, secondDelay*2,
-						"Delays should increase over retries (with some tolerance)")
+					should(t, firstDelay <= secondDelay*2, "Delays should increase over retries (with some tolerance)")
 					t.Logf("First delay: %v, Second delay: %v", firstDelay, secondDelay)
 				}
 			},
@@ -160,8 +159,7 @@ func TestBackoffBehavior(t *testing.T) {
 
 				for i := 1; i < len(timestamps); i++ {
 					interval := timestamps[i].Sub(timestamps[i-1])
-					should(t).LessOrEqual(interval, maxReasonableDelay,
-						"Backoff delay should not exceed %v, got %v", maxReasonableDelay, interval)
+					should(t, interval <= maxReasonableDelay, fmt.Sprintf("Backoff interval too large: %v > %v", interval, maxReasonableDelay))
 				}
 
 				t.Logf("Observed %d retry attempts over %v",
@@ -184,8 +182,7 @@ func TestBackoffBehavior(t *testing.T) {
 
 				timestamps := ttr.GetTimestamps()
 				if len(timestamps) < 3 {
-					may(t).GreaterOrEqual(len(timestamps), 3,
-						"Jitter validation requires multiple retries")
+					may(t, len(timestamps) >= 3, "Jitter validation requires multiple retries")
 					return
 				}
 
@@ -197,7 +194,7 @@ func TestBackoffBehavior(t *testing.T) {
 
 				// With jitter, intervals shouldn't be exactly doubling
 				// Check for some variance
-				may(t).NotEmpty(intervals, "Intervals should exist for jitter analysis")
+				may(t, len(intervals) > 0, "Intervals should exist for jitter analysis")
 				t.Logf("Intervals: %v (jitter may cause variance)", intervals)
 			},
 		},
@@ -227,8 +224,7 @@ func TestBackoffBehavior(t *testing.T) {
 
 				for i := 1; i < len(timestamps); i++ {
 					interval := timestamps[i].Sub(timestamps[i-1])
-					should(t).GreaterOrEqual(interval, minReasonableDelay,
-						"Backoff delay should be at least %v, got %v", minReasonableDelay, interval)
+					should(t, interval >= minReasonableDelay, fmt.Sprintf("Backoff interval too small: %v < %v", interval, minReasonableDelay))
 				}
 
 				t.Logf("Minimum observed interval: %v", timestamps[1].Sub(timestamps[0]))

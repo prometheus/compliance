@@ -14,10 +14,12 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestResponseProcessing validates sender response header processing.
@@ -45,12 +47,10 @@ func TestResponseProcessing(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				should(t).GreaterOrEqual(len(requests), 1,
-					"Should receive at least one request")
+				should(t, len(requests) >= 1, "Should receive at least one request")
 
 				// Sender should accept 204 with body (even though unusual)
-				should(t).True(true,
-					"Sender should ignore response body on successful requests")
+				should(t, true, "Sender should ignore response body on successful requests")
 				t.Logf("Received %d successful requests", len(requests))
 			},
 		},
@@ -72,12 +72,10 @@ test_gauge{label="c"} 50
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				may(t).GreaterOrEqual(len(requests), 1,
-					"Should receive at least one request")
+				may(t, len(requests) >= 1, "Should receive at least one request")
 
 				// Sender may use these headers for optimization/tracking
-				may(t).True(true,
-					"Sender may process X-Prometheus-Remote-Write-*-Written headers")
+				may(t, true, "Sender may process X-Prometheus-Remote-Write-*-Written headers")
 				t.Logf("Sent response with written count headers")
 			},
 		},
@@ -101,12 +99,10 @@ sample_3 3
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				should(t).GreaterOrEqual(len(requests), 1,
-					"Should receive at least one request")
+				should(t, len(requests) >= 1, "Should receive at least one request")
 
 				// Sender should handle partial writes
-				should(t).True(true,
-					"Sender should handle partial write responses")
+				should(t, true, "Sender should handle partial write responses")
 				t.Logf("Handled partial write response")
 			},
 		},
@@ -124,12 +120,10 @@ sample_3 3
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				should(t).GreaterOrEqual(len(requests), 1,
-					"Should receive request even with error")
+				should(t, len(requests) >= 1, "Should receive request even with error")
 
 				// Sender should assume nothing was written
-				should(t).True(true,
-					"Sender should assume 0 written when headers missing")
+				should(t, true, "Sender should assume 0 written when headers missing")
 				t.Logf("Handled missing written count headers")
 			},
 		},
@@ -172,11 +166,9 @@ sample_3 3
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				should(t).GreaterOrEqual(len(requests), 1,
-					"Should handle large error bodies")
+				should(t, len(requests) >= 1, "Should handle large error bodies")
 
-				should(t).True(true,
-					"Sender should handle large error response bodies")
+				should(t, true, "Sender should handle large error response bodies")
 				t.Logf("Handled large error response body")
 			},
 		},
@@ -242,8 +234,6 @@ sample_3 3
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-
-
 				// Wait for sender to send
 				time.Sleep(6 * time.Second)
 
@@ -277,18 +267,14 @@ func TestContentTypeNegotiation(t *testing.T) {
 		scrapeTarget := NewMockScrapeTarget(scrapeData)
 		defer scrapeTarget.Close()
 
-
-
 		time.Sleep(5 * time.Second)
 
 		requests := receiver.GetRequests()
-		should(t).GreaterOrEqual(len(requests), 1,
-			"Should send at least one request")
+		should(t, len(requests) >= 1, "Should send at least one request")
 
 		if len(requests) > 0 {
 			contentType := requests[0].Headers.Get("Content-Type")
-			should(t).Contains(contentType, "application/x-protobuf",
-				"Should use protobuf content-type")
+			should(t, strings.Contains(contentType, "application/x-protobuf"), "Should use protobuf content-type")
 			t.Logf("Content-Type: %s", contentType)
 		}
 	})

@@ -14,11 +14,12 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestErrorHandling validates sender error handling in various failure scenarios.
@@ -46,7 +47,7 @@ func TestErrorHandling(t *testing.T) {
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
 				// Sender should handle connection refused without crashing
-				should(t).True(true, "Sender should handle connection refused")
+				should(t, true, "Sender should handle connection refused")
 				t.Logf("Sender handled connection refused scenario")
 			},
 		},
@@ -64,7 +65,7 @@ func TestErrorHandling(t *testing.T) {
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
 				// Sender should timeout and handle gracefully
-				should(t).True(true, "Sender should handle timeouts")
+				should(t, true, "Sender should handle timeouts")
 				t.Logf("Sender handled timeout scenario")
 			},
 		},
@@ -82,7 +83,7 @@ func TestErrorHandling(t *testing.T) {
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
-				should(t).True(true, "Sender should handle partial writes")
+				should(t, true, "Sender should handle partial writes")
 				t.Logf("Sender handled partial write scenario")
 			},
 		},
@@ -99,7 +100,7 @@ func TestErrorHandling(t *testing.T) {
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
-				should(t).True(true, "Sender should handle malformed responses")
+				should(t, true, "Sender should handle malformed responses")
 				t.Logf("Sender handled malformed response")
 			},
 		},
@@ -133,7 +134,7 @@ func TestErrorHandling(t *testing.T) {
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
-				should(t).True(true, "Sender should handle unusual status codes")
+				should(t, true, "Sender should handle unusual status codes")
 				t.Logf("Sender handled invalid status code")
 			},
 		},
@@ -150,7 +151,7 @@ func TestErrorHandling(t *testing.T) {
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
-				should(t).True(true, "Sender should handle empty responses")
+				should(t, true, "Sender should handle empty responses")
 				t.Logf("Sender handled empty response")
 			},
 		},
@@ -171,7 +172,7 @@ func TestErrorHandling(t *testing.T) {
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
-				should(t).True(true, "Sender should handle large error bodies")
+				should(t, true, "Sender should handle large error bodies")
 				t.Logf("Sender handled large error response")
 			},
 		},
@@ -236,12 +237,10 @@ func TestNetworkErrors(t *testing.T) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
+				// Run target with invalid URL - sender should handle gracefully
+				runAutoTargetWithCustomReceiver(t, targetName, target, tt.serverURL, scrapeTarget, 5*time.Second)
 
-			// Run target with invalid URL - sender should handle gracefully
-			runAutoTargetWithCustomReceiver(t, targetName, target, tt.serverURL, scrapeTarget, 5*time.Second)
-
-
-				should(t).True(true, "Sender handled network error without crashing")
+				should(t, true, "Sender handled network error without crashing")
 				t.Logf("Network error handled gracefully: %s", tt.name)
 			})
 		})

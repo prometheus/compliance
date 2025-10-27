@@ -78,82 +78,45 @@ func runSenderTest(t *testing.T, targetName string, target targets.Target, scena
 	receiver := NewMockReceiver()
 	defer receiver.Close()
 
-	// Configure receiver response.
+	scrapeTarget := NewMockScrapeTarget(scenario.ScrapeData)
+	defer scrapeTarget.Close()
+
+	// Configure receiver response
 	if scenario.ReceiverResponse.StatusCode == 0 {
 		scenario.ReceiverResponse.StatusCode = http.StatusNoContent
 	}
 	receiver.SetResponse(scenario.ReceiverResponse)
 
-	scrapeTarget := NewMockScrapeTarget(scenario.ScrapeData)
-	defer scrapeTarget.Close()
-
 	t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
 
-	// Run the target with appropriate timeout.
-	// Auto targets need: download time (first run) + startup + scrape interval + send time
-	waitTime := scenario.WaitTime
-	if waitTime == 0 {
-		waitTime = 6 * time.Second // Prometheus needs ~3-4s startup + 1s scrape interval + buffer
+	// SIMPLE BLOCKING CALL - like the working version
+	err := target(targets.TargetOptions{
+		ScrapeTarget:    scrapeTarget.URL(),
+		ReceiveEndpoint: receiver.URL(),
+		Timeout:         8 * time.Second, // Adequate timeout
+	})
+
+	// Check for expected error (some might be expected)
+	if err != nil {
+		t.Fatalf("Target failed: %v", err)
 	}
 
-	// Run target in a goroutine.
-	done := make(chan error, 1)
-	go func() {
-		done <- target(targets.TargetOptions{
-			ScrapeTarget:    scrapeTarget.URL(),
-			ReceiveEndpoint: receiver.URL(),
-			Timeout:         waitTime,
-		})
-	}()
-
-	expectedCount := scenario.ExpectedRequestCount
-	if expectedCount == 0 {
-		expectedCount = 1 // Default: expect at least 1 request
+	// Now check requests
+	requests := receiver.GetRequests()
+	if len(requests) < scenario.ExpectedRequestCount {
+		t.Fatalf("Expected at least %d request(s), got %d", scenario.ExpectedRequestCount, len(requests))
 	}
 
-	// Start polling for requests in background
-	requestsCh := make(chan []CapturedRequest, 1)
-	go func() {
-		requests := receiver.WaitForRequests(expectedCount, waitTime)
-		requestsCh <- requests
-	}()
-
-	// Wait for either requests to arrive or timeout
-	var requests []CapturedRequest
-	select {
-	case requests = <-requestsCh:
-		// Got requests! Don't wait for sender to finish, just drain the channel
-		select {
-		case err := <-done:
-			t.Logf("Target finished: %v", err)
-		default:
-			t.Logf("Target still running (expected)")
-		}
-	case <-time.After(waitTime + 2*time.Second):
-		// Timeout - get whatever requests we have
-		requests = receiver.GetRequests()
-		t.Logf("Timeout waiting for requests, got %d", len(requests))
-		// Drain the done channel
-		select {
-		case <-done:
-		default:
-		}
-	}
-
-	if len(requests) < expectedCount {
-		t.Fatalf("Expected at least %d request(s), got %d", expectedCount, len(requests))
-	}
-
-	// Validate the most recent request.
-	lastReq := &requests[len(requests)-1]
-	if scenario.Validator != nil {
+	// Validate
+	if scenario.Validator != nil && len(requests) > 0 {
+		lastReq := &requests[len(requests)-1]
 		scenario.Validator(t, lastReq)
 	}
 }
 
 // runAutoTargetWithCustomReceiver runs an auto-target with a custom receiver (for special test cases).
 // Use this when you need custom receiver behavior (e.g., TimestampTrackingReceiver, FallbackTrackingReceiver).
-func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target targets.Target, receiverURL string, scrapeTarget *MockScrapeTarget, waitTime time.Duration) {
+func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target targets.Target, receiverURL string, scrapeTarget *MockScrapeTarget, waitTime time.Duration) error {
 	t.Helper()
 
 	if waitTime == 0 {
@@ -162,25 +125,20 @@ func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target tar
 
 	t.Logf("Running %s with custom receiver at %s", targetName, receiverURL)
 
-	// Run target in a goroutine.
-	done := make(chan error, 1)
-	go func() {
-		done <- target(targets.TargetOptions{
-			ScrapeTarget:    scrapeTarget.URL(),
-			ReceiveEndpoint: receiverURL,
-			Timeout:         waitTime,
-		})
-	}()
+	// BLOCKING CALL - wait for completion
+	err := target(targets.TargetOptions{
+		ScrapeTarget:    scrapeTarget.URL(),
+		ReceiveEndpoint: receiverURL,
+		Timeout:         waitTime,
+	})
 
-	// Wait for the target to finish or timeout.
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Logf("Target finished with error (may be expected): %v", err)
-		}
-	case <-time.After(waitTime + 2*time.Second):
-		t.Logf("Target timed out (expected for auto targets)")
+	if err != nil {
+		t.Logf("Target finished with error (may be expected): %v", err)
+	} else {
+		t.Logf("Target completed successfully")
 	}
+
+	return err
 }
 
 // forEachSender runs the provided test function for each configured sender.

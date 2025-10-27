@@ -14,8 +14,10 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"fmt"
 	"testing"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestSymbolTable validates symbol table requirements for Remote Write 2.0.
@@ -153,9 +155,9 @@ http_requests_total{method="GET",status="200",handler="/api/v2"} 75
 				// For the above scrape data, we expect around 11-15 unique symbols:
 				// metric name (1), label keys (3), label values (7-8)
 				// If the symbol table is much larger, deduplication may not be working.
-				should(t).LessOrEqual(uniqueCount, 30,
+				should(t, uniqueCount <= 30, fmt.Sprintf(
 					"Symbol table should be efficiently deduplicated (found %d unique symbols)",
-					uniqueCount)
+					uniqueCount))
 
 				t.Logf("Symbol table contains %d unique symbols (total %d entries)",
 					uniqueCount, len(symbols))

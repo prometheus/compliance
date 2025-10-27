@@ -14,9 +14,10 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestTimestampEncoding validates timestamp encoding and handling.
@@ -90,10 +91,8 @@ test_counter_total 100
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "test_counter_total" {
 						if ts.CreatedTimestamp != 0 {
-							may(t).Greater(ts.CreatedTimestamp, int64(0),
-								"Created timestamp may be present for counters")
-							may(t).Greater(ts.CreatedTimestamp, int64(1e12),
-								"Created timestamp should be in milliseconds")
+							may(t, ts.CreatedTimestamp > int64(0), "Created timestamp may be present for counters")
+							may(t, ts.CreatedTimestamp > int64(1e12), "Created timestamp should be in milliseconds")
 							t.Logf("Found created_timestamp: %d", ts.CreatedTimestamp)
 						}
 						break
@@ -117,8 +116,7 @@ test_histogram_bucket{le="+Inf"} 100
 
 					if metricName == "test_histogram_count" || metricName == "test_histogram" {
 						if ts.CreatedTimestamp != 0 {
-							may(t).Greater(ts.CreatedTimestamp, int64(0),
-								"Created timestamp may be present for histograms")
+							may(t, ts.CreatedTimestamp > int64(0), "Created timestamp may be present for histograms")
 							t.Logf("Found created_timestamp for histogram: %d", ts.CreatedTimestamp)
 						}
 						break
@@ -138,12 +136,10 @@ test_counter_total 50
 				for _, ts := range req.Request.Timeseries {
 					if ts.CreatedTimestamp == 0 {
 						// This is valid - 0 means unset
-						should(t).Equal(int64(0), ts.CreatedTimestamp,
-							"Created timestamp of 0 means unset")
+						should(t, int64(0) == ts.CreatedTimestamp, "Created timestamp of 0 means unset")
 					} else {
 						// If set, must be valid
-						should(t).Greater(ts.CreatedTimestamp, int64(1e12),
-							"Non-zero created timestamp should be valid milliseconds")
+						should(t, ts.CreatedTimestamp > int64(1e12), "Non-zero created timestamp should be valid milliseconds")
 					}
 				}
 			},
@@ -165,7 +161,7 @@ test_counter_total 50
 							diff = -diff
 						}
 
-						should(t).Less(diff, int64(10*60*1000),
+						should(t, diff < int64(10*60*1000),
 							"Timestamp should be within 10 minutes of current time for fresh scrape")
 
 						// Verify precision (not rounded to seconds)
@@ -193,7 +189,7 @@ test_counter_total 50
 						// Timestamps might be slightly in the future due to clock skew
 						if timestamp > now {
 							diff := timestamp - now
-							should(t).Less(diff, int64(5*60*1000),
+							should(t, diff < int64(5*60*1000),
 								"Future timestamps should not be too far ahead (max 5 min)")
 							t.Logf("Found future timestamp: %d ms ahead", diff)
 						}
@@ -213,15 +209,13 @@ test_counter_total 100
 				for _, ts := range req.Request.Timeseries {
 					if ts.CreatedTimestamp != 0 && len(ts.Samples) > 0 {
 						sampleTimestamp := ts.Samples[0].Timestamp
-						should(t).LessOrEqual(ts.CreatedTimestamp, sampleTimestamp,
-							"Created timestamp should be before or equal to sample timestamp")
+						should(t, ts.CreatedTimestamp <= sampleTimestamp, "Created timestamp should be before or equal to sample timestamp")
 						t.Logf("Created: %d, Sample: %d", ts.CreatedTimestamp, sampleTimestamp)
 					}
 
 					if ts.CreatedTimestamp != 0 && len(ts.Histograms) > 0 {
 						histTimestamp := ts.Histograms[0].Timestamp
-						should(t).LessOrEqual(ts.CreatedTimestamp, histTimestamp,
-							"Created timestamp should be before or equal to histogram timestamp")
+						should(t, ts.CreatedTimestamp <= histTimestamp, "Created timestamp should be before or equal to histogram timestamp")
 					}
 				}
 			},

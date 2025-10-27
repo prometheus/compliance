@@ -14,9 +14,11 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestBatchingBehavior validates sender batching and queueing behavior.
@@ -48,10 +50,8 @@ disk_io_bytes_total 1000000
 					metricNames[labels["__name__"]] = true
 				}
 
-				should(t).GreaterOrEqual(len(req.Request.Timeseries), 3,
-					"Sender should batch multiple series, got %d series", len(req.Request.Timeseries))
-				should(t).GreaterOrEqual(len(metricNames), 2,
-					"Sender should batch different metrics, got %d unique metrics", len(metricNames))
+				should(t, len(req.Request.Timeseries) >= 3, fmt.Sprintf("Sender should batch multiple series, got %d series", len(req.Request.Timeseries)))
+				should(t, len(metricNames) >= 2, fmt.Sprintf("Sender should batch different metrics, got %d unique metrics", len(metricNames)))
 
 				t.Logf("Batched %d timeseries with %d unique metrics",
 					len(req.Request.Timeseries), len(metricNames))
@@ -87,12 +87,10 @@ metric_20 20
 				seriesCount := len(req.Request.Timeseries)
 
 				// Batches shouldn't be too small (inefficient) or too large (risk)
-				should(t).GreaterOrEqual(seriesCount, 1,
-					"Request should contain at least one series")
+				should(t, seriesCount >= 1, "Request should contain at least one series")
 
 				// Most senders batch at least several series together
-				should(t).LessOrEqual(seriesCount, 10000,
-					"Batch size should be reasonable (not too large)")
+				should(t, seriesCount <= 10000, "Batch size should be reasonable (not too large)")
 
 				t.Logf("Batch contains %d timeseries", seriesCount)
 			},
@@ -105,8 +103,7 @@ metric_20 20
 			validator: func(t *testing.T, req *CapturedRequest) {
 				// Verify that data is sent even with small amounts
 				// This indicates time-based flushing
-				should(t).NotEmpty(req.Request.Timeseries,
-					"Sender should flush small batches based on time")
+				should(t, len(req.Request.Timeseries) > 0, "Sender should flush small batches based on time")
 
 				t.Logf("Time-based flush sent %d timeseries", len(req.Request.Timeseries))
 			},
@@ -133,9 +130,8 @@ low_cardinality_metric 42
 					}
 				}
 
-				should(t).NotEmpty(uniqueSymbols, "Symbol table should deduplicate")
-				should(t).GreaterOrEqual(len(req.Request.Timeseries), 2,
-					"Should handle mixed cardinality metrics")
+				should(t, len(uniqueSymbols) > 0, "Symbol table should deduplicate")
+				should(t, len(req.Request.Timeseries) >= 2, "Should handle mixed cardinality metrics")
 
 				t.Logf("Symbol table: %d unique symbols for %d timeseries",
 					len(uniqueSymbols), len(req.Request.Timeseries))
@@ -164,8 +160,7 @@ http_duration{service="api",method="POST"} 0.3
 				// Common strings should appear only once (deduplicated)
 				for sym, count := range symbolCounts {
 					if sym != "" {
-						should(t).Equal(1, count,
-							"Symbol %q should appear only once in table, got %d", sym, count)
+						should(t, count == 1, fmt.Sprintf("Symbol %q should appear only once in table, got %d", sym, count))
 					}
 				}
 
@@ -202,8 +197,7 @@ memory_usage_bytes 1048576
 					}
 				}
 
-				should(t).GreaterOrEqual(len(req.Request.Timeseries), 2,
-					"Should batch multiple series")
+				should(t, len(req.Request.Timeseries) >= 2, "Should batch multiple series")
 
 				t.Logf("Batched timeseries: %d with metadata, %d without",
 					withMetadata, withoutMetadata)
@@ -247,7 +241,7 @@ metric_5 5
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				// This test just checks that requests are received
 				// The actual concurrency is implementation-dependent
-				may(t).NotNil(req, "At least one request should be sent")
+				may(t, req != nil, "At least one request should be sent")
 				t.Logf("Request received (parallel sending is optional)")
 			},
 		})

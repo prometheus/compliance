@@ -14,8 +14,9 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"testing"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
@@ -98,7 +99,7 @@ test_histogram_bucket{le="+Inf"} 100
 						break
 					}
 				}
-				may(t).True(foundCount, "Histogram count should be present in some form")
+				may(t, foundCount, "Histogram count should be present in some form")
 			},
 		},
 		{
@@ -130,7 +131,7 @@ test_histogram_bucket{le="+Inf"} 100
 						break
 					}
 				}
-				may(t).True(foundSum, "Histogram sum should be present in some form")
+				may(t, foundSum, "Histogram sum should be present in some form")
 			},
 		},
 		{
@@ -154,14 +155,10 @@ request_duration_count 250
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "request_duration" && len(ts.Histograms) > 0 {
 						foundHistogram = true
-						// If native histogram, validate structure
-						hist := ts.Histograms[0]
-						should(t).NotNil(hist, "Histogram structure should be valid")
 						break
 					}
 				}
-				may(t).True(foundHistogram || len(req.Request.Timeseries) > 0,
-					"Histogram data should be present")
+				may(t, foundHistogram || len(req.Request.Timeseries) > 0, "Histogram data should be present")
 			},
 		},
 		{
@@ -179,13 +176,11 @@ test_native_histogram_sum 250.0
 					if len(ts.Histograms) > 0 {
 						foundNative = true
 						hist := ts.Histograms[0]
-						may(t).NotEmpty(hist.PositiveSpans,
-							"Native histogram may have positive buckets")
+						may(t, len(hist.PositiveSpans) > 0, "Native histogram may have positive buckets")
 						break
 					}
 				}
-				may(t).True(foundNative || len(req.Request.Timeseries) > 0,
-					"Histogram may be in native or classic format")
+				may(t, foundNative || len(req.Request.Timeseries) > 0, "Histogram may be in native or classic format")
 			},
 		},
 		{
@@ -202,14 +197,10 @@ test_histogram_sum -25.0
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Histograms) > 0 {
 						foundNative = true
-						hist := ts.Histograms[0]
-						// Negative buckets are optional
-						may(t).NotNil(hist, "Native histogram structure may include negative buckets")
 						break
 					}
 				}
-				may(t).True(foundNative || len(req.Request.Timeseries) > 0,
-					"Histogram may be in various formats")
+				may(t, foundNative || len(req.Request.Timeseries) > 0, "Histogram may be in various formats")
 			},
 		},
 		{
@@ -225,13 +216,10 @@ test_histogram_sum 0.0
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Histograms) > 0 {
 						foundNative = true
-						// Zero bucket is optional
-						may(t).NotNil(ts.Histograms[0], "Native histogram may include zero bucket")
 						break
 					}
 				}
-				may(t).True(foundNative || len(req.Request.Timeseries) > 0,
-					"Histogram data should be present in some form")
+				may(t, foundNative || len(req.Request.Timeseries) > 0, "Histogram data should be present in some form")
 			},
 		},
 		{
@@ -319,14 +307,12 @@ test_histogram_bucket{le="+Inf"} 0
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "test_histogram_count" && len(ts.Samples) > 0 {
-						should(t).Equal(0.0, ts.Samples[0].Value,
-							"Empty histogram count should be 0")
+						should(t, ts.Samples[0].Value == 0.0, "Empty histogram count should be 0")
 						foundEmpty = true
 						break
 					}
 				}
-				should(t).True(foundEmpty || len(req.Request.Timeseries) > 0,
-					"Empty histogram should be handled correctly")
+				should(t, foundEmpty || len(req.Request.Timeseries) > 0, "Empty histogram should be handled correctly")
 			},
 		},
 		{
@@ -349,8 +335,7 @@ test_histogram_bucket{le="+Inf"} 1000000000
 						break
 					}
 				}
-				may(t).True(foundLarge || len(req.Request.Timeseries) > 0,
-					"Large histogram counts should be handled")
+				may(t, foundLarge || len(req.Request.Timeseries) > 0, "Large histogram counts should be handled")
 			},
 		},
 	}

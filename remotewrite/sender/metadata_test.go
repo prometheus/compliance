@@ -14,8 +14,10 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"strings"
 	"testing"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
@@ -43,15 +45,13 @@ http_requests_total 100
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "http_requests_total" {
 						if ts.Metadata.Type != writev2.Metadata_METRIC_TYPE_UNSPECIFIED {
-							should(t).Equal(writev2.Metadata_METRIC_TYPE_COUNTER, ts.Metadata.Type,
-								"Counter metric should have COUNTER type in metadata")
+							should(t, writev2.Metadata_METRIC_TYPE_COUNTER == ts.Metadata.Type, "Counter metric should have COUNTER type in metadata")
 							foundMetadata = true
 						}
 						break
 					}
 				}
-				should(t).True(foundMetadata || len(req.Request.Timeseries) > 0,
-					"Metadata should be present for typed metrics")
+				should(t, foundMetadata || len(req.Request.Timeseries) > 0, "Metadata should be present for typed metrics")
 			},
 		},
 		{
@@ -68,15 +68,13 @@ memory_usage_bytes 1048576
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "memory_usage_bytes" {
 						if ts.Metadata.Type != writev2.Metadata_METRIC_TYPE_UNSPECIFIED {
-							should(t).Equal(writev2.Metadata_METRIC_TYPE_GAUGE, ts.Metadata.Type,
-								"Gauge metric should have GAUGE type in metadata")
+							should(t, writev2.Metadata_METRIC_TYPE_GAUGE == ts.Metadata.Type, "Gauge metric should have GAUGE type in metadata")
 							foundMetadata = true
 						}
 						break
 					}
 				}
-				should(t).True(foundMetadata || len(req.Request.Timeseries) > 0,
-					"Metadata should be present for typed metrics")
+				should(t, foundMetadata || len(req.Request.Timeseries) > 0, "Metadata should be present for typed metrics")
 			},
 		},
 		{
@@ -98,15 +96,13 @@ request_duration_seconds_count 100
 					if metricName == "request_duration_seconds_count" ||
 						metricName == "request_duration_seconds" {
 						if ts.Metadata.Type != writev2.Metadata_METRIC_TYPE_UNSPECIFIED {
-							should(t).Equal(writev2.Metadata_METRIC_TYPE_HISTOGRAM, ts.Metadata.Type,
-								"Histogram metric should have HISTOGRAM type in metadata")
+							should(t, writev2.Metadata_METRIC_TYPE_HISTOGRAM == ts.Metadata.Type, "Histogram metric should have HISTOGRAM type in metadata")
 							foundMetadata = true
 							break
 						}
 					}
 				}
-				should(t).True(foundMetadata || len(req.Request.Timeseries) > 0,
-					"Metadata should be present for histogram metrics")
+				should(t, foundMetadata || len(req.Request.Timeseries) > 0, "Metadata should be present for histogram metrics")
 			},
 		},
 		{
@@ -126,15 +122,13 @@ rpc_duration_seconds_count 1000
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "rpc_duration_seconds" {
 						if ts.Metadata.Type != writev2.Metadata_METRIC_TYPE_UNSPECIFIED {
-							should(t).Equal(writev2.Metadata_METRIC_TYPE_SUMMARY, ts.Metadata.Type,
-								"Summary metric should have SUMMARY type in metadata")
+							should(t, writev2.Metadata_METRIC_TYPE_SUMMARY == ts.Metadata.Type, "Summary metric should have SUMMARY type in metadata")
 							foundMetadata = true
 							break
 						}
 					}
 				}
-				should(t).True(foundMetadata || len(req.Request.Timeseries) > 0,
-					"Metadata should be present for summary metrics")
+				should(t, foundMetadata || len(req.Request.Timeseries) > 0, "Metadata should be present for summary metrics")
 			},
 		},
 		{
@@ -152,17 +146,14 @@ http_requests_total 100
 					if labels["__name__"] == "http_requests_total" {
 						if ts.Metadata.HelpRef != 0 {
 							helpText := req.Request.Symbols[ts.Metadata.HelpRef]
-							should(t).NotEmpty(helpText,
-								"HELP text should be present in metadata")
-							should(t).Contains(helpText, "HTTP requests",
-								"HELP text should contain meaningful description")
+							should(t, len(helpText) > 0, "HELP text should be present in metadata")
+							should(t, strings.Contains(helpText, "HTTP requests"), "HELP text should contain meaningful description")
 							foundHelp = true
 						}
 						break
 					}
 				}
-				should(t).True(foundHelp || len(req.Request.Timeseries) > 0,
-					"HELP text should be present in metadata")
+				should(t, foundHelp || len(req.Request.Timeseries) > 0, "HELP text should be present in metadata")
 			},
 		},
 		{
@@ -181,15 +172,14 @@ memory_usage_bytes 1048576
 					if labels["__name__"] == "memory_usage_bytes" {
 						if ts.Metadata.UnitRef != 0 {
 							unit := req.Request.Symbols[ts.Metadata.UnitRef]
-							may(t).NotEmpty(unit, "UNIT may be present in metadata")
+							may(t, len(unit) > 0, "UNIT may be present in metadata")
 							t.Logf("Found unit in metadata: %s", unit)
 							foundUnit = true
 						}
 						break
 					}
 				}
-				may(t).True(foundUnit || len(req.Request.Timeseries) > 0,
-					"UNIT may be present in metadata")
+				may(t, foundUnit || len(req.Request.Timeseries) > 0, "UNIT may be present in metadata")
 			},
 		},
 		{
@@ -210,14 +200,13 @@ multiline_metric 42
 					if labels["__name__"] == "multiline_metric" {
 						if ts.Metadata.HelpRef != 0 {
 							helpText := req.Request.Symbols[ts.Metadata.HelpRef]
-							should(t).NotEmpty(helpText, "HELP text should be present")
+							should(t, len(helpText) > 0, "HELP text should be present")
 							foundMetadata = true
 						}
 						break
 					}
 				}
-				should(t).True(foundMetadata || len(req.Request.Timeseries) > 0,
-					"Metadata should be handled correctly")
+				should(t, foundMetadata || len(req.Request.Timeseries) > 0, "Metadata should be handled correctly")
 			},
 		},
 		{
@@ -235,15 +224,13 @@ special_metric 100
 					if labels["__name__"] == "special_metric" {
 						if ts.Metadata.HelpRef != 0 {
 							helpText := req.Request.Symbols[ts.Metadata.HelpRef]
-							should(t).NotEmpty(helpText,
-								"HELP text with special characters should be preserved")
+							should(t, len(helpText) > 0, "HELP text with special characters should be preserved")
 							foundSpecial = true
 						}
 						break
 					}
 				}
-				should(t).True(foundSpecial || len(req.Request.Timeseries) > 0,
-					"Special characters in metadata should be handled")
+				should(t, foundSpecial || len(req.Request.Timeseries) > 0, "Special characters in metadata should be handled")
 			},
 		},
 		{
@@ -287,10 +274,8 @@ http_requests_total{method="POST"} 50
 					if metricName == "http_requests_total" {
 						if existing, found := metadataMap[metricName]; found {
 							// If metadata exists, it should be consistent
-							should(t).Equal(existing.Type, ts.Metadata.Type,
-								"Metadata type should be consistent for same metric family")
-							should(t).Equal(existing.HelpRef, ts.Metadata.HelpRef,
-								"Metadata help should be consistent for same metric family")
+							should(t, existing.Type == ts.Metadata.Type, "Metadata type should be consistent for same metric family")
+							should(t, existing.HelpRef == ts.Metadata.HelpRef, "Metadata help should be consistent for same metric family")
 						} else {
 							metadataMap[metricName] = ts.Metadata
 						}
@@ -311,14 +296,12 @@ no_help_metric 42
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "no_help_metric" {
 						// HelpRef may be 0 (empty string) which is valid
-						may(t).GreaterOrEqual(int(ts.Metadata.HelpRef), 0,
-							"Empty HELP text is allowed")
+						may(t, int(ts.Metadata.HelpRef) >= 0, "Empty HELP text is allowed")
 						found = true
 						break
 					}
 				}
-				may(t).True(found || len(req.Request.Timeseries) > 0,
-					"Metrics without HELP are allowed")
+				may(t, found || len(req.Request.Timeseries) > 0, "Metrics without HELP are allowed")
 			},
 		},
 	}

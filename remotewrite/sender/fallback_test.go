@@ -14,12 +14,14 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // FallbackTrackingReceiver tracks version changes across requests.
@@ -82,8 +84,7 @@ func TestFallbackBehavior(t *testing.T) {
 
 				versions := tracker.GetVersions()
 				if len(versions) < 2 {
-					should(t).GreaterOrEqual(len(versions), 2,
-						"Should see multiple requests for fallback validation")
+					should(t, len(versions) >= 2, "Should see multiple requests for fallback validation")
 					t.Logf("Only %d request(s) observed, cannot validate fallback", len(versions))
 					return
 				}
@@ -96,8 +97,7 @@ func TestFallbackBehavior(t *testing.T) {
 					// First request was RW 2.0, check if later requests fell back
 					for i, v := range laterVersions {
 						if strings.HasPrefix(v, "0.1") || v == "" {
-							should(t).True(true,
-								"Sender fell back from RW 2.0 to RW 1.0 after 415")
+							should(t, true, "Sender fell back from RW 2.0 to RW 1.0 after 415")
 							t.Logf("Fallback detected: %s -> %s (request %d)",
 								firstVersion, v, i+2)
 							return
@@ -131,8 +131,7 @@ func TestFallbackBehavior(t *testing.T) {
 					if strings.HasPrefix(versions[i-1], "2.0") &&
 						(strings.HasPrefix(versions[i], "0.1") || versions[i] == "") {
 						foundFallback = true
-						should(t).True(true,
-							"Version changed from %s to %s", versions[i-1], versions[i])
+						should(t, true, fmt.Sprintf("Version changed from %s to %s", versions[i-1], versions[i]))
 						break
 					}
 				}
@@ -183,8 +182,7 @@ func TestFallbackBehavior(t *testing.T) {
 
 				// After fallback, subsequent requests should succeed
 				requests := tracker.GetRequests()
-				should(t).GreaterOrEqual(len(requests), 1,
-					"Should receive requests after fallback")
+				should(t, len(requests) >= 1, "Should receive requests after fallback")
 
 				t.Logf("Received %d requests total", len(requests))
 			},
@@ -222,8 +220,7 @@ func TestFallbackBehavior(t *testing.T) {
 						}
 					}
 
-					should(t).True(consistentFallback,
-						"Sender should consistently use fallback version")
+					should(t, consistentFallback, "Sender should consistently use fallback version")
 					t.Logf("Fallback persistence: versions=%v", versions)
 				}
 			},
@@ -278,7 +275,6 @@ func TestFallbackBehavior(t *testing.T) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-
 				// Run target with custom receiver
 				runAutoTargetWithCustomReceiver(t, targetName, target, receiver.URL(), scrapeTarget, 15*time.Second)
 				// Run validator which waits and checks fallback
@@ -318,7 +314,6 @@ func TestNoFallbackOn2xx(t *testing.T) {
 
 		scrapeTarget := NewMockScrapeTarget(scrapeData)
 		defer scrapeTarget.Close()
-
 
 		// Run target with custom receiver
 		runAutoTargetWithCustomReceiver(t, targetName, target, receiver.URL(), scrapeTarget, 12*time.Second)

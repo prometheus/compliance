@@ -14,9 +14,11 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"fmt"
 	"regexp"
 	"testing"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestLabelValidation validates label encoding and formatting.
@@ -147,8 +149,7 @@ func TestLabelValidation(t *testing.T) {
 						valueRef := refs[i]
 						labelValue := symbols[valueRef]
 						// Empty values are allowed
-						may(t).GreaterOrEqual(len(labelValue), 0,
-							"Label values may be empty")
+						may(t, len(labelValue) >= 0, "Label values may be empty")
 					}
 				}
 			},
@@ -167,8 +168,7 @@ func TestLabelValidation(t *testing.T) {
 							continue // __name__ is allowed
 						}
 						if len(labelName) >= 2 && labelName[0:2] == "__" {
-							should(t).True(labelName == "__name__",
-								"Labels with __ prefix should be reserved, found: %s", labelName)
+							should(t, labelName == "__name__", fmt.Sprintf("Labels with __ prefix should be reserved, found: %s", labelName))
 						}
 					}
 				}
@@ -194,8 +194,7 @@ func TestLabelValidation(t *testing.T) {
 						}
 					}
 				}
-				may(t).True(foundUnicode || len(req.Request.Timeseries) > 0,
-					"Unicode characters may be present in labels")
+				may(t, foundUnicode || len(req.Request.Timeseries) > 0, "Unicode characters may be present in labels")
 			},
 		},
 		{
@@ -214,8 +213,7 @@ func TestLabelValidation(t *testing.T) {
 						}
 					}
 				}
-				should(t).True(foundSpecial || len(req.Request.Timeseries) > 0,
-					"Special characters should be handled correctly")
+				should(t, foundSpecial || len(req.Request.Timeseries) > 0, "Special characters should be handled correctly")
 			},
 		},
 		{
@@ -228,7 +226,7 @@ func TestLabelValidation(t *testing.T) {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					for labelName := range labels {
 						if len(labelName) > 50 {
-							should(t).NotEmpty(labelName, "Long label names should be handled")
+							should(t, len(labelName) > 0, "Long label names should be handled")
 							t.Logf("Found long label name: %s (length: %d)", labelName, len(labelName))
 						}
 					}
@@ -245,7 +243,7 @@ func TestLabelValidation(t *testing.T) {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					for _, value := range labels {
 						if len(value) > 100 {
-							should(t).NotEmpty(value, "Long label values should be handled")
+							should(t, len(value) > 0, "Long label values should be handled")
 							t.Logf("Found long label value (length: %d)", len(value))
 						}
 					}
@@ -261,8 +259,7 @@ func TestLabelValidation(t *testing.T) {
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if len(labels) > 5 {
-						should(t).GreaterOrEqual(len(labels), 5,
-							"Sender should handle timeseries with many labels")
+						should(t, len(labels) >= 5, "Sender should handle timeseries with many labels")
 						t.Logf("Found timeseries with %d labels", len(labels))
 					}
 				}

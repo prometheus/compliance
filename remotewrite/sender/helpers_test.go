@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -118,9 +119,24 @@ func (mr *MockReceiver) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Set X-Prometheus-Remote-Write-*-Written headers if response is successful.
 	if mr.response.StatusCode >= 200 && mr.response.StatusCode < 300 {
-		w.Header().Set("X-Prometheus-Remote-Write-Samples-Written", fmt.Sprintf("%d", mr.response.SamplesWritten))
-		w.Header().Set("X-Prometheus-Remote-Write-Exemplars-Written", fmt.Sprintf("%d", mr.response.ExemplarsWritten))
-		w.Header().Set("X-Prometheus-Remote-Write-Histograms-Written", fmt.Sprintf("%d", mr.response.HistogramsWritten))
+		// If response counts are explicitly configured, use those
+		// Otherwise, automatically count what we actually received
+		samplesWritten := mr.response.SamplesWritten
+		exemplarsWritten := mr.response.ExemplarsWritten
+		histogramsWritten := mr.response.HistogramsWritten
+
+		// Auto-count if not explicitly set
+		if samplesWritten == 0 && exemplarsWritten == 0 && histogramsWritten == 0 {
+			for _, ts := range req.Timeseries {
+				samplesWritten += len(ts.Samples)
+				exemplarsWritten += len(ts.Exemplars)
+				histogramsWritten += len(ts.Histograms)
+			}
+		}
+
+		w.Header().Set("X-Prometheus-Remote-Write-Samples-Written", fmt.Sprintf("%d", samplesWritten))
+		w.Header().Set("X-Prometheus-Remote-Write-Exemplars-Written", fmt.Sprintf("%d", exemplarsWritten))
+		w.Header().Set("X-Prometheus-Remote-Write-Histograms-Written", fmt.Sprintf("%d", histogramsWritten))
 	}
 
 	w.WriteHeader(mr.response.StatusCode)
@@ -145,7 +161,6 @@ func (mr *MockReceiver) GetRequests() []CapturedRequest {
 	defer mr.mu.Unlock()
 	return append([]CapturedRequest{}, mr.requests...)
 }
-
 
 // GetLastRequest returns the most recent captured request, or nil if none.
 func (mr *MockReceiver) GetLastRequest() *CapturedRequest {
@@ -206,14 +221,30 @@ func NewMockScrapeTarget(initialMetrics string) *MockScrapeTarget {
 	return mst
 }
 
-// handleScrape serves metrics in Prometheus exposition format.
+// handleScrape serves metrics in Prometheus exposition format or OpenMetrics format.
+// If the metrics contain exemplars (detected by "# {" pattern), use OpenMetrics format.
 func (mst *MockScrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request) {
 	mst.mu.Lock()
 	defer mst.mu.Unlock()
 
+	hasExemplars := containsExemplars(mst.metrics)
+	metrics := mst.metrics
+
+	if hasExemplars {
+		contentType := "application/openmetrics-text; version=1.0.0; charset=utf-8"
+		if !strings.HasSuffix(metrics, "# EOF\n") {
+			metrics = metrics + "# EOF\n"
+		}
+		w.Header().Set("Content-Type", contentType)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(metrics))
+		return
+	}
+
+	// Normal text format for non-exemplar metrics
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(mst.metrics))
+	w.Write([]byte(metrics))
 }
 
 // URL returns the URL of the mock scrape target.
@@ -291,24 +322,24 @@ func must(t *testing.T) *require.Assertions {
 	return require.New(t)
 }
 
-// should marks a test as having a "SHOULD" RFC compliance level.
-// Tests marked with should() will produce warnings on failures but not fail the test.
-func should(t *testing.T) *require.Assertions {
+// should logs a warning if condition is false but does not fail the test (SHOULD level).
+// SHOULD level means the feature is recommended but not required.
+func should(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "SHOULD")
-	// For now, use same behavior as must().
-	// In the future, this could be customized to log warnings instead of failing.
-	return require.New(t)
+	if !condition {
+		t.Logf("⚠️  SHOULD level requirement not met (recommended): %s", msg)
+	}
 }
 
-// may marks a test as having a "MAY" RFC compliance level.
-// Tests marked with may() are informational and don't fail on assertion failures.
-func may(t *testing.T) *require.Assertions {
+// may logs information if condition is false but does not fail the test (MAY level).
+// MAY level means the feature is completely optional.
+func may(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "MAY")
-	// For now, use same behavior as must().
-	// In the future, this could be customized for informational-only checks.
-	return require.New(t)
+	if !condition {
+		t.Logf("ℹ️  MAY level feature not present (optional): %s", msg)
+	}
 }
 
 // validateSymbolTable validates that the symbol table follows RW 2.0 requirements.
@@ -360,4 +391,10 @@ func isSorted(labels map[string]string, symbols []string, refs []uint32) bool {
 		prevKey = key
 	}
 	return true
+}
+
+// containsExemplars checks if the metrics string contains exemplar annotations.
+// Exemplars in OpenMetrics format are indicated by "# {" after a metric value.
+func containsExemplars(metrics string) bool {
+	return strings.Contains(metrics, "# {")
 }

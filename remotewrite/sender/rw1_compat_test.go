@@ -46,7 +46,7 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 				}
 
 				if strings.HasPrefix(version, "0.1") || version == "" {
-					should(t).True(true, "RW 1.0 version header is acceptable")
+					should(t, true, "RW 1.0 version header is acceptable")
 					t.Logf("RW 1.0 detected with version: %s", version)
 				} else {
 					t.Logf("Unknown version: %s", version)
@@ -69,8 +69,7 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 				}
 
 				// RW 1.0 typically uses simple "application/x-protobuf"
-				should(t).Contains(contentType, "application/x-protobuf",
-					"RW 1.0 should use protobuf content-type")
+				should(t, strings.Contains(contentType, "application/x-protobuf"), "RW 1.0 should use protobuf content-type")
 
 				// RW 1.0 should NOT have proto parameter (that's RW 2.0)
 				if strings.Contains(contentType, "proto=io.prometheus.write.v2") {
@@ -162,8 +161,7 @@ test_counter_total 100
 				// If sender is truly in RW 1.0 mode, this field should be 0/unset
 				for _, ts := range req.Request.Timeseries {
 					// In RW 1.0, created_timestamp should not be used
-					should(t).Equal(int64(0), ts.CreatedTimestamp,
-						"RW 1.0 should not use created_timestamp field")
+					should(t, int64(0) == ts.CreatedTimestamp, "RW 1.0 should not use created_timestamp field")
 				}
 
 				t.Logf("RW 1.0: No created_timestamp field used")
@@ -187,7 +185,7 @@ test_metric 42
 
 				// RW 1.0 has limited metadata support
 				// Metadata is typically sent via separate API endpoint
-				may(t).NotNil(req.Request, "RW 1.0 may handle metadata differently")
+				may(t, req.Request != nil, "RW 1.0 may handle metadata differently")
 				t.Logf("RW 1.0: Metadata handling validated")
 			},
 		},
@@ -209,7 +207,7 @@ http_requests{method="POST",status="200"} 50
 				// RW 1.0 doesn't use symbol table - labels are sent inline
 				// If this is truly RW 1.0, symbol table should be minimal or empty
 				// (RW 2.0 proto may still parse it but values should be inline)
-				may(t).NotNil(req.Request, "RW 1.0 format validated")
+				may(t, req.Request != nil, "RW 1.0 format validated")
 				t.Logf("RW 1.0: Symbol table not used (labels inline)")
 			},
 		},
@@ -247,13 +245,13 @@ func TestRemoteWrite1Configuration(t *testing.T) {
 
 				// Check what version is being used
 				if version == "" {
-					should(t).NotEmpty(version, "Version header should be present")
+					should(t, len(version) > 0, "Version header should be present")
 					t.Logf("No version header, may default to RW 1.0")
 				} else if strings.HasPrefix(version, "0.1") {
-					should(t).True(true, "Sender configured for RW 1.0")
+					should(t, true, "Sender configured for RW 1.0")
 					t.Logf("RW 1.0 mode: version %s", version)
 				} else if strings.HasPrefix(version, "2.0") {
-					should(t).True(true, "Sender configured for RW 2.0")
+					should(t, true, "Sender configured for RW 2.0")
 					t.Logf("RW 2.0 mode: version %s (RW 1.0 support may be configurable)", version)
 				} else {
 					t.Logf("Unknown version: %s", version)

@@ -14,10 +14,12 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestRetryBehavior validates sender retry behavior on different error responses.
@@ -45,8 +47,8 @@ func TestRetryBehavior(t *testing.T) {
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				// Should receive exactly 1 request (no retries)
 				// Allow up to 2 for initial attempt + possible single retry before detecting 4xx
-				should(t).LessOrEqual(len(requests), 2,
-					"Sender should not retry on 400 Bad Request, got %d requests", len(requests))
+				should(t, len(requests) <= 2, fmt.Sprintf(
+					"Sender should not retry on 400 Bad Request, got %d requests", len(requests)))
 				t.Logf("Received %d requests for 400 response", len(requests))
 			},
 		},
@@ -62,8 +64,8 @@ func TestRetryBehavior(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				should(t).LessOrEqual(len(requests), 2,
-					"Sender should not retry on 401 Unauthorized, got %d requests", len(requests))
+				should(t, len(requests) <= 2, fmt.Sprintf(
+					"Sender should not retry on 401 Unauthorized, got %d requests", len(requests)))
 				t.Logf("Received %d requests for 401 response", len(requests))
 			},
 		},
@@ -79,8 +81,8 @@ func TestRetryBehavior(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				should(t).LessOrEqual(len(requests), 2,
-					"Sender should not retry on 404 Not Found, got %d requests", len(requests))
+				should(t, len(requests) <= 2, fmt.Sprintf(
+					"Sender should not retry on 404 Not Found, got %d requests", len(requests)))
 				t.Logf("Received %d requests for 404 response", len(requests))
 			},
 		},
@@ -100,8 +102,7 @@ func TestRetryBehavior(t *testing.T) {
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				// 429 retry behavior is optional
-				may(t).GreaterOrEqual(len(requests), 1,
-					"Sender may retry on 429 Too Many Requests")
+				may(t, len(requests) >= 1, "Sender may retry on 429 Too Many Requests")
 				t.Logf("Received %d requests for 429 response (retry optional)", len(requests))
 			},
 		},
@@ -159,8 +160,7 @@ func TestRetryBehavior(t *testing.T) {
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				time.Sleep(3 * time.Second)
-				should(t).GreaterOrEqual(len(requests), 1,
-					"Sender should retry on 502 Bad Gateway")
+				should(t, len(requests) >= 1, "Sender should retry on 502 Bad Gateway")
 				t.Logf("Received %d requests for 502 response", len(requests))
 			},
 		},
@@ -177,8 +177,7 @@ func TestRetryBehavior(t *testing.T) {
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				time.Sleep(3 * time.Second)
-				should(t).GreaterOrEqual(len(requests), 1,
-					"Sender should retry on 504 Gateway Timeout")
+				should(t, len(requests) >= 1, "Sender should retry on 504 Gateway Timeout")
 				t.Logf("Received %d requests for 504 response", len(requests))
 			},
 		},
@@ -194,8 +193,8 @@ func TestRetryBehavior(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				should(t).LessOrEqual(len(requests), 2,
-					"Sender should not retry on 413 Payload Too Large, got %d requests", len(requests))
+				should(t, len(requests) <= 2, fmt.Sprintf(
+					"Sender should not retry on 413 Payload Too Large, got %d requests", len(requests)))
 				t.Logf("Received %d requests for 413 response", len(requests))
 			},
 		},
@@ -215,7 +214,7 @@ func TestRetryBehavior(t *testing.T) {
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				if len(requests) < 2 {
-					may(t).True(true, "Retry-After header support is optional")
+					may(t, true, "Retry-After header support is optional")
 					return
 				}
 
@@ -223,8 +222,8 @@ func TestRetryBehavior(t *testing.T) {
 				firstTime := requests[0].Headers.Get("X-Request-Time")
 				secondTime := requests[1].Headers.Get("X-Request-Time")
 
-				may(t).NotEmpty(firstTime, "Request timestamps may be tracked")
-				may(t).NotEmpty(secondTime, "Request timestamps may be tracked")
+				may(t, len(firstTime) > 0, "Request timestamps may be tracked")
+				may(t, len(secondTime) > 0, "Request timestamps may be tracked")
 
 				t.Logf("Received %d requests with Retry-After header", len(requests))
 			},
@@ -244,8 +243,6 @@ func TestRetryBehavior(t *testing.T) {
 
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
-
-
 
 				time.Sleep(10 * time.Second)
 

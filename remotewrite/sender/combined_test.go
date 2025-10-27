@@ -14,9 +14,11 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
@@ -40,30 +42,37 @@ http_requests_total{method="GET",status="200"} 1000
 http_requests_total{method="POST",status="201"} 500
 `,
 			validator: func(t *testing.T, req *CapturedRequest) {
+				var foundMetric bool
 				var foundWithMetadata bool
 
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "http_requests_total" {
-						should(t).NotEmpty(ts.Samples, "Counter should have samples")
+						foundMetric = true
+						should(t, len(ts.Samples) > 0, "Counter should have samples")
 
 						// Check if metadata is present
 						if ts.Metadata.Type != writev2.Metadata_METRIC_TYPE_UNSPECIFIED {
-							should(t).Equal(writev2.Metadata_METRIC_TYPE_COUNTER, ts.Metadata.Type,
+							should(t, ts.Metadata.Type == writev2.Metadata_METRIC_TYPE_COUNTER,
 								"Metadata type should match metric type")
 							foundWithMetadata = true
 						}
 
 						if ts.Metadata.HelpRef != 0 {
 							helpText := req.Request.Symbols[ts.Metadata.HelpRef]
-							should(t).Contains(helpText, "HTTP requests",
+							should(t, strings.Contains(helpText, "HTTP requests"),
 								"Help text should be meaningful")
 						}
 					}
 				}
 
-				should(t).True(foundWithMetadata || len(req.Request.Timeseries) > 0,
-					"Metadata should be present with samples")
+				// Metric must be present
+				if !foundMetric {
+					t.Fatalf("Expected to find http_requests_total metric")
+				}
+
+				// SHOULD level: log warning if metadata not present
+				should(t, foundWithMetadata, "Metadata should be present with samples")
 			},
 		},
 		{
@@ -74,25 +83,29 @@ http_requests_total{method="POST",status="201"} 500
 request_count 1000 # {trace_id="abc123",span_id="def456"} 999 1234567890.123
 `,
 			validator: func(t *testing.T, req *CapturedRequest) {
+				var foundMetric bool
 				var foundExemplar bool
 
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "request_count" {
+						foundMetric = true
 						if len(ts.Exemplars) > 0 {
 							foundExemplar = true
-							may(t).NotEmpty(ts.Samples, "Timeseries with exemplars should have samples")
-
 							ex := ts.Exemplars[0]
 							exLabels := extractExemplarLabels(&ex, req.Request.Symbols)
-							may(t).NotEmpty(exLabels, "Exemplar should have labels")
 							t.Logf("Found exemplar with labels: %v", exLabels)
 						}
 					}
 				}
 
-				may(t).True(foundExemplar || len(req.Request.Timeseries) > 0,
-					"Exemplars may be attached to samples")
+				// Metric data must be present
+				if !foundMetric {
+					t.Fatalf("Expected to find request_count metric")
+				}
+
+				// MAY level: log whether optional feature is present
+				may(t, foundExemplar, "Exemplars present")
 			},
 		},
 		{
@@ -113,8 +126,12 @@ request_duration_seconds_count 1000
 				var foundMetadata bool
 				var foundExemplar bool
 
-				for _, ts := range req.Request.Timeseries {
+				t.Logf("Total timeseries received: %d", len(req.Request.Timeseries))
+
+				for i, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
+					t.Logf("Timeseries %d: %v", i, labels)
+
 					metricBase := "request_duration_seconds"
 
 					if labels["__name__"] == metricBase+"_count" ||
@@ -122,19 +139,30 @@ request_duration_seconds_count 1000
 						labels["__name__"] == metricBase {
 						foundHistogramData = true
 
+						// Log detailed info for histogram buckets
+						t.Logf("  Samples: %d, Histograms: %d, Exemplars: %d, Metadata.Type: %v",
+							len(ts.Samples), len(ts.Histograms), len(ts.Exemplars), ts.Metadata.Type)
+
 						if ts.Metadata.Type != writev2.Metadata_METRIC_TYPE_UNSPECIFIED {
 							foundMetadata = true
+							t.Logf("Found metadata type: %v", ts.Metadata.Type)
 						}
 
 						if len(ts.Exemplars) > 0 {
 							foundExemplar = true
+							t.Logf("Found %d exemplars", len(ts.Exemplars))
 						}
 					}
 				}
 
-				may(t).True(foundHistogramData, "Histogram data should be present")
-				may(t).True(foundMetadata || !foundHistogramData, "Histogram metadata may be present")
-				may(t).True(foundExemplar || !foundHistogramData, "Histogram exemplars may be present")
+				// Histogram data must be present
+				if !foundHistogramData {
+					t.Fatalf("Expected histogram data but none was found")
+				}
+
+				// MAY level: log whether optional features are present
+				may(t, foundMetadata, "Histogram metadata present")
+				may(t, foundExemplar, "Histogram exemplars present")
 			},
 		},
 		{
@@ -197,7 +225,7 @@ http_requests_total{method="DELETE",path="/api/v1/users",status="204"} 10
 				}
 
 				// Check that common strings are deduplicated
-				should(t).NotEmpty(uniqueSymbols, "Symbol table should contain unique symbols")
+				should(t, len(uniqueSymbols) > 0, "Symbol table should contain unique symbols")
 
 				// Count timeseries
 				httpRequestsSeries := 0
@@ -208,7 +236,7 @@ http_requests_total{method="DELETE",path="/api/v1/users",status="204"} 10
 					}
 				}
 
-				should(t).GreaterOrEqual(httpRequestsSeries, 6,
+				should(t, httpRequestsSeries >= 6,
 					"High cardinality metrics should have multiple series")
 				t.Logf("Found %d unique symbols, %d http_requests_total series",
 					len(uniqueSymbols), httpRequestsSeries)
@@ -269,9 +297,9 @@ api_calls_total{service="users",method="GET",endpoint="/profile",region="eu-west
 						seriesCount++
 
 						// Check labels are properly structured
-						should(t).NotEmpty(labels["service"], "Service label should be present")
-						should(t).NotEmpty(labels["method"], "Method label should be present")
-						should(t).NotEmpty(labels["endpoint"], "Endpoint label should be present")
+						should(t, labels["service"] != "", "Service label should be present")
+						should(t, labels["method"] != "", "Method label should be present")
+						should(t, labels["endpoint"] != "", "Endpoint label should be present")
 
 						// Check metadata
 						if ts.Metadata.Type != writev2.Metadata_METRIC_TYPE_UNSPECIFIED {
@@ -280,7 +308,7 @@ api_calls_total{service="users",method="GET",endpoint="/profile",region="eu-west
 					}
 				}
 
-				should(t).GreaterOrEqual(seriesCount, 3,
+				should(t, seriesCount >= 3,
 					"Should have multiple series with different label combinations")
 				t.Logf("Found %d series, %d with metadata", seriesCount, metadataCount)
 			},

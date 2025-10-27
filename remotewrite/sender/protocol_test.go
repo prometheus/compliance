@@ -14,9 +14,11 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestProtocolCompliance validates HTTP protocol requirements for Remote Write 2.0 senders.
@@ -46,8 +48,7 @@ func TestProtocolCompliance(t *testing.T) {
 			scrapeData:  "test_metric 42\n",
 			validator: func(t *testing.T, req *CapturedRequest) {
 				contentType := req.Headers.Get("Content-Type")
-				should(t).Contains(contentType, "proto=io.prometheus.write.v2.Request",
-					"Content-Type should include proto parameter for RW 2.0")
+				should(t, strings.Contains(contentType, "proto=io.prometheus.write.v2.Request"), "Content-Type should include proto parameter for RW 2.0")
 			},
 		},
 		{
@@ -79,8 +80,7 @@ func TestProtocolCompliance(t *testing.T) {
 			scrapeData:  "test_metric 42\n",
 			validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
-				should(t).True(strings.HasPrefix(version, "2.0"),
-					"Version should be 2.0.x for RW 2.0, got: %s", version)
+				should(t, strings.HasPrefix(version, "2.0"), fmt.Sprintf("Version should be 2.0.x for RW 2.0, got: %s", version))
 			},
 		},
 		{
