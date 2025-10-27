@@ -1,0 +1,3 @@
+# HELP test_histogram A native histogram example
+# TYPE test_histogram histogram
+test_histogram{} {{schema:0 sum:5.5 count:10 buckets:[1 2 3 4]}}

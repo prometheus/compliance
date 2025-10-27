@@ -3,15 +3,20 @@ package targets
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
-const prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v2.30.3/prometheus-2.30.3.{{.OS}}-{{.Arch}}.tar.gz"
+const prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.7.1/prometheus-3.7.1.{{.OS}}-{{.Arch}}.tar.gz"
 
 func RunPrometheus(opts TargetOptions) error {
 	binary, err := downloadBinary(prometheusDownloadURL, "prometheus")
 	if err != nil {
 		return err
 	}
+
+	// Extract host:port from scrape target URL (Prometheus expects just host:port, not full URL)
+	scrapeTarget := strings.TrimPrefix(opts.ScrapeTarget, "http://")
+	scrapeTarget = strings.TrimPrefix(scrapeTarget, "https://")
 
 	// Write out config file.
 	cfg := fmt.Sprintf(`
@@ -20,12 +25,13 @@ global:
 
 remote_write:
   - url: '%s'
+    protobuf_message: "io.prometheus.write.v2.Request"
 
 scrape_configs:
   - job_name: 'test'
     static_configs:
     - targets: ['%s']
-`, opts.ReceiveEndpoint, opts.ScrapeTarget)
+`, opts.ReceiveEndpoint, scrapeTarget)
 	configFileName, err := writeTempFile(cfg, "config-*.yaml")
 	if err != nil {
 		return err

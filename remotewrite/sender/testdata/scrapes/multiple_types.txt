@@ -1,0 +1,24 @@
+# HELP process_cpu_seconds_total Total CPU time
+# TYPE process_cpu_seconds_total counter
+process_cpu_seconds_total 123.45
+
+# HELP process_memory_bytes Current memory usage
+# TYPE process_memory_bytes gauge
+process_memory_bytes 1048576
+
+# HELP request_duration_seconds Request duration histogram
+# TYPE request_duration_seconds histogram
+request_duration_seconds_bucket{le="0.1"} 100
+request_duration_seconds_bucket{le="0.5"} 250
+request_duration_seconds_bucket{le="1.0"} 500
+request_duration_seconds_bucket{le="+Inf"} 1000
+request_duration_seconds_sum 450.5
+request_duration_seconds_count 1000
+
+# HELP rpc_duration_seconds RPC duration summary
+# TYPE rpc_duration_seconds summary
+rpc_duration_seconds{quantile="0.5"} 0.05
+rpc_duration_seconds{quantile="0.9"} 0.1
+rpc_duration_seconds{quantile="0.99"} 0.5
+rpc_duration_seconds_sum 100.0
+rpc_duration_seconds_count 1000

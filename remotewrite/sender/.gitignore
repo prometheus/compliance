@@ -1,1 +1,24 @@
-bin
+# Sender binaries (not included in repo)
+bin/
+
+# Go build artifacts
+*.test
+*.out
+
+# Temporary config files
+config.yml
+
+# Test coverage
+coverage.out
+*.coverprofile
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

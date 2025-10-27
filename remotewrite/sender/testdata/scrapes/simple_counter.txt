@@ -1,0 +1,3 @@
+# HELP test_counter_total A simple test counter
+# TYPE test_counter_total counter
+test_counter_total 42

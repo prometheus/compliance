@@ -252,7 +252,9 @@ func runCommand(prog string, timeout time.Duration, args ...string) error {
 	defer os.RemoveAll(cwd)
 
 	var output *os.File
-	if true {
+	// Suppress output to avoid cluttering test results
+	suppressOutput := os.Getenv("DEBUG") == ""
+	if suppressOutput {
 		output, err = os.CreateTemp("", "")
 		if err != nil {
 			return err
