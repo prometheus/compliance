@@ -24,11 +24,11 @@ import (
 func TestSymbolTable(t *testing.T) {
 	tests := []TestCase{
 		{
-			Name:"empty_string_at_index_zero",
-			Description:"Symbol table MUST have empty string at index 0",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "empty_string_at_index_zero",
+			Description: "Symbol table MUST have empty string at index 0",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 				must(t).NotEmpty(symbols, "Symbol table must not be empty")
 				must(t).Equal("", symbols[0],
@@ -36,15 +36,15 @@ func TestSymbolTable(t *testing.T) {
 			},
 		},
 		{
-			Name:"string_deduplication",
-			Description:"Symbol table MUST deduplicate repeated strings",
-			RFCLevel:"MUST",
+			Name:        "string_deduplication",
+			Description: "Symbol table MUST deduplicate repeated strings",
+			RFCLevel:    "MUST",
 			ScrapeData: `# Multiple metrics with same label keys/values
 test_metric{foo="bar",baz="qux"} 1
 test_metric{foo="bar",baz="qux"} 2
 another_metric{foo="bar"} 3
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 				must(t).NotEmpty(symbols, "Symbol table must not be empty")
 
@@ -52,7 +52,7 @@ another_metric{foo="bar"} 3
 				seen := make(map[string]int)
 				for i, sym := range symbols {
 					if sym == "" {
-						continue // Empty string can appear multiple times (though should only be at index 0)
+						continue // Empty string can appear multiple times (though should only be at index 0).
 					}
 					if prevIdx, exists := seen[sym]; exists {
 						must(t).Fail("Duplicate string %q found at indices %d and %d (deduplication required)",
@@ -63,11 +63,11 @@ another_metric{foo="bar"} 3
 			},
 		},
 		{
-			Name:"labels_refs_valid_indices",
-			Description:"All label refs MUST point to valid symbol table indices",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric{label=\"value\"} 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "labels_refs_valid_indices",
+			Description: "All label refs MUST point to valid symbol table indices",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric{label=\"value\"} 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 				timeseries := req.Request.Timeseries
 
@@ -83,11 +83,11 @@ another_metric{foo="bar"} 3
 			},
 		},
 		{
-			Name:"labels_refs_even_length",
-			Description:"Label refs array length MUST be even (key-value pairs)",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric{label=\"value\"} 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "labels_refs_even_length",
+			Description: "Label refs array length MUST be even (key-value pairs)",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric{label=\"value\"} 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				timeseries := req.Request.Timeseries
 				must(t).NotEmpty(timeseries, "Request must contain at least one timeseries")
 

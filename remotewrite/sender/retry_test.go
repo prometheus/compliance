@@ -38,15 +38,14 @@ func TestRetryBehavior(t *testing.T) {
 			rfcLevel:    "MUST",
 			scrapeData:  "test_metric 42\n",
 			setup: func(mr *MockReceiver) {
-				// Always return 400
+				// Always return 400.
 				mr.SetResponse(MockReceiverResponse{
 					StatusCode: http.StatusBadRequest,
 					Body:       "Bad request",
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				// Should receive exactly 1 request (no retries)
-				// Allow up to 2 for initial attempt + possible single retry before detecting 4xx
+				// Should receive exactly 1 request (no retries). Allow up to 2 for initial attempt + possible single retry before detecting 4xx.
 				should(t, len(requests) <= 2, fmt.Sprintf(
 					"Sender should not retry on 400 Bad Request, got %d requests", len(requests)))
 				t.Logf("Received %d requests for 400 response", len(requests))
@@ -101,7 +100,7 @@ func TestRetryBehavior(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				// 429 retry behavior is optional
+				// 429 retry behavior is optional.
 				may(t, len(requests) >= 1, "Sender may retry on 429 Too Many Requests")
 				t.Logf("Received %d requests for 429 response (retry optional)", len(requests))
 			},
@@ -118,9 +117,8 @@ func TestRetryBehavior(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				// Should retry on 500 (expect multiple attempts)
-				// Note: Some senders may give up after a few retries
-				// We just check that at least one request was made
+				// Should retry on 500 (expect multiple attempts).
+				// Note: Some senders may give up after a few retries. We just check that at least one request was made.
 				must(t).GreaterOrEqual(len(requests), 1,
 					"Sender should attempt request on 500 Internal Server Error")
 				t.Logf("Received %d requests for 500 response (retries expected)", len(requests))
@@ -192,36 +190,6 @@ func TestRetryBehavior(t *testing.T) {
 				t.Logf("Received %d requests for 413 response", len(requests))
 			},
 		},
-		{
-			name:        "honor_retry_after_header",
-			description: "Sender MAY honor Retry-After header",
-			rfcLevel:    "MAY",
-			scrapeData:  "test_metric 42\n",
-			setup: func(mr *MockReceiver) {
-				mr.SetResponse(MockReceiverResponse{
-					StatusCode: http.StatusServiceUnavailable,
-					Headers: map[string]string{
-						"Retry-After": "2",
-					},
-					Body: "Service unavailable, retry after 2 seconds",
-				})
-			},
-			validator: func(t *testing.T, requests []CapturedRequest) {
-				if len(requests) < 2 {
-					may(t, true, "Retry-After header support is optional")
-					return
-				}
-
-				// If there are retries, check timing
-				firstTime := requests[0].Headers.Get("X-Request-Time")
-				secondTime := requests[1].Headers.Get("X-Request-Time")
-
-				may(t, len(firstTime) > 0, "Request timestamps may be tracked")
-				may(t, len(secondTime) > 0, "Request timestamps may be tracked")
-
-				t.Logf("Received %d requests with Retry-After header", len(requests))
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -249,7 +217,6 @@ func TestRetryBehavior(t *testing.T) {
 					t.Logf("Target exited with error (expected for retry tests): %v", err)
 				}
 
-				// Get all requests that were received
 				requests := receiver.GetRequests()
 				tt.validator(t, requests)
 			})

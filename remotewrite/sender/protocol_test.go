@@ -25,76 +25,76 @@ import (
 func TestProtocolCompliance(t *testing.T) {
 	tests := []TestCase{
 		{
-			Name:"content_type_protobuf",
-			Description:"Sender MUST use Content-Type: application/x-protobuf",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "content_type_protobuf",
+			Description: "Sender MUST use Content-Type: application/x-protobuf",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				contentType := req.Headers.Get("Content-Type")
 				must(t).Contains(contentType, "application/x-protobuf",
 					"Content-Type header must contain application/x-protobuf")
 			},
 		},
 		{
-			Name:"content_type_with_proto_param",
-			Description:"Sender SHOULD include proto parameter in Content-Type for RW 2.0",
-			RFCLevel:"SHOULD",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "content_type_with_proto_param",
+			Description: "Sender SHOULD include proto parameter in Content-Type for RW 2.0",
+			RFCLevel:    "SHOULD",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				contentType := req.Headers.Get("Content-Type")
 				should(t, strings.Contains(contentType, "proto=io.prometheus.write.v2.Request"), "Content-Type should include proto parameter for RW 2.0")
 			},
 		},
 		{
-			Name:"content_encoding_snappy",
-			Description:"Sender MUST use Content-Encoding: snappy",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "content_encoding_snappy",
+			Description: "Sender MUST use Content-Encoding: snappy",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				encoding := req.Headers.Get("Content-Encoding")
 				must(t).Equal("snappy", encoding,
 					"Content-Encoding header must be 'snappy'")
 			},
 		},
 		{
-			Name:"version_header_present",
-			Description:"Sender MUST include X-Prometheus-Remote-Write-Version header",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "version_header_present",
+			Description: "Sender MUST include X-Prometheus-Remote-Write-Version header",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 				must(t).NotEmpty(version,
 					"X-Prometheus-Remote-Write-Version header must be present")
 			},
 		},
 		{
-			Name:"version_header_value",
-			Description:"Sender SHOULD use version 2.0.0 for RW 2.0 receivers",
-			RFCLevel:"SHOULD",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "version_header_value",
+			Description: "Sender SHOULD use version 2.0.0 for RW 2.0 receivers",
+			RFCLevel:    "SHOULD",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 				should(t, strings.HasPrefix(version, "2.0"), fmt.Sprintf("Version should be 2.0.x for RW 2.0, got: %s", version))
 			},
 		},
 		{
-			Name:"user_agent_present",
-			Description:"Sender MUST include User-Agent header (RFC 9110)",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Name:        "user_agent_present",
+			Description: "Sender MUST include User-Agent header (RFC 9110)",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				userAgent := req.Headers.Get("User-Agent")
 				must(t).NotEmpty(userAgent,
 					"User-Agent header must be present per RFC 9110")
 			},
 		},
 		{
-			Name:"snappy_block_format",
-			Description:"Sender MUST use snappy block format, not framed format",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
-				// Snappy framed format starts with specific magic bytes: 0xff 0x06 0x00 0x00 0x73 0x4e 0x61 0x50 0x50 0x59
+			Name:        "snappy_block_format",
+			Description: "Sender MUST use snappy block format, not framed format",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				// Snappy framed format starts with specific magic bytes: 0xff 0x06 0x00 0x00 0x73 0x4e 0x61 0x50 0x50 0x59.
 				// Snappy block format does not have these magic bytes.
 				body := req.Body
 				must(t).NotEmpty(body, "Request body must not be empty")
@@ -115,13 +115,12 @@ func TestProtocolCompliance(t *testing.T) {
 			},
 		},
 		{
-			Name:"protobuf_parseable",
-			Description:"Sender MUST send valid protobuf messages that can be parsed",
-			RFCLevel:"MUST",
-			ScrapeData:"test_metric 42\n",
-			Validator:func(t *testing.T, req *CapturedRequest) {
-				// The request was already parsed in MockReceiver.handleRequest
-				// If we got here, the protobuf was successfully parsed.
+			Name:        "protobuf_parseable",
+			Description: "Sender MUST send valid protobuf messages that can be parsed",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				// The request was already parsed in MockReceiver.handleRequest. If we got here, the protobuf was successfully parsed.
 				must(t).NotNil(req.Request, "Protobuf message must be parseable")
 				must(t).NotEmpty(req.Request.Symbols,
 					"Parsed request must contain symbols")

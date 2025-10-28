@@ -89,12 +89,12 @@ func TestFallbackBehavior(t *testing.T) {
 					return
 				}
 
-				// Check if version changed from 2.0 to earlier version
+				// Check if version changed from 2.0 to earlier version.
 				firstVersion := versions[0]
 				laterVersions := versions[1:]
 
 				if strings.HasPrefix(firstVersion, "2.0") {
-					// First request was RW 2.0, check if later requests fell back
+					// First request was RW 2.0, check if later requests fell back.
 					for i, v := range laterVersions {
 						if strings.HasPrefix(v, "0.1") || v == "" {
 							should(t, true, "Sender fell back from RW 2.0 to RW 1.0 after 415")
@@ -125,7 +125,7 @@ func TestFallbackBehavior(t *testing.T) {
 					return
 				}
 
-				// Look for version change pattern
+				// Look for version change pattern.
 				var foundFallback bool
 				for i := 1; i < len(versions); i++ {
 					if strings.HasPrefix(versions[i-1], "2.0") &&
@@ -155,12 +155,12 @@ func TestFallbackBehavior(t *testing.T) {
 					return
 				}
 
-				// Check if Content-Type changed between requests
+				// Check if Content-Type changed between requests.
 				firstCT := requests[0].Headers.Get("Content-Type")
 				for i := 1; i < len(requests); i++ {
 					laterCT := requests[i].Headers.Get("Content-Type")
 
-					// If fallback happened, content-type should differ
+					// If fallback happened, content-type should differ.
 					if firstCT != laterCT {
 						must(t).NotEqual(firstCT, laterCT,
 							"Content-Type should change on fallback")
@@ -180,7 +180,7 @@ func TestFallbackBehavior(t *testing.T) {
 			validator: func(t *testing.T, tracker *FallbackTrackingReceiver) {
 				time.Sleep(10 * time.Second)
 
-				// After fallback, subsequent requests should succeed
+				// After fallback, subsequent requests should succeed.
 				requests := tracker.GetRequests()
 				should(t, len(requests) >= 1, "Should receive requests after fallback")
 
@@ -201,7 +201,7 @@ func TestFallbackBehavior(t *testing.T) {
 					return
 				}
 
-				// After fallback, version should stay consistent
+				// After fallback, version should stay consistent.
 				var fallbackVersion string
 				for i := 1; i < len(versions); i++ {
 					if versions[i] != versions[0] {
@@ -211,7 +211,7 @@ func TestFallbackBehavior(t *testing.T) {
 				}
 
 				if fallbackVersion != "" {
-					// Check that subsequent requests use the same version
+					// Check that subsequent requests use the same version.
 					consistentFallback := true
 					for i := 2; i < len(versions); i++ {
 						if versions[i] != fallbackVersion && versions[i] != versions[0] {
@@ -237,10 +237,9 @@ func TestFallbackBehavior(t *testing.T) {
 				receiver := NewMockReceiver()
 				defer receiver.Close()
 
-				// Create fallback tracker
 				tracker := NewFallbackTrackingReceiver(receiver, true)
 
-				// Setup custom handler that returns 415 first, then 204
+				// Setup custom handler that returns 415 first, then 204.
 				originalHandler := receiver.server.Config.Handler
 				receiver.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					version := r.Header.Get("X-Prometheus-Remote-Write-Version")
@@ -251,7 +250,7 @@ func TestFallbackBehavior(t *testing.T) {
 						len(tracker.GetVersions()), version, contentType)
 
 					if tracker.ShouldReturn415() {
-						// Return 415 for first RW 2.0 request
+						// Return 415 for first RW 2.0 request.
 						if strings.HasPrefix(version, "2.0") {
 							t.Logf("Returning 415 to trigger fallback")
 							w.WriteHeader(http.StatusUnsupportedMediaType)
@@ -260,11 +259,11 @@ func TestFallbackBehavior(t *testing.T) {
 						}
 					}
 
-					// For subsequent requests or RW 1.0, return success
+					// For subsequent requests or RW 1.0, return success.
 					originalHandler.ServeHTTP(w, r)
 				})
 
-				// Set successful response for non-415 cases
+				// Set successful response for non-415 cases.
 				receiver.SetResponse(MockReceiverResponse{
 					StatusCode:        http.StatusNoContent,
 					SamplesWritten:    1,
@@ -275,9 +274,7 @@ func TestFallbackBehavior(t *testing.T) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-				// Run target with custom receiver
 				runAutoTargetWithCustomReceiver(t, targetName, target, receiver.URL(), scrapeTarget, 15*time.Second)
-				// Run validator which waits and checks fallback
 				tt.validator(t, tracker)
 			})
 		})
@@ -297,7 +294,6 @@ func TestNoFallbackOn2xx(t *testing.T) {
 
 		tracker := NewFallbackTrackingReceiver(receiver, false)
 
-		// Track versions
 		originalHandler := receiver.server.Config.Handler
 		receiver.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			version := r.Header.Get("X-Prometheus-Remote-Write-Version")
@@ -315,13 +311,12 @@ func TestNoFallbackOn2xx(t *testing.T) {
 		scrapeTarget := NewMockScrapeTarget(scrapeData)
 		defer scrapeTarget.Close()
 
-		// Run target with custom receiver
 		runAutoTargetWithCustomReceiver(t, targetName, target, receiver.URL(), scrapeTarget, 12*time.Second)
 
 		versions := tracker.GetVersions()
 		if len(versions) > 0 {
 			firstVersion := versions[0]
-			// All versions should be the same (no fallback on success)
+			// All versions should be the same (no fallback on success).
 			for _, v := range versions {
 				must(t).Equal(firstVersion, v,
 					"Version should not change on successful responses")

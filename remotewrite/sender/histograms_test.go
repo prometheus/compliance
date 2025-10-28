@@ -75,10 +75,10 @@ test_histogram_bucket{le="+Inf"} 100
 			},
 		},
 		{
-			Name:"histogram_buckets_ordered",
-			Description:"Sender SHOULD send histogram buckets in order",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# TYPE request_duration histogram
+			Name:        "histogram_buckets_ordered",
+			Description: "Sender SHOULD send histogram buckets in order",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# TYPE request_duration histogram
 request_duration_bucket{le="0.1"} 10
 request_duration_bucket{le="0.5"} 50
 request_duration_bucket{le="1.0"} 100
@@ -87,9 +87,9 @@ request_duration_bucket{le="+Inf"} 250
 request_duration_sum 500.0
 request_duration_count 250
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
-				// Classic histograms are sent as separate timeseries, order is not guaranteed
-				// Native histograms have internal bucket structure
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				// Classic histograms are sent as separate timeseries, order is not guaranteed.
+				// Native histograms have internal bucket structure.
 				var foundHistogram bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -102,15 +102,15 @@ request_duration_count 250
 			},
 		},
 		{
-			Name:"histogram_positive_buckets",
-			Description:"Native histogram MAY include positive buckets",
-			RFCLevel:"MAY",
-			ScrapeData:`# TYPE test_native_histogram histogram
+			Name:        "histogram_positive_buckets",
+			Description: "Native histogram MAY include positive buckets",
+			RFCLevel:    "MAY",
+			ScrapeData: `# TYPE test_native_histogram histogram
 test_native_histogram_count 100
 test_native_histogram_sum 250.0
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
-				// Check if sender supports native histograms
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				// Check if sender supports native histograms.
 				var foundNative bool
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Histograms) > 0 {
@@ -124,15 +124,15 @@ test_native_histogram_sum 250.0
 			},
 		},
 		{
-			Name:"histogram_negative_buckets",
-			Description:"Native histogram MAY include negative buckets",
-			RFCLevel:"MAY",
-			ScrapeData:`# TYPE test_histogram histogram
+			Name:        "histogram_negative_buckets",
+			Description: "Native histogram MAY include negative buckets",
+			RFCLevel:    "MAY",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 50
 test_histogram_sum -25.0
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
-				// Negative buckets are optional in native histograms
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				// Negative buckets are optional in native histograms.
 				var foundNative bool
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Histograms) > 0 {
@@ -144,14 +144,14 @@ test_histogram_sum -25.0
 			},
 		},
 		{
-			Name:"histogram_zero_bucket",
-			Description:"Native histogram MAY include zero bucket",
-			RFCLevel:"MAY",
-			ScrapeData:`# TYPE test_histogram histogram
+			Name:        "histogram_zero_bucket",
+			Description: "Native histogram MAY include zero bucket",
+			RFCLevel:    "MAY",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 10
 test_histogram_sum 0.0
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundNative bool
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Histograms) > 0 {
@@ -163,19 +163,18 @@ test_histogram_sum 0.0
 			},
 		},
 		{
-			Name:"histogram_schema",
-			Description:"Native histogram MUST specify schema if using native format",
-			RFCLevel:"MUST",
-			ScrapeData:`# TYPE test_histogram histogram
+			Name:        "histogram_schema",
+			Description: "Native histogram MUST specify schema if using native format",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 500.0
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
-				// If native histograms are present, they must have a schema
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				// If native histograms are present, they must have a schema.
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Histograms) > 0 {
 						hist := ts.Histograms[0]
-						// Schema must be set (even if 0)
 						must(t).NotNil(hist, "Native histogram must have schema")
 						t.Logf("Histogram schema: %d", hist.Schema)
 						break
@@ -184,20 +183,19 @@ test_histogram_sum 500.0
 			},
 		},
 		{
-			Name:"histogram_timestamp",
-			Description:"Histogram MUST include valid timestamp",
-			RFCLevel:"MUST",
-			ScrapeData:`# TYPE test_histogram histogram
+			Name:        "histogram_timestamp",
+			Description: "Histogram MUST include valid timestamp",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 250.0
 test_histogram_bucket{le="+Inf"} 100
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundTimestamp bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 
-					// Check classic histogram timestamp
 					if labels["__name__"] == "test_histogram_count" && len(ts.Samples) > 0 {
 						must(t).Greater(ts.Samples[0].Timestamp, int64(0),
 							"Histogram timestamp must be valid")
@@ -205,7 +203,6 @@ test_histogram_bucket{le="+Inf"} 100
 						break
 					}
 
-					// Check native histogram timestamp
 					if len(ts.Histograms) > 0 {
 						must(t).Greater(ts.Histograms[0].Timestamp, int64(0),
 							"Native histogram timestamp must be valid")
@@ -217,15 +214,15 @@ test_histogram_bucket{le="+Inf"} 100
 			},
 		},
 		{
-			Name:"histogram_no_mixed_with_samples",
-			Description:"Sender MUST NOT mix histogram and sample data in same timeseries",
-			RFCLevel:"MUST",
-			ScrapeData:`# TYPE test_histogram histogram
+			Name:        "histogram_no_mixed_with_samples",
+			Description: "Sender MUST NOT mix histogram and sample data in same timeseries",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 250.0
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
-				// Check that no timeseries has both samples and histograms
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				// Check that no timeseries has both samples and histograms.
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Samples) > 0 && len(ts.Histograms) > 0 {
 						must(t).Fail("Timeseries must not contain both samples and histograms")
@@ -234,15 +231,15 @@ test_histogram_sum 250.0
 			},
 		},
 		{
-			Name:"histogram_empty_buckets",
-			Description:"Sender SHOULD handle histograms with no observations",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# TYPE test_histogram histogram
+			Name:        "histogram_empty_buckets",
+			Description: "Sender SHOULD handle histograms with no observations",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 0
 test_histogram_sum 0
 test_histogram_bucket{le="+Inf"} 0
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundEmpty bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -256,15 +253,15 @@ test_histogram_bucket{le="+Inf"} 0
 			},
 		},
 		{
-			Name:"histogram_large_counts",
-			Description:"Sender MUST handle histograms with large observation counts",
-			RFCLevel:"MUST",
-			ScrapeData:`# TYPE test_histogram histogram
+			Name:        "histogram_large_counts",
+			Description: "Sender MUST handle histograms with large observation counts",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 1000000000
 test_histogram_sum 5000000000.0
 test_histogram_bucket{le="+Inf"} 1000000000
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundLarge bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)

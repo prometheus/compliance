@@ -37,7 +37,7 @@ memory_usage_bytes 1048576
 disk_io_bytes_total 1000000
 `,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// Count unique metric names
+				// Count unique metric names.
 				metricNames := make(map[string]bool)
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -80,10 +80,10 @@ metric_20 20
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
 
-				// Batches shouldn't be too small (inefficient) or too large (risk)
+				// Batches shouldn't be too small (inefficient) or too large (risk).
 				should(t, seriesCount >= 1, "Request should contain at least one series")
 
-				// Most senders batch at least several series together
+				// Most senders batch at least several series together.
 				should(t, seriesCount <= 10000, "Batch size should be reasonable (not too large)")
 
 				t.Logf("Batch contains %d timeseries", seriesCount)
@@ -95,8 +95,8 @@ metric_20 20
 			RFCLevel:    "SHOULD",
 			ScrapeData:  "test_metric 42\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// Verify that data is sent even with small amounts
-				// This indicates time-based flushing
+				// Verify that data is sent even with small amounts.
+				// This indicates time-based flushing.
 				should(t, len(req.Request.Timeseries) > 0, "Sender should flush small batches based on time")
 
 				t.Logf("Time-based flush sent %d timeseries", len(req.Request.Timeseries))
@@ -115,7 +115,7 @@ api_calls{endpoint="/comments",method="GET",region="ap-south",status="200"} 500
 low_cardinality_metric 42
 `,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// Check symbol table efficiency with varying cardinality
+				// Check symbol table efficiency with varying cardinality.
 				symbols := req.Request.Symbols
 				uniqueSymbols := make(map[string]bool)
 				for _, sym := range symbols {
@@ -145,13 +145,13 @@ http_duration{service="api",method="POST"} 0.3
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 
-				// Count occurrences of common strings
+				// Count occurrences of common strings.
 				symbolCounts := make(map[string]int)
 				for _, sym := range symbols {
 					symbolCounts[sym]++
 				}
 
-				// Common strings should appear only once (deduplicated)
+				// Common strings should appear only once (deduplicated).
 				for sym, count := range symbolCounts {
 					if sym != "" {
 						should(t, count == 1, fmt.Sprintf("Symbol %q should appear only once in table, got %d", sym, count))
@@ -179,7 +179,7 @@ memory_usage_bytes 1048576
 				var withoutMetadata int
 
 				for _, ts := range req.Request.Timeseries {
-					// Count timeseries with metadata
+					// Count timeseries with metadata.
 					hasMetadata := ts.Metadata.Type != 0 ||
 						ts.Metadata.HelpRef != 0 ||
 						ts.Metadata.UnitRef != 0
@@ -220,8 +220,6 @@ metric_5 5
 			ScrapeData: scrapeData,
 			WaitTime:   8 * time.Second,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// This test just checks that requests are received
-				// The actual concurrency is implementation-dependent
 				may(t, req != nil, "At least one request should be sent")
 				t.Logf("Request received (parallel sending is optional)")
 			},

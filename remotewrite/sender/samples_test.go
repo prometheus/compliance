@@ -120,8 +120,6 @@ func TestSampleEncoding(t *testing.T) {
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 
 				timestamp := ts.Samples[0].Timestamp
-				// Timestamp should be reasonable (not in microseconds, nanoseconds, or seconds)
-				// Current time in milliseconds is around 1.7e12
 				must(t).Greater(timestamp, int64(1e12),
 					"Timestamp should be in milliseconds, not seconds")
 				must(t).Less(timestamp, int64(1e16),
@@ -140,7 +138,6 @@ func TestSampleEncoding(t *testing.T) {
 				timestamp := ts.Samples[0].Timestamp
 				now := time.Now().UnixMilli()
 
-				// Timestamp should be within reasonable range of now (±5 minutes)
 				diff := now - timestamp
 				if diff < 0 {
 					diff = -diff
@@ -155,7 +152,6 @@ func TestSampleEncoding(t *testing.T) {
 			RFCLevel:    "MAY",
 			ScrapeData:  "test_counter_total 100\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// This is informational - just validate the structure is correct
 				ts, _ := findTimeseriesByMetricName(req, "test_counter_total")
 				if ts != nil {
 					may(t, len(ts.Samples) > 0, "Timeseries may contain samples")
@@ -232,9 +228,6 @@ func TestSampleOrdering(t *testing.T) {
 	t.Attr("rfcLevel", "MUST")
 	t.Attr("description", "Sender MUST send samples with older timestamps before newer ones within a series")
 
-	// This test would require multiple scrapes over time to validate ordering
-	// For now, we validate that within a single request, if multiple samples exist,
-	// they are properly ordered
 	scrapeData := `# Multiple metrics
 metric_a 1
 metric_b 2
@@ -245,10 +238,9 @@ metric_c 3
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: scrapeData,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// Verify that all samples in the request have valid timestamps
+				// Verify that all samples in the request have valid timestamps.
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Samples) > 1 {
-						// If multiple samples in one timeseries, they must be ordered
 						for i := 1; i < len(ts.Samples); i++ {
 							must(t).LessOrEqual(ts.Samples[i-1].Timestamp, ts.Samples[i].Timestamp,
 								"Samples within a timeseries must be ordered by timestamp")

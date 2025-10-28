@@ -72,10 +72,8 @@ func (mr *MockReceiver) handleRequest(w http.ResponseWriter, r *http.Request) {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 
-	// Capture headers.
 	headers := r.Header.Clone()
 
-	// Read body.
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
@@ -83,14 +81,11 @@ func (mr *MockReceiver) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	// Decode request.
 	var req writev2.Request
 	var decoded []byte
 
-	// Check Content-Encoding header.
 	contentEncoding := r.Header.Get("Content-Encoding")
 	if contentEncoding == "snappy" {
-		// Decode snappy compression.
 		decoded, err = snappy.Decode(nil, body)
 		if err != nil {
 			http.Error(w, "Failed to decode snappy", http.StatusBadRequest)
@@ -100,33 +95,29 @@ func (mr *MockReceiver) handleRequest(w http.ResponseWriter, r *http.Request) {
 		decoded = body
 	}
 
-	// Unmarshal protobuf.
 	if err := req.Unmarshal(decoded); err != nil {
 		http.Error(w, "Failed to unmarshal protobuf", http.StatusBadRequest)
 		return
 	}
 
-	// Store captured request.
 	mr.requests = append(mr.requests, CapturedRequest{
 		Headers: headers,
 		Body:    body,
 		Request: &req,
 	})
 
-	// Send configured response.
 	for k, v := range mr.response.Headers {
 		w.Header().Set(k, v)
 	}
 
 	// Set X-Prometheus-Remote-Write-*-Written headers if response is successful.
 	if mr.response.StatusCode >= 200 && mr.response.StatusCode < 300 {
-		// If response counts are explicitly configured, use those
-		// Otherwise, automatically count what we actually received
+		// If response counts are explicitly configured, use those. Otherwise, automatically count what we actually received.
 		samplesWritten := mr.response.SamplesWritten
 		exemplarsWritten := mr.response.ExemplarsWritten
 		histogramsWritten := mr.response.HistogramsWritten
 
-		// Auto-count if not explicitly set
+		// Auto-count if not explicitly set.
 		if samplesWritten == 0 && exemplarsWritten == 0 && histogramsWritten == 0 {
 			for _, ts := range req.Timeseries {
 				samplesWritten += len(ts.Samples)
@@ -242,7 +233,7 @@ func (mst *MockScrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Normal text format for non-exemplar metrics
+	// Normal text format for non-exemplar metrics.
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(metrics))
@@ -270,7 +261,7 @@ func extractLabels(ts *writev2.TimeSeries, symbols []string) map[string]string {
 	labels := make(map[string]string)
 	refs := ts.LabelsRefs
 
-	// Labels are stored as pairs: [key_ref, value_ref, key_ref, value_ref, ...]
+	// Labels are stored as pairs: [key_ref, value_ref, key_ref, value_ref, ...].
 	for i := 0; i < len(refs); i += 2 {
 		if i+1 >= len(refs) {
 			break
@@ -398,8 +389,6 @@ func containsExemplars(metrics string) bool {
 	return strings.Contains(metrics, "# {")
 }
 
-// ===== REFACTORED HELPER FUNCTIONS TO REDUCE DUPLICATION =====
-
 // TestCase represents a single test case for compliance testing.
 type TestCase struct {
 	Name        string
@@ -410,7 +399,6 @@ type TestCase struct {
 }
 
 // runTestCases is a helper that eliminates the common test table runner pattern.
-// This pattern was duplicated across 15+ test files.
 func runTestCases(t *testing.T, tests []TestCase) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -429,8 +417,6 @@ func runTestCases(t *testing.T, tests []TestCase) {
 }
 
 // findTimeseriesByMetricName finds a timeseries by metric name from a captured request.
-// Returns the timeseries and labels if found, or nil if not found.
-// This eliminates the "var found bool; for loop" pattern repeated 30+ times.
 func findTimeseriesByMetricName(req *CapturedRequest, metricName string) (*writev2.TimeSeries, map[string]string) {
 	for i := range req.Request.Timeseries {
 		ts := &req.Request.Timeseries[i]
@@ -443,7 +429,6 @@ func findTimeseriesByMetricName(req *CapturedRequest, metricName string) (*write
 }
 
 // requireTimeseriesByMetricName finds a timeseries by metric name and fails the test if not found.
-// This is the most common pattern - find metric and assert it exists.
 func requireTimeseriesByMetricName(t *testing.T, req *CapturedRequest, metricName string) (*writev2.TimeSeries, map[string]string) {
 	t.Helper()
 	ts, labels := findTimeseriesByMetricName(req, metricName)
@@ -455,20 +440,18 @@ func requireTimeseriesByMetricName(t *testing.T, req *CapturedRequest, metricNam
 // Returns (classicFound, nativeTS) where:
 //   - classicFound: true if classic histogram metrics (_count, _sum, _bucket) are found
 //   - nativeTS: pointer to timeseries containing native histogram, or nil if not found
-//
-// This eliminates the duplicate histogram format checking pattern repeated 10+ times.
 func findHistogramData(req *CapturedRequest, baseName string) (classicFound bool, nativeTS *writev2.TimeSeries) {
 	for i := range req.Request.Timeseries {
 		ts := &req.Request.Timeseries[i]
 		labels := extractLabels(ts, req.Request.Symbols)
 		metricName := labels["__name__"]
 
-		// Check for classic histogram components
+		// Check for classic histogram components.
 		if metricName == baseName+"_count" || metricName == baseName+"_sum" || metricName == baseName+"_bucket" {
 			classicFound = true
 		}
 
-		// Check for native histogram format
+		// Check for native histogram format.
 		if metricName == baseName && len(ts.Histograms) > 0 {
 			nativeTS = ts
 		}
@@ -479,13 +462,13 @@ func findHistogramData(req *CapturedRequest, baseName string) (classicFound bool
 // extractHistogramCount extracts count from either classic or native histogram format.
 // Returns (count, found) where found indicates if count was successfully extracted.
 func extractHistogramCount(req *CapturedRequest, baseName string) (float64, bool) {
-	// Try classic format first
+	// Try classic format first.
 	ts, _ := findTimeseriesByMetricName(req, baseName+"_count")
 	if ts != nil && len(ts.Samples) > 0 {
 		return ts.Samples[0].Value, true
 	}
 
-	// Try native format
+	// Try native format.
 	ts, _ = findTimeseriesByMetricName(req, baseName)
 	if ts != nil && len(ts.Histograms) > 0 {
 		hist := ts.Histograms[0]
@@ -502,15 +485,14 @@ func extractHistogramCount(req *CapturedRequest, baseName string) (float64, bool
 }
 
 // extractHistogramSum extracts sum from either classic or native histogram format.
-// Returns (sum, found) where found indicates if sum was successfully extracted.
 func extractHistogramSum(req *CapturedRequest, baseName string) (float64, bool) {
-	// Try classic format first
+	// Try classic format first.
 	ts, _ := findTimeseriesByMetricName(req, baseName+"_sum")
 	if ts != nil && len(ts.Samples) > 0 {
 		return ts.Samples[0].Value, true
 	}
 
-	// Try native format
+	// Try native format.
 	ts, _ = findTimeseriesByMetricName(req, baseName)
 	if ts != nil && len(ts.Histograms) > 0 {
 		return ts.Histograms[0].Sum, true

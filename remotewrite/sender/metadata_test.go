@@ -24,14 +24,14 @@ import (
 func TestMetadataEncoding(t *testing.T) {
 	tests := []TestCase{
 		{
-			Name:"metadata_type_counter",
-			Description:"Sender SHOULD include TYPE metadata for counter metrics",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# HELP http_requests_total Total HTTP requests
+			Name:        "metadata_type_counter",
+			Description: "Sender SHOULD include TYPE metadata for counter metrics",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP http_requests_total Total HTTP requests
 # TYPE http_requests_total counter
 http_requests_total 100
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundMetadata bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -47,14 +47,14 @@ http_requests_total 100
 			},
 		},
 		{
-			Name:"metadata_type_gauge",
-			Description:"Sender SHOULD include TYPE metadata for gauge metrics",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# HELP memory_usage_bytes Current memory usage
+			Name:        "metadata_type_gauge",
+			Description: "Sender SHOULD include TYPE metadata for gauge metrics",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP memory_usage_bytes Current memory usage
 # TYPE memory_usage_bytes gauge
 memory_usage_bytes 1048576
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundMetadata bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -70,16 +70,16 @@ memory_usage_bytes 1048576
 			},
 		},
 		{
-			Name:"metadata_type_histogram",
-			Description:"Sender SHOULD include TYPE metadata for histogram metrics",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# HELP request_duration_seconds Request duration
+			Name:        "metadata_type_histogram",
+			Description: "Sender SHOULD include TYPE metadata for histogram metrics",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP request_duration_seconds Request duration
 # TYPE request_duration_seconds histogram
 request_duration_seconds_bucket{le="+Inf"} 100
 request_duration_seconds_sum 50.0
 request_duration_seconds_count 100
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundMetadata bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -98,17 +98,17 @@ request_duration_seconds_count 100
 			},
 		},
 		{
-			Name:"metadata_type_summary",
-			Description:"Sender SHOULD include TYPE metadata for summary metrics",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# HELP rpc_duration_seconds RPC duration
+			Name:        "metadata_type_summary",
+			Description: "Sender SHOULD include TYPE metadata for summary metrics",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP rpc_duration_seconds RPC duration
 # TYPE rpc_duration_seconds summary
 rpc_duration_seconds{quantile="0.5"} 0.05
 rpc_duration_seconds{quantile="0.9"} 0.1
 rpc_duration_seconds_sum 100.0
 rpc_duration_seconds_count 1000
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundMetadata bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -124,14 +124,14 @@ rpc_duration_seconds_count 1000
 			},
 		},
 		{
-			Name:"metadata_help_text",
-			Description:"Sender SHOULD include HELP text in metadata",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# HELP http_requests_total The total number of HTTP requests
+			Name:        "metadata_help_text",
+			Description: "Sender SHOULD include HELP text in metadata",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP http_requests_total The total number of HTTP requests
 # TYPE http_requests_total counter
 http_requests_total 100
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundHelp bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -149,15 +149,15 @@ http_requests_total 100
 			},
 		},
 		{
-			Name:"metadata_unit",
-			Description:"Sender MAY include UNIT in metadata",
-			RFCLevel:"MAY",
-			ScrapeData:`# HELP memory_usage_bytes Memory usage
+			Name:        "metadata_unit",
+			Description: "Sender MAY include UNIT in metadata",
+			RFCLevel:    "MAY",
+			ScrapeData: `# HELP memory_usage_bytes Memory usage
 # TYPE memory_usage_bytes gauge
 # UNIT memory_usage_bytes bytes
 memory_usage_bytes 1048576
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundUnit bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -175,15 +175,15 @@ memory_usage_bytes 1048576
 			},
 		},
 		{
-			Name:"metadata_help_with_newlines",
-			Description:"Sender SHOULD preserve newlines in HELP text",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# HELP multiline_metric This is a help text
+			Name:        "metadata_help_with_newlines",
+			Description: "Sender SHOULD preserve newlines in HELP text",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP multiline_metric This is a help text
 # HELP multiline_metric that spans multiple lines
 # TYPE multiline_metric gauge
 multiline_metric 42
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				// Note: Prometheus exposition format doesn't actually support
 				// multi-line HELP. This test validates handling of the format.
 				var foundMetadata bool
@@ -202,14 +202,14 @@ multiline_metric 42
 			},
 		},
 		{
-			Name:"metadata_help_with_special_chars",
-			Description:"Sender SHOULD preserve special characters in HELP text",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# HELP special_metric This help contains "quotes" and \backslashes\
+			Name:        "metadata_help_with_special_chars",
+			Description: "Sender SHOULD preserve special characters in HELP text",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP special_metric This help contains "quotes" and \backslashes\
 # TYPE special_metric counter
 special_metric 100
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var foundSpecial bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -226,14 +226,14 @@ special_metric 100
 			},
 		},
 		{
-			Name:"metadata_help_refs_valid",
-			Description:"Metadata HelpRef MUST point to valid symbol table index if non-zero",
-			RFCLevel:"MUST",
-			ScrapeData:`# HELP test_metric Test metric description
+			Name:        "metadata_help_refs_valid",
+			Description: "Metadata HelpRef MUST point to valid symbol table index if non-zero",
+			RFCLevel:    "MUST",
+			ScrapeData: `# HELP test_metric Test metric description
 # TYPE test_metric counter
 test_metric 42
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 				for _, ts := range req.Request.Timeseries {
 					if ts.Metadata.HelpRef != 0 {
@@ -248,15 +248,15 @@ test_metric 42
 			},
 		},
 		{
-			Name:"metadata_consistent_across_series",
-			Description:"Sender SHOULD send consistent metadata for the same metric family",
-			RFCLevel:"SHOULD",
-			ScrapeData:`# HELP http_requests_total Total HTTP requests
+			Name:        "metadata_consistent_across_series",
+			Description: "Sender SHOULD send consistent metadata for the same metric family",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP http_requests_total Total HTTP requests
 # TYPE http_requests_total counter
 http_requests_total{method="GET"} 100
 http_requests_total{method="POST"} 50
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				metadataMap := make(map[string]writev2.Metadata)
 
 				for _, ts := range req.Request.Timeseries {
@@ -265,7 +265,7 @@ http_requests_total{method="POST"} 50
 
 					if metricName == "http_requests_total" {
 						if existing, found := metadataMap[metricName]; found {
-							// If metadata exists, it should be consistent
+							// If metadata exists, it should be consistent.
 							should(t, existing.Type == ts.Metadata.Type, "Metadata type should be consistent for same metric family")
 							should(t, existing.HelpRef == ts.Metadata.HelpRef, "Metadata help should be consistent for same metric family")
 						} else {
@@ -276,18 +276,18 @@ http_requests_total{method="POST"} 50
 			},
 		},
 		{
-			Name:"metadata_empty_help_allowed",
-			Description:"Sender MAY send metrics without HELP text",
-			RFCLevel:"MAY",
-			ScrapeData:`# TYPE no_help_metric counter
+			Name:        "metadata_empty_help_allowed",
+			Description: "Sender MAY send metrics without HELP text",
+			RFCLevel:    "MAY",
+			ScrapeData: `# TYPE no_help_metric counter
 no_help_metric 42
 `,
-			Validator:func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var found bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "no_help_metric" {
-						// HelpRef may be 0 (empty string) which is valid
+						// HelpRef may be 0 (empty string) which is valid.
 						may(t, int(ts.Metadata.HelpRef) >= 0, "Empty HELP text is allowed")
 						found = true
 						break

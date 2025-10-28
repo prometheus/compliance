@@ -49,7 +49,7 @@ func TestResponseProcessing(t *testing.T) {
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				should(t, len(requests) >= 1, "Should receive at least one request")
 
-				// Sender should accept 204 with body (even though unusual)
+				// Sender should accept 204 with body.
 				should(t, true, "Sender should ignore response body on successful requests")
 				t.Logf("Received %d successful requests", len(requests))
 			},
@@ -74,7 +74,7 @@ test_gauge{label="c"} 50
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				may(t, len(requests) >= 1, "Should receive at least one request")
 
-				// Sender may use these headers for optimization/tracking
+				// Sender may use these headers for optimization/tracking.
 				may(t, true, "Sender may process X-Prometheus-Remote-Write-*-Written headers")
 				t.Logf("Sent response with written count headers")
 			},
@@ -89,7 +89,7 @@ sample_2 2
 sample_3 3
 `,
 			setup: func(mr *MockReceiver) {
-				// Indicate only 2 out of 3 samples were written
+				// Indicate only 2 out of 3 samples were written.
 				mr.SetResponse(MockReceiverResponse{
 					StatusCode:        http.StatusBadRequest,
 					Body:              "Rejected 1 sample",
@@ -101,7 +101,7 @@ sample_3 3
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				should(t, len(requests) >= 1, "Should receive at least one request")
 
-				// Sender should handle partial writes
+				// Sender should handle partial writes.
 				should(t, true, "Sender should handle partial write responses")
 				t.Logf("Handled partial write response")
 			},
@@ -112,17 +112,16 @@ sample_3 3
 			rfcLevel:    "SHOULD",
 			scrapeData:  "test_metric 42\n",
 			setup: func(mr *MockReceiver) {
-				// Return error without written count headers
+				// Return error without written count headers.
 				mr.SetResponse(MockReceiverResponse{
 					StatusCode: http.StatusBadRequest,
 					Body:       "Bad request",
-					// No written counts set (defaults to 0)
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				should(t, len(requests) >= 1, "Should receive request even with error")
 
-				// Sender should assume nothing was written
+				// Sender should assume nothing was written.
 				should(t, true, "Sender should assume 0 written when headers missing")
 				t.Logf("Handled missing written count headers")
 			},
@@ -142,7 +141,7 @@ sample_3 3
 				must(t).GreaterOrEqual(len(requests), 1,
 					"Should receive request")
 
-				// Sender should log the error message without modification
+				// Sender should log the error message without modification.
 				must(t).True(true,
 					"Sender must log error messages verbatim")
 				t.Logf("Error response sent to sender")
@@ -154,7 +153,6 @@ sample_3 3
 			rfcLevel:    "SHOULD",
 			scrapeData:  "test_metric 42\n",
 			setup: func(mr *MockReceiver) {
-				// Create large error message
 				largeError := "Error details: "
 				for i := 0; i < 1000; i++ {
 					largeError += "detailed error information; "
@@ -236,19 +234,16 @@ sample_3 3
 
 				t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
 
-				// Actually RUN the sender (this was missing!)
 				err := target(targets.TargetOptions{
 					ScrapeTarget:    scrapeTarget.URL(),
 					ReceiveEndpoint: receiver.URL(),
 					Timeout:         8 * time.Second,
 				})
 
-				// Error may occur for error response tests
 				if err != nil {
 					t.Logf("Target exited with error (may be expected): %v", err)
 				}
 
-				// Get captured requests
 				requests := receiver.GetRequests()
 				tt.validator(t, requests)
 			})
@@ -267,7 +262,6 @@ func TestContentTypeNegotiation(t *testing.T) {
 		receiver := NewMockReceiver()
 		defer receiver.Close()
 
-		// Set successful response
 		receiver.SetResponse(MockReceiverResponse{
 			StatusCode:        http.StatusNoContent,
 			SamplesWritten:    1,

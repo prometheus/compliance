@@ -57,9 +57,7 @@ func TestErrorHandling(t *testing.T) {
 			rfcLevel:    "SHOULD",
 			scrapeData:  "test_metric 42\n",
 			setup: func() *httptest.Server {
-				// Create server that never responds
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Sleep longer than typical timeout
 					time.Sleep(30 * time.Second)
 				}))
 			},

@@ -14,7 +14,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -32,11 +31,6 @@ var (
 	// registeredTargets holds targets that can automatically download binaries.
 	registeredTargets = map[string]targets.Target{
 		"prometheus": targets.RunPrometheus,
-		//"grafana_agent": targets.RunGrafanaAgent,
-		//"otelcollector": targets.RunOtelCollector,
-		//"vmagent":       targets.RunVMAgent,
-		//"telegraf":      targets.RunTelegraf,
-		//"vector":        targets.RunVector,
 	}
 )
 
@@ -56,19 +50,10 @@ func TestMain(m *testing.M) {
 
 // SenderTestScenario defines a test scenario to run against senders.
 type SenderTestScenario struct {
-	// ScrapeData is the metrics data to serve from the mock scrape target.
-	ScrapeData string
-
-	// ReceiverResponse configures how the mock receiver should respond.
-	ReceiverResponse MockReceiverResponse
-
-	// Validator is called with captured requests to perform test assertions.
-	Validator func(t *testing.T, req *CapturedRequest)
-
-	// WaitTime is how long to wait for requests after sender starts.
-	WaitTime time.Duration
-
-	// ExpectedRequestCount is the number of requests expected (0 = at least 1).
+	ScrapeData           string
+	ReceiverResponse     MockReceiverResponse
+	Validator            func(t *testing.T, req *CapturedRequest)
+	WaitTime             time.Duration
 	ExpectedRequestCount int
 }
 
@@ -82,30 +67,27 @@ func runSenderTest(t *testing.T, targetName string, target targets.Target, scena
 	scrapeTarget := NewMockScrapeTarget(scenario.ScrapeData)
 	defer scrapeTarget.Close()
 
-	// Configure receiver response
 	if scenario.ReceiverResponse.StatusCode == 0 {
 		scenario.ReceiverResponse.StatusCode = http.StatusNoContent
 	}
 	receiver.SetResponse(scenario.ReceiverResponse)
-	
+
 	err := target(targets.TargetOptions{
 		ScrapeTarget:    scrapeTarget.URL(),
 		ReceiveEndpoint: receiver.URL(),
-		Timeout:         5 * time.Second, // Adequate timeout
+		Timeout:         5 * time.Second, // Adequate timeout.
 	})
 
-	// Check for expected error (some might be expected)
+	// Check for expected error (some might be expected).
 	if err != nil {
 		t.Fatalf("Target failed: %v", err)
 	}
 
-	// Now check requests
 	requests := receiver.GetRequests()
 	if len(requests) < scenario.ExpectedRequestCount {
 		t.Fatalf("Expected at least %d request(s), got %d", scenario.ExpectedRequestCount, len(requests))
 	}
 
-	// Validate
 	if scenario.Validator != nil && len(requests) > 0 {
 		lastReq := &requests[len(requests)-1]
 		scenario.Validator(t, lastReq)
@@ -123,7 +105,6 @@ func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target tar
 
 	t.Logf("Running %s with custom receiver at %s", targetName, receiverURL)
 
-	// BLOCKING CALL - wait for completion
 	err := target(targets.TargetOptions{
 		ScrapeTarget:    scrapeTarget.URL(),
 		ReceiveEndpoint: receiverURL,
@@ -137,106 +118,6 @@ func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target tar
 	}
 
 	return err
-}
-
-// SharedSenderContext manages a long-running sender instance for multiple tests.
-type SharedSenderContext struct {
-	Receiver     *MockReceiver
-	ScrapeTarget *MockScrapeTarget
-	Process      *os.Process
-	Name         string
-	cleanup      func()
-}
-
-// NewSharedSenderContext starts a sender and keeps it running for multiple test scenarios.
-func NewSharedSenderContext(t *testing.T, targetName string, target targets.Target) *SharedSenderContext {
-	t.Helper()
-
-	receiver := NewMockReceiver()
-	// Start with valid metrics so Prometheus has something to scrape during startup
-	scrapeTarget := NewMockScrapeTarget("# TYPE test_metric counter\ntest_metric 1\n")
-
-	// Configure receiver to auto-respond successfully
-	receiver.SetResponse(MockReceiverResponse{
-		StatusCode: http.StatusNoContent,
-	})
-
-	// Start the sender in a goroutine
-	doneCh := make(chan error, 1)
-	go func() {
-		err := target(targets.TargetOptions{
-			ScrapeTarget:    scrapeTarget.URL(),
-			ReceiveEndpoint: receiver.URL(),
-			Timeout:         testTimeout, // Long timeout for shared instance
-		})
-		doneCh <- err
-	}()
-
-	// Wait for Prometheus to start and complete its first scrape
-	// This ensures it's fully operational before we run any tests
-	t.Logf("Waiting for %s to start and complete first scrape...", targetName)
-	_ = receiver.WaitForRequests(1, 10*time.Second)
-	t.Logf("%s is ready", targetName)
-
-	ctx := &SharedSenderContext{
-		Receiver:     receiver,
-		ScrapeTarget: scrapeTarget,
-		Name:         targetName,
-		cleanup: func() {
-			receiver.Close()
-			scrapeTarget.Close()
-		},
-	}
-
-	t.Cleanup(ctx.cleanup)
-	return ctx
-}
-
-// RunScenario updates the scrape target with new data and waits for the sender to scrape and send it.
-func (ctx *SharedSenderContext) RunScenario(t *testing.T, scenario SenderTestScenario) {
-	t.Helper()
-
-	// Increment scenario counter to ensure unique metrics
-
-	// Count current requests BEFORE updating metrics
-	initialCount := len(ctx.Receiver.GetRequests())
-
-	// Update scrape target with new metrics
-	// Add a unique counter metric to ensure Prometheus sends new data every time
-	metricsWithCounter := fmt.Sprintf("%s\n# Unique counter to force new data\ntest_scenario_counter\n",
-		scenario.ScrapeData)
-	ctx.ScrapeTarget.UpdateMetrics(metricsWithCounter)
-
-	// Wait intelligently for NEW requests after the update
-	// Prometheus scrapes every 1s, so new data should arrive within 1-2s
-	waitTime := scenario.WaitTime
-	if waitTime == 0 {
-		waitTime = 5 * time.Second // Max wait for new scrape cycles
-	}
-
-	expectedNewCount := scenario.ExpectedRequestCount
-	if expectedNewCount == 0 {
-		expectedNewCount = 1
-	}
-
-	// Wait for total count to increase (initial + expected new requests)
-	targetCount := initialCount + expectedNewCount
-	allRequests := ctx.Receiver.WaitForRequests(targetCount, waitTime)
-
-	// Extract only the NEW requests (after initialCount)
-	if len(allRequests) < targetCount {
-		t.Fatalf("Expected at least %d new request(s), got %d (initial: %d, total: %d)",
-			expectedNewCount, len(allRequests)-initialCount, initialCount, len(allRequests))
-	}
-
-	// Get the NEW requests for validation
-	newRequests := allRequests[initialCount:]
-
-	// Run validator on the LAST new request
-	if scenario.Validator != nil && len(newRequests) > 0 {
-		lastReq := &newRequests[len(newRequests)-1]
-		scenario.Validator(t, lastReq)
-	}
 }
 
 // forEachSender runs the provided test function for each configured sender.

@@ -33,9 +33,9 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
-				// Check if this is RW 1.0 or RW 2.0
+				// Check if this is RW 1.0 or RW 2.0.
 				if strings.HasPrefix(version, "2.0") {
-					// This is RW 2.0, skip RW 1.0 validation
+					// This is RW 2.0, skip RW 1.0 validation.
 					t.Logf("Sender using RW 2.0 (version: %s), skipping RW 1.0 test", version)
 					return
 				}
@@ -57,16 +57,16 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 				contentType := req.Headers.Get("Content-Type")
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
-				// Only validate if this is RW 1.0
+				// Only validate if this is RW 1.0.
 				if strings.HasPrefix(version, "2.0") {
 					t.Logf("RW 2.0 detected, skipping RW 1.0 content-type test")
 					return
 				}
 
-				// RW 1.0 typically uses simple "application/x-protobuf"
+				// RW 1.0 typically uses simple "application/x-protobuf".
 				should(t, strings.Contains(contentType, "application/x-protobuf"), "RW 1.0 should use protobuf content-type")
 
-				// RW 1.0 should NOT have proto parameter (that's RW 2.0)
+				// RW 1.0 should NOT have proto parameter (that's RW 2.0).
 				if strings.Contains(contentType, "proto=io.prometheus.write.v2") {
 					t.Logf("Warning: RW 1.0 should not use v2 proto parameter")
 				}
@@ -85,9 +85,6 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 					return
 				}
 
-				// For RW 1.0 mode, basic validation
-				// RW 1.0 uses different protobuf structure, but we can still
-				// check that data was sent
 				must(t).NotNil(req.Request, "Request should be parseable")
 				t.Logf("RW 1.0 samples encoded")
 			},
@@ -105,7 +102,7 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 					return
 				}
 
-				// Validate that request contains data
+				// Validate that request contains data.
 				must(t).NotNil(req.Request, "Request should contain label data")
 				t.Logf("RW 1.0 labels encoded")
 			},
@@ -127,8 +124,8 @@ test_histogram_bucket{le="+Inf"} 100
 					return
 				}
 
-				// RW 1.0 should send histogram as separate timeseries (classic format)
-				// Should NOT use native histogram encoding
+				// RW 1.0 should send histogram as separate timeseries (classic format).
+				// Should NOT use native histogram encoding.
 				for _, ts := range req.Request.Timeseries {
 					must(t).Empty(ts.Histograms,
 						"RW 1.0 should not use native histogram encoding")
@@ -152,8 +149,8 @@ test_counter_total 100
 					return
 				}
 
-				// RW 1.0 format doesn't have created_timestamp field
-				// If sender is truly in RW 1.0 mode, this field should be 0/unset
+				// RW 1.0 format doesn't have created_timestamp field.
+				// If sender is truly in RW 1.0 mode, this field should be 0/unset.
 				for _, ts := range req.Request.Timeseries {
 					// In RW 1.0, created_timestamp should not be used
 					should(t, int64(0) == ts.CreatedTimestamp, "RW 1.0 should not use created_timestamp field")
@@ -178,8 +175,8 @@ test_metric 42
 					return
 				}
 
-				// RW 1.0 has limited metadata support
-				// Metadata is typically sent via separate API endpoint
+				// RW 1.0 has limited metadata support.
+				// Metadata is typically sent via separate API endpoint.
 				may(t, req.Request != nil, "RW 1.0 may handle metadata differently")
 				t.Logf("RW 1.0: Metadata handling validated")
 			},
@@ -199,9 +196,9 @@ http_requests{method="POST",status="200"} 50
 					return
 				}
 
-				// RW 1.0 doesn't use symbol table - labels are sent inline
-				// If this is truly RW 1.0, symbol table should be minimal or empty
-				// (RW 2.0 proto may still parse it but values should be inline)
+				// RW 1.0 doesn't use symbol table - labels are sent inline.
+				// If this is truly RW 1.0, symbol table should be minimal or empty.
+				// (RW 2.0 proto may still parse it but values should be inline).
 				may(t, req.Request != nil, "RW 1.0 format validated")
 				t.Logf("RW 1.0: Symbol table not used (labels inline)")
 			},
@@ -224,7 +221,7 @@ func TestRemoteWrite1Configuration(t *testing.T) {
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
-				// Check what version is being used
+				// Check what version is being used.
 				if version == "" {
 					should(t, len(version) > 0, "Version header should be present")
 					t.Logf("No version header, may default to RW 1.0")

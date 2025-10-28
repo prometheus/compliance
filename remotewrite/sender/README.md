@@ -1,297 +1,110 @@
-# Prometheus Remote-Write 2.0 Sender Compliance Test Suite
+# Prometheus Remote-Write v2 Receiver Compliance Test Suite
 
-This repository contains a comprehensive compliance test suite for Prometheus Remote-Write Protocol **senders**. It validates that sender implementations properly comply with the [Remote-Write 2.0 specification](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/).
+This repository contains a compliance test suite for Prometheus Remote-Write Protocol receivers. It validates that Remote-Write endpoints properly implement the Remote-Write v2 specification according to the [official protocol requirements](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/).
 
 ## Overview
 
-The test suite validates sender compliance across **4 comprehensive phases**:
+The test suite sends various Remote-Write v2 requests to configured endpoints and validates responses against the protocol specification. It tests proper handling of:
 
-1. **Foundation & Protocol** - HTTP protocol, headers, compression, protobuf encoding, symbol tables
-2. **Data Correctness & Encoding** - Samples, histograms, exemplars, metadata, labels, timestamps
-3. **Behavior & Reliability** - Retry logic, backoff, batching, error handling, response processing
-4. **Backward Compatibility & Edge Cases** - RW 1.0 compatibility, version fallback, edge case handling
+- Float samples
+- Native Histograms
+- Exemplars
+- Protocol headers and response codes
+- Error conditions and edge cases
+- Content-Type validation
+- Response header (`X-Prometheus-Remote-Write-*-Written`)
 
-**Test Coverage:**
-- ✅ **161+ test cases** across 17 test files
-- ✅ **98% spec coverage** of official Remote Write 2.0 requirements
-- ✅ **All RFC compliance levels**: MUST (95%), SHOULD (100%), MAY (100%)
+## Limitations
 
-## Quick Start
+Because different Remote-Write receivers have varied behaviors and APIs, this test suite does not verify data ingestion by reading data back from the receiver.
 
-The test suite **automatically downloads** and configures sender binaries for you:
+Some requests that are valid for one backend might be rejected by another. The suite tolerates both 200 and 400 series HTTP responses since actual data validation is up to the receiver.
 
-```bash
-# Run tests against ALL senders (downloads binaries automatically)
-make test
+Therefore, passing all tests does not guarantee that a receiver supports every Remote-Write feature (such as Native Histograms); some receivers may legitimately return a 400 error for unsupported features.
 
-# Test specific senders only
-make test-prometheus      # Test Prometheus only
-make test-grafana         # Test Grafana Agent only
-make test-otel            # Test OpenTelemetry Collector only
-make test-vmagent         # Test VictoriaMetrics Agent only
+You should review the detailed test output to judge compliance for your receiver. A successful `go test` run alone is not sufficient.
+
+## Prerequisites
+
+A Prometheus server with Remote-Write Receiver enabled, as baseline:
+  ```bash
+  prometheus --web.enable-remote-write-receiver --enable-feature=native-histograms
+  ```
+
+Or
+
+Any other Remote-Write Receiver.
+
+## Configuration
+
+The main test configuration file `config.yml` in the `<repo>/remotewrite/receiver/` directory controls
+the receiver test suite, notably which receiver endpoints to test and any extra client configuration
+(auth, extra headers or relabeling). It follows the Prometheus [`remote_write`](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write) structure.
+Configuration options that are not relevant for Remote-Write are ignored.
+
+```yaml
+remote_write:
+  - name: local-prometheus
+    url: http://127.0.0.1:9090/api/v1/write
+  - name: remote-endpoint
+    url: https://your-remote-write-endpoint.com/api/v1/write
+    basic_auth:
+      username: user
+      password: pass
 ```
 
-**Supported Senders:**
-- `prometheus` - Prometheus v3.7.1
-- `grafana_agent` - Grafana Agent v0.19.0 (coming soon)
-- `otelcollector` - OpenTelemetry Collector (coming soon)
-- `vmagent` - VictoriaMetrics Agent (coming soon)
-- `telegraf` - Telegraf (coming soon)
-- `vector` - Vector (coming soon)
+If no `config.yml` exists, the test suite will fall back to `config_example.yml`.
 
-Binaries are automatically downloaded to `bin/` and cached for subsequent runs.
+Alternatively, a configuration file can be provided with the `PROMETHEUS_RW2_COMPLIANCE_CONFIG_FILE` environment variable.
+
+### Receiver Filtering
+
+You can filter which receivers from the configuration file to test using the `PROMETHEUS_RW2_COMPLIANCE_RECEIVERS` environment variable:
+
+```bash
+export PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus,mimir"
+go test -v
+```
 
 ## Running Tests
 
-### Basic Usage
+After ensuring your receivers are running and available (e.g. Prometheus) and `config.yml` is configured, you can use `go test` to run all or some test cases:
 
 ```bash
-# Run all tests with auto-download (recommended)
-make test
+# Run all compliance tests
+go test -v -timeout 5m
 
-# Run tests against specific sender
-make test-prometheus
-make test-grafana
-
-# Generate HTML results report
-make results
-
-# Run specific test by name
-make test-run TEST=TestProtocolCompliance
-```
-
-### Advanced Usage
-
-```bash
-# Test only specific senders (comma-separated)
-PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus,grafana_agent" go test -v
-
-# Filter tests by pattern
+# Run tests for a specific area
 go test -v -run TestHistograms
+go test -v -run TestMetrics
 
-# Increase timeout for slow environments
-PROMETHEUS_RW2_COMPLIANCE_TEST_TIMEOUT=60s make test
+# Run tests with detailed output
+go test -v -count=1
 
-# Run with coverage report
-make coverage
+# Run tests against specific receivers only
+PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus" go test -v
 ```
 
-### Environment Variables
+## HTML visualisation
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PROMETHEUS_RW2_COMPLIANCE_SENDERS` | Filter which senders to test (comma-separated) | All registered senders |
-| `PROMETHEUS_RW2_COMPLIANCE_TEST_TIMEOUT` | Timeout for each test | `2m` |
+This repository contains a `index.html` that enables viewing the results of the compliance tests.
 
-## HTML Test Results
-
-The test suite includes an interactive HTML results viewer:
+It loads a `results.json` that can be generated with:
 
 ```bash
-# Generate test results in JSON format
-make results
-
-# Or manually:
 go test -json | tee results.json
 ```
 
-Then open `index.html` in your browser to view:
-- ✅ Test matrix with pass/fail status per sender
-- 📊 Summary statistics and progress bars
-- 🔍 Detailed test output and assertions
-- 🏷️ RFC compliance levels (MUST/SHOULD/MAY)
-- 🔗 Cross-references between related tests
+## Protocol Compliance Levels
 
-## Test Coverage
+Tests are marked with compliance levels:
+- **MUST**: Required by specification
+- **SHOULD**: Recommended by specification
 
-Our test suite provides **comprehensive coverage** of the Remote Write 2.0 specification:
+Use `t.Attr("rfcLevel", "MUST")` or `t.Attr("rfcLevel", "SHOULD")` to identify compliance levels.
 
-### Phase 1: Foundation & Protocol
-- `protocol_test.go` - HTTP method, headers, compression, protobuf encoding (9 tests)
-- `symbols_test.go` - Symbol table structure and deduplication (5 tests)
+## Response Validation
 
-### Phase 2: Data Correctness & Encoding
-- `samples_test.go` - Float sample encoding, special values (16 tests)
-- `histograms_test.go` - Native and classic histogram encoding (12 tests)
-- `exemplars_test.go` - Exemplar attachment with trace IDs (9 tests)
-- `metadata_test.go` - TYPE, HELP, UNIT metadata (11 tests)
-- `labels_test.go` - Label format, ordering, validation (13 tests)
-- `timestamps_test.go` - Timestamp format, created_timestamp (8 tests)
-- `combined_test.go` - Integration of multiple features (8 tests)
-
-### Phase 3: Behavior & Reliability
-- `retry_test.go` - Retry behavior on 4xx/5xx errors (10 tests)
-- `backoff_test.go` - Exponential backoff validation (5 tests)
-- `batching_test.go` - Batching and flushing strategies (7 tests)
-- `error_handling_test.go` - Network errors, timeouts (10 tests)
-- `response_test.go` - Response header processing (9 tests)
-
-### Phase 4: Compatibility & Edge Cases
-- `rw1_compat_test.go` - Remote Write 1.0 backward compatibility (9 tests)
-- `fallback_test.go` - Version fallback on 415 responses (6 tests)
-- `edge_cases_test.go` - Edge cases and stress testing (14 tests)
-
-**Total:** 161+ test cases
-
-See `COVERAGE_CHECKLIST.md` for detailed mapping to specification requirements.
-
-## Architecture
-
-### Test Infrastructure
-
-```
-┌─────────────────────────────────────────────────┐
-│  Test Runner (main_test.go)                     │
-│  - Registered targets (prometheus, etc)         │
-│  - Iterates through test cases                  │
-│  - Manages test execution                       │
-└─────────────┬───────────────────────────────────┘
-              │
-              ▼
-      ┌─────────────────┐
-      │ Auto Targets    │
-      │ (targets/*.go)  │
-      │ - Download bins │
-      │ - Generate cfg  │
-      └────────┬────────┘
-               │
-               ▼
-      ┌─────────────────┐
-      │ Mock Receiver   │ ◄──────┐
-      │ (Captures       │        │
-      │  requests)      │        │
-      └─────────────────┘        │
-                                 │
-      ┌─────────────────┐        │
-      │ Mock Scrape     │        │
-      │ Target          │        │
-      │ (Serves metrics)│        │
-      └────────┬────────┘        │
-               │                 │
-               │                 │
-               ▼                 │
-      ┌─────────────────┐        │
-      │ Sender Instance │────────┘
-      │ (Auto-started)  │ Sends
-      └─────────────────┘ Remote Write
-```
-
-### Key Components
-
-- **`helpers_test.go`** - Mock receiver, mock scrape target, assertion helpers
-- **`main_test.go`** - Test framework, sender lifecycle management
-- **`targets/*.go`** - Automatic binary downloading and configuration
-- **Test files** - Individual test suites for each specification area
-
-## Development
-
-### Prerequisites
-
-- Go 1.25.0 or later
-- Make (optional, for convenience commands)
-
-### Building
-
-```bash
-# Install dependencies
-make deps
-
-# Build test binary
-make build
-
-# Run linter
-make lint
-```
-
-### Adding Tests
-
-1. Create a new test file (e.g., `my_feature_test.go`)
-2. Use `forEachSender` pattern to test all registered senders
-3. Write test scenario with validator function
-4. Set RFC compliance level: `t.Attr("rfcLevel", "MUST")`
-
-Example:
-```go
-package main
-
-import "testing"
-
-func TestMyFeature(t *testing.T) {
-    t.Attr("rfcLevel", "MUST")
-    t.Attr("description", "Sender MUST support my feature")
-
-    forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-        runSenderTest(t, targetName, target, SenderTestScenario{
-            ScrapeData: "test_metric 42\n",
-            Validator: func(t *testing.T, req *CapturedRequest) {
-                must(t).NotNil(req.Request)
-                // Add your assertions here
-            },
-        })
-    })
-}
-```
-
-## Troubleshooting
-
-### Tests are skipped
-
-```
-=== SKIP TestProtocolCompliance/prometheus
-    No auto targets found matching "xyz"
-```
-
-**Solution:** Check the sender name is correct. Available senders: prometheus, grafana_agent, otelcollector, vmagent, telegraf, vector.
-
-### Timeout errors
-
-```
-Test timed out after 2m
-```
-
-**Solution:** Increase timeout:
-```bash
-PROMETHEUS_RW2_COMPLIANCE_TEST_TIMEOUT=10m make test
-```
-
-### Download failures
-
-```
-Error downloading: 404
-```
-
-**Solution:** Check your internet connection. Some targets may require specific OS/architecture combinations.
-
-### No requests captured
-
-```
-Expected at least 1 request(s), got 0
-```
-
-**Solution:**
-- Increase wait time in test scenario
-- Check sender logs for startup errors
-- Verify sender configuration template is correct
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Run tests before submitting: `make test-all`
-2. Add tests for new features
-3. Update documentation
-4. Follow Go coding conventions
-
-## License
-
-Apache License 2.0 - See LICENSE file for details
-
-## Resources
-
-- [Remote Write 2.0 Specification](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/)
-- [Prometheus Documentation](https://prometheus.io/docs/)
-- [CNCF Prometheus Conformance Program](https://github.com/cncf/prometheus-conformance)
-
----
-
-**Questions?** Open an issue in the [prometheus/compliance](https://github.com/prometheus/compliance) repository.
+The test suite validates:
+- HTTP status codes (2xx for success, 4xx for client errors, 5xx for server errors)
+- Required response headers (`X-Prometheus-Remote-Write-*-Written`)
