@@ -138,6 +138,8 @@ func TestProtocolCompliance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			t.Attr("rfcLevel", tt.rfcLevel)
+			t.Attr("description", tt.description)
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
 				runSenderTest(t, targetName, target, SenderTestScenario{
@@ -151,6 +153,7 @@ func TestProtocolCompliance(t *testing.T) {
 
 // TestHTTPMethod validates that senders use POST method for remote write.
 func TestHTTPMethod(t *testing.T) {
+	t.Attr("rfcLevel", "MUST")
 	t.Attr("description", "Sender MUST use POST method for remote write requests")
 
 	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {

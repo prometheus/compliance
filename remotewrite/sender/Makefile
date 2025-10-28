@@ -62,7 +62,7 @@ test-manual:
 # Generate HTML results from test output
 results:
 	@echo "Generating test results..."
-	go test --tags=compliance -json -timeout 30m | tee results.json
+	go test -json -timeout 30m | tee results.json
 	@echo ""
 	@echo "Results saved to results.json. Open index.html to view the test matrix."
 

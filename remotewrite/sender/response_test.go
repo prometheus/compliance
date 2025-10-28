@@ -220,7 +220,6 @@ sample_3 3
 	}
 
 	for _, tt := range tests {
-		tt := tt // Capture range variable for parallel execution
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			t.Attr("rfcLevel", tt.rfcLevel)
@@ -259,6 +258,7 @@ sample_3 3
 
 // TestContentTypeNegotiation validates content-type handling.
 func TestContentTypeNegotiation(t *testing.T) {
+	t.Attr("rfcLevel", "SHOULD")
 	t.Attr("description", "Sender SHOULD handle content-type negotiation")
 
 	scrapeData := "test_metric 42\n"

@@ -369,6 +369,8 @@ rpc_duration_count 1000
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			t.Attr("rfcLevel", tt.rfcLevel)
+			t.Attr("description", tt.description)
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
 				runSenderTest(t, targetName, target, SenderTestScenario{
@@ -383,6 +385,7 @@ rpc_duration_count 1000
 
 // TestRobustnessUnderLoad validates sender behavior under stress.
 func TestRobustnessUnderLoad(t *testing.T) {
+	t.Attr("rfcLevel", "SHOULD")
 	t.Attr("description", "Sender SHOULD remain stable under load")
 
 	// Generate larger scrape data

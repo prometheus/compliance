@@ -227,6 +227,8 @@ func TestRetryBehavior(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			t.Attr("rfcLevel", tt.rfcLevel)
+			t.Attr("description", tt.description)
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
 				receiver := NewMockReceiver()
@@ -236,8 +238,6 @@ func TestRetryBehavior(t *testing.T) {
 
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
-
-				t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
 
 				err := target(targets.TargetOptions{
 					ScrapeTarget:    scrapeTarget.URL(),

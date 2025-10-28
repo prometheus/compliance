@@ -110,6 +110,8 @@ another_metric{foo="bar"} 3
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+			t.Attr("rfcLevel", tt.rfcLevel)
+			t.Attr("description", tt.description)
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
 				runSenderTest(t, targetName, target, SenderTestScenario{
