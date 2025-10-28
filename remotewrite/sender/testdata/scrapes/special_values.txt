@@ -1,8 +1,0 @@
-# HELP test_special_values Metrics with special float values
-# TYPE test_special_values gauge
-test_special_values{type="normal"} 42.5
-test_special_values{type="zero"} 0
-test_special_values{type="negative"} -123.45
-test_special_values{type="positive_infinity"} +Inf
-test_special_values{type="negative_infinity"} -Inf
-test_special_values{type="nan"} NaN

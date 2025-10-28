@@ -52,6 +52,57 @@ func (ttr *TimestampTrackingReceiver) GetTimestamps() []time.Time {
 	return append([]time.Time{}, ttr.timestamps...)
 }
 
+// TestBackoffRequired validates that senders implement a backoff mechanism when retrying.
+func TestBackoffRequired(t *testing.T) {
+	t.Attr("rfcLevel", "MUST")
+	t.Attr("description", "Sender MUST use a backoff algorithm to prevent overwhelming the server")
+
+	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+		receiver := NewMockReceiver()
+		defer receiver.Close()
+
+		tracker := NewTimestampTrackingReceiver(receiver)
+
+		// Configure receiver to return 503 errors to trigger retries.
+		receiver.SetResponse(MockReceiverResponse{
+			StatusCode: http.StatusServiceUnavailable,
+			Body:       "Service unavailable",
+		})
+
+		originalHandler := receiver.server.Config.Handler
+		receiver.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tracker.RecordTimestamp()
+			originalHandler.ServeHTTP(w, r)
+		})
+
+		scrapeTarget := NewMockScrapeTarget("test_metric 42\n")
+		defer scrapeTarget.Close()
+
+		runAutoTargetWithCustomReceiver(t, targetName, target, receiver.URL(), scrapeTarget, 10*time.Second)
+
+		timestamps := tracker.GetTimestamps()
+		must(t).True(len(timestamps) >= 2, "Sender must retry on 5xx errors")
+
+		if len(timestamps) < 2 {
+			t.Fatalf("Expected at least 2 requests (initial + retry), got %d", len(timestamps))
+		}
+
+		// Verify that there is a delay between requests (any backoff mechanism).
+		firstInterval := timestamps[1].Sub(timestamps[0])
+		minBackoffDelay := 1 * time.Millisecond
+
+		must(t).True(firstInterval >= minBackoffDelay,
+			"Sender MUST implement backoff (delay between retries), got interval: %v", firstInterval)
+
+		// Verify delays exist between subsequent requests if multiple retries occurred.
+		for i := 2; i < len(timestamps); i++ {
+			interval := timestamps[i].Sub(timestamps[i-1])
+			must(t).True(interval >= minBackoffDelay,
+				"Sender MUST use backoff between all retry attempts, interval %d was: %v", i, interval)
+		}
+	})
+}
+
 // TestBackoffBehavior validates exponential backoff implementation.
 func TestBackoffBehavior(t *testing.T) {
 	tests := []struct {

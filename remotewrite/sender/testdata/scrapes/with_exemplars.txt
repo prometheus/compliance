@@ -1,8 +1,0 @@
-# HELP http_request_duration_seconds HTTP request duration
-# TYPE http_request_duration_seconds histogram
-http_request_duration_seconds_bucket{le="0.1"} 100 # {trace_id="abc123"} 0.05 1234567890.123
-http_request_duration_seconds_bucket{le="0.5"} 250
-http_request_duration_seconds_bucket{le="1.0"} 500
-http_request_duration_seconds_bucket{le="+Inf"} 1000
-http_request_duration_seconds_sum 450.5
-http_request_duration_seconds_count 1000
