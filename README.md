@@ -26,4 +26,4 @@ for vendors or those who wish to maintain high Prometheus compatibility over tim
 
 ## Remote Write: Sender
 
-The [remotewrite/sender](remotewrite/sender/proposals.md) directory contains code to test compliance with the [Prometheus Remote Write specification](https://prometheus.io/docs/specs/remote_write_spec/) as a sender.
+The [remotewrite/sender](remotewrite/sender/README.md) directory contains code to test compliance with the [Prometheus Remote Write specification](https://prometheus.io/docs/specs/remote_write_spec/) as a sender.
