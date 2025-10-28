@@ -1,74 +1,68 @@
-# Prometheus Remote-Write v2 Receiver Compliance Test Suite
+# Prometheus Remote-Write v2 Sender Compliance Test Suite
 
-This repository contains a compliance test suite for Prometheus Remote-Write Protocol receivers. It validates that Remote-Write endpoints properly implement the Remote-Write v2 specification according to the [official protocol requirements](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/).
+This repository contains a compliance test suite for Prometheus Remote-Write Protocol senders. It validates that Remote-Write senders properly implement the Remote-Write v2 specification according to the [official protocol requirements](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/).
 
 ## Overview
 
-The test suite sends various Remote-Write v2 requests to configured endpoints and validates responses against the protocol specification. It tests proper handling of:
+The test suite forks sender instances (e.g., Prometheus with remote-write enabled), examines the requests they generate, and validates them against the protocol specification. It tests proper implementation of:
 
-- Float samples
-- Native Histograms
-- Exemplars
-- Protocol headers and response codes
-- Error conditions and edge cases
-- Content-Type validation
-- Response header (`X-Prometheus-Remote-Write-*-Written`)
+- Float samples encoding
+- Native Histograms encoding
+- Exemplars encoding
+- Protocol headers and content negotiation
+- Error handling and retry logic
+- Backoff and batching behavior
+- Metadata and symbol table management
+- Request formatting and compression
 
 ## Limitations
 
-Because different Remote-Write receivers have varied behaviors and APIs, this test suite does not verify data ingestion by reading data back from the receiver.
+The test suite validates the format and structure of requests sent by the sender but does not verify end-to-end data flow or persistence. Tests examine:
 
-Some requests that are valid for one backend might be rejected by another. The suite tolerates both 200 and 400 series HTTP responses since actual data validation is up to the receiver.
+- Request payload structure and encoding
+- Protocol compliance of generated requests
+- Proper header usage and content negotiation
+- Correct retry and backoff behavior when receivers respond with errors
 
-Therefore, passing all tests does not guarantee that a receiver supports every Remote-Write feature (such as Native Histograms); some receivers may legitimately return a 400 error for unsupported features.
+Because senders may have different configuration options and capabilities, passing all tests does not guarantee a sender supports every Remote-Write feature (such as Native Histograms). Some senders may not expose certain features or may require specific configuration.
 
-You should review the detailed test output to judge compliance for your receiver. A successful `go test` run alone is not sufficient.
+You should review the detailed test output to judge compliance for your sender. A successful `go test` run demonstrates the sender correctly encodes and sends Remote-Write v2 requests when configured to do so.
 
 ## Prerequisites
 
-A Prometheus server with Remote-Write Receiver enabled, as baseline:
-  ```bash
-  prometheus --web.enable-remote-write-receiver --enable-feature=native-histograms
-  ```
+- Go 1.23 or later
+- The sender binary to test (e.g., Prometheus)
 
-Or
-
-Any other Remote-Write Receiver.
+The test suite automatically downloads and runs Prometheus as the reference sender implementation. For testing custom senders, place the binary in the `bin/` directory.
 
 ## Configuration
 
-The main test configuration file `config.yml` in the `<repo>/remotewrite/receiver/` directory controls
-the receiver test suite, notably which receiver endpoints to test and any extra client configuration
-(auth, extra headers or relabeling). It follows the Prometheus [`remote_write`](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write) structure.
-Configuration options that are not relevant for Remote-Write are ignored.
+The test suite uses environment variables for configuration:
 
-```yaml
-remote_write:
-  - name: local-prometheus
-    url: http://127.0.0.1:9090/api/v1/write
-  - name: remote-endpoint
-    url: https://your-remote-write-endpoint.com/api/v1/write
-    basic_auth:
-      username: user
-      password: pass
-```
+### Sender Selection
 
-If no `config.yml` exists, the test suite will fall back to `config_example.yml`.
-
-Alternatively, a configuration file can be provided with the `PROMETHEUS_RW2_COMPLIANCE_CONFIG_FILE` environment variable.
-
-### Receiver Filtering
-
-You can filter which receivers from the configuration file to test using the `PROMETHEUS_RW2_COMPLIANCE_RECEIVERS` environment variable:
+You can specify which sender to test using the `PROMETHEUS_RW2_COMPLIANCE_SENDERS` environment variable:
 
 ```bash
-export PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus,mimir"
+export PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus"
+go test -v
+```
+
+Currently supported senders:
+- `prometheus` - The reference Prometheus implementation (automatically downloaded)
+
+### Test Timeout
+
+You can override the default test timeout using:
+
+```bash
+export PROMETHEUS_RW2_COMPLIANCE_TEST_TIMEOUT="10m"
 go test -v
 ```
 
 ## Running Tests
 
-After ensuring your receivers are running and available (e.g. Prometheus) and `config.yml` is configured, you can use `go test` to run all or some test cases:
+The test suite automatically sets up mock receiver endpoints and forks sender instances. You can run tests using standard Go test commands:
 
 ```bash
 # Run all compliance tests
@@ -76,13 +70,16 @@ go test -v -timeout 5m
 
 # Run tests for a specific area
 go test -v -run TestHistograms
-go test -v -run TestMetrics
+go test -v -run TestExemplars
+
+# Run specific test case
+go test -v -run "TestExemplarEncoding/exemplar_with_trace_id"
 
 # Run tests with detailed output
 go test -v -count=1
 
-# Run tests against specific receivers only
-PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus" go test -v
+# Run tests against specific sender only
+PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus" go test -v
 ```
 
 ## HTML visualisation
@@ -103,8 +100,13 @@ Tests are marked with compliance levels:
 
 Use `t.Attr("rfcLevel", "MUST")` or `t.Attr("rfcLevel", "SHOULD")` to identify compliance levels.
 
-## Response Validation
+## Request Validation
 
-The test suite validates:
-- HTTP status codes (2xx for success, 4xx for client errors, 5xx for server errors)
-- Required response headers (`X-Prometheus-Remote-Write-*-Written`)
+The test suite validates sender behavior by examining:
+- Request payload structure and encoding (protobuf format)
+- Required request headers (Content-Type, Content-Encoding, etc.)
+- Proper compression (snappy)
+- Correct retry behavior on receiver errors
+- Backoff strategy implementation
+- Batching and queueing behavior
+- Metadata and symbol handling

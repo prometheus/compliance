@@ -240,10 +240,7 @@ func writeTempFile(contents, name string) (filename string, err error) {
 	return f.Name(), f.Close()
 }
 
-// runCommand runs the given command with the given args in a temporary working
-// directory and connecting that processes stdin/stdout to stdin/stdout.
-// After timeout seconds, it send SIGINT to the process to shut it down and
-// returns an error if the process exits with non-zero status code.
+// runCommand runs the given command with the given args.
 func runCommand(prog string, timeout time.Duration, args ...string) error {
 	cwd, err := os.MkdirTemp("", "")
 	if err != nil {
@@ -252,7 +249,7 @@ func runCommand(prog string, timeout time.Duration, args ...string) error {
 	defer os.RemoveAll(cwd)
 
 	var output *os.File
-	// Suppress output to avoid cluttering test results
+	// Suppress output to avoid cluttering test results.
 	suppressOutput := os.Getenv("DEBUG") == ""
 	if suppressOutput {
 		output, err = os.CreateTemp("", "")
