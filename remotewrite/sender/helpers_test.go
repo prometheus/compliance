@@ -322,23 +322,21 @@ func must(t *testing.T) *require.Assertions {
 	return require.New(t)
 }
 
-// should logs a warning if condition is false but does not fail the test (SHOULD level).
-// SHOULD level means the feature is recommended but not required.
+// should marks a test as having a "SHOULD" RFC compliance level.
 func should(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "SHOULD")
 	if !condition {
-		t.Logf("⚠️  SHOULD level requirement not met (recommended): %s", msg)
+		t.Errorf("⚠️  SHOULD level requirement not met (recommended): %s", msg)
 	}
 }
 
-// may logs information if condition is false but does not fail the test (MAY level).
-// MAY level means the feature is completely optional.
+// may marks a test as having a "MAY" RFC compliance level.
 func may(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "MAY")
 	if !condition {
-		t.Logf("ℹ️  MAY level feature not present (optional): %s", msg)
+		t.Errorf("ℹ️  MAY level feature not present (optional): %s", msg)
 	}
 }
 
