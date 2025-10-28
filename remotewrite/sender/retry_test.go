@@ -119,9 +119,6 @@ func TestRetryBehavior(t *testing.T) {
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
 				// Should retry on 500 (expect multiple attempts)
-				// Wait longer to see retries
-				time.Sleep(3 * time.Second)
-
 				// Note: Some senders may give up after a few retries
 				// We just check that at least one request was made
 				must(t).GreaterOrEqual(len(requests), 1,
@@ -141,7 +138,6 @@ func TestRetryBehavior(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				time.Sleep(3 * time.Second)
 				must(t).GreaterOrEqual(len(requests), 1,
 					"Sender should attempt request on 503 Service Unavailable")
 				t.Logf("Received %d requests for 503 response", len(requests))
@@ -159,7 +155,6 @@ func TestRetryBehavior(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				time.Sleep(3 * time.Second)
 				should(t, len(requests) >= 1, "Sender should retry on 502 Bad Gateway")
 				t.Logf("Received %d requests for 502 response", len(requests))
 			},
@@ -176,7 +171,6 @@ func TestRetryBehavior(t *testing.T) {
 				})
 			},
 			validator: func(t *testing.T, requests []CapturedRequest) {
-				time.Sleep(3 * time.Second)
 				should(t, len(requests) >= 1, "Sender should retry on 504 Gateway Timeout")
 				t.Logf("Received %d requests for 504 response", len(requests))
 			},
@@ -232,8 +226,7 @@ func TestRetryBehavior(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
+			t.Parallel()
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
 				receiver := NewMockReceiver()
@@ -244,8 +237,19 @@ func TestRetryBehavior(t *testing.T) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-				time.Sleep(10 * time.Second)
+				t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
 
+				err := target(targets.TargetOptions{
+					ScrapeTarget:    scrapeTarget.URL(),
+					ReceiveEndpoint: receiver.URL(),
+					Timeout:         6 * time.Second,
+				})
+
+				if err != nil {
+					t.Logf("Target exited with error (expected for retry tests): %v", err)
+				}
+
+				// Get all requests that were received
 				requests := receiver.GetRequests()
 				tt.validator(t, requests)
 			})

@@ -233,23 +233,15 @@ test_histogram_count 100
 		},
 	}
 
-	// Create ONE shared sender instance per sender type, then run all tests against it
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-		// Start shared sender instance once
-		ctx := NewSharedSenderContext(t, targetName, target)
-
-		// Run all test cases using the same sender instance
-		for _, tt := range tests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-				t.Attr("rfcLevel", tt.rfcLevel)
-				t.Attr("description", tt.description)
-
-				ctx.RunScenario(t, SenderTestScenario{
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+				runSenderTest(t, targetName, target, SenderTestScenario{
 					ScrapeData: tt.scrapeData,
 					Validator:  tt.validator,
 				})
 			})
-		}
-	})
+		})
+	}
 }

@@ -220,12 +220,13 @@ sample_3 3
 	}
 
 	for _, tt := range tests {
+		tt := tt // Capture range variable for parallel execution
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			t.Attr("rfcLevel", tt.rfcLevel)
 			t.Attr("description", tt.description)
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-
 				receiver := NewMockReceiver()
 				defer receiver.Close()
 
@@ -234,8 +235,19 @@ sample_3 3
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-				// Wait for sender to send
-				time.Sleep(6 * time.Second)
+				t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
+
+				// Actually RUN the sender (this was missing!)
+				err := target(targets.TargetOptions{
+					ScrapeTarget:    scrapeTarget.URL(),
+					ReceiveEndpoint: receiver.URL(),
+					Timeout:         6 * time.Second,
+				})
+
+				// Error may occur for error response tests
+				if err != nil {
+					t.Logf("Target exited with error (may be expected): %v", err)
+				}
 
 				// Get captured requests
 				requests := receiver.GetRequests()
@@ -247,7 +259,6 @@ sample_3 3
 
 // TestContentTypeNegotiation validates content-type handling.
 func TestContentTypeNegotiation(t *testing.T) {
-	t.Attr("rfcLevel", "SHOULD")
 	t.Attr("description", "Sender SHOULD handle content-type negotiation")
 
 	scrapeData := "test_metric 42\n"
@@ -267,7 +278,15 @@ func TestContentTypeNegotiation(t *testing.T) {
 		scrapeTarget := NewMockScrapeTarget(scrapeData)
 		defer scrapeTarget.Close()
 
-		time.Sleep(5 * time.Second)
+		err := target(targets.TargetOptions{
+			ScrapeTarget:    scrapeTarget.URL(),
+			ReceiveEndpoint: receiver.URL(),
+			Timeout:         6 * time.Second,
+		})
+
+		if err != nil {
+			t.Fatalf("Target failed: %v", err)
+		}
 
 		requests := receiver.GetRequests()
 		should(t, len(requests) >= 1, "Should send at least one request")

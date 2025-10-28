@@ -87,9 +87,7 @@ func runSenderTest(t *testing.T, targetName string, target targets.Target, scena
 		scenario.ReceiverResponse.StatusCode = http.StatusNoContent
 	}
 	receiver.SetResponse(scenario.ReceiverResponse)
-
-	t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
-
+	
 	err := target(targets.TargetOptions{
 		ScrapeTarget:    scrapeTarget.URL(),
 		ReceiveEndpoint: receiver.URL(),

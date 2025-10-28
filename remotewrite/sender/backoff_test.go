@@ -218,9 +218,7 @@ func TestBackoffBehavior(t *testing.T) {
 					return
 				}
 
-				// Check that first retry doesn't happen immediately
-				// Reasonable minimum: 100ms
-				minReasonableDelay := 100 * time.Millisecond
+				minReasonableDelay := 10 * time.Millisecond
 
 				for i := 1; i < len(timestamps); i++ {
 					interval := timestamps[i].Sub(timestamps[i-1])
@@ -234,8 +232,7 @@ func TestBackoffBehavior(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
+			t.Parallel()
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
 

@@ -14,9 +14,10 @@
 package main
 
 import (
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"strings"
 	"testing"
+
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestRemoteWrite1Compatibility validates RW 1.0 backward compatibility.
@@ -215,8 +216,7 @@ http_requests{method="POST",status="200"} 50
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
+			t.Parallel()
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
 				// Note: Most senders will be in RW 2.0 mode by default

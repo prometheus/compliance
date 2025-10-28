@@ -229,8 +229,7 @@ func TestFallbackBehavior(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
+			t.Parallel()
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
 
@@ -286,7 +285,6 @@ func TestFallbackBehavior(t *testing.T) {
 
 // TestNoFallbackOn2xx validates that fallback doesn't happen on success.
 func TestNoFallbackOn2xx(t *testing.T) {
-	t.Attr("rfcLevel", "MUST")
 	t.Attr("description", "Sender MUST NOT fallback when receiving 2xx success responses")
 
 	scrapeData := "test_metric 42\n"
