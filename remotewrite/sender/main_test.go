@@ -14,6 +14,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -89,11 +90,10 @@ func runSenderTest(t *testing.T, targetName string, target targets.Target, scena
 
 	t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
 
-	// SIMPLE BLOCKING CALL - like the working version
 	err := target(targets.TargetOptions{
 		ScrapeTarget:    scrapeTarget.URL(),
 		ReceiveEndpoint: receiver.URL(),
-		Timeout:         8 * time.Second, // Adequate timeout
+		Timeout:         5 * time.Second, // Adequate timeout
 	})
 
 	// Check for expected error (some might be expected)
@@ -139,6 +139,106 @@ func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target tar
 	}
 
 	return err
+}
+
+// SharedSenderContext manages a long-running sender instance for multiple tests.
+type SharedSenderContext struct {
+	Receiver     *MockReceiver
+	ScrapeTarget *MockScrapeTarget
+	Process      *os.Process
+	Name         string
+	cleanup      func()
+}
+
+// NewSharedSenderContext starts a sender and keeps it running for multiple test scenarios.
+func NewSharedSenderContext(t *testing.T, targetName string, target targets.Target) *SharedSenderContext {
+	t.Helper()
+
+	receiver := NewMockReceiver()
+	// Start with valid metrics so Prometheus has something to scrape during startup
+	scrapeTarget := NewMockScrapeTarget("# TYPE test_metric counter\ntest_metric 1\n")
+
+	// Configure receiver to auto-respond successfully
+	receiver.SetResponse(MockReceiverResponse{
+		StatusCode: http.StatusNoContent,
+	})
+
+	// Start the sender in a goroutine
+	doneCh := make(chan error, 1)
+	go func() {
+		err := target(targets.TargetOptions{
+			ScrapeTarget:    scrapeTarget.URL(),
+			ReceiveEndpoint: receiver.URL(),
+			Timeout:         testTimeout, // Long timeout for shared instance
+		})
+		doneCh <- err
+	}()
+
+	// Wait for Prometheus to start and complete its first scrape
+	// This ensures it's fully operational before we run any tests
+	t.Logf("Waiting for %s to start and complete first scrape...", targetName)
+	_ = receiver.WaitForRequests(1, 10*time.Second)
+	t.Logf("%s is ready", targetName)
+
+	ctx := &SharedSenderContext{
+		Receiver:     receiver,
+		ScrapeTarget: scrapeTarget,
+		Name:         targetName,
+		cleanup: func() {
+			receiver.Close()
+			scrapeTarget.Close()
+		},
+	}
+
+	t.Cleanup(ctx.cleanup)
+	return ctx
+}
+
+// RunScenario updates the scrape target with new data and waits for the sender to scrape and send it.
+func (ctx *SharedSenderContext) RunScenario(t *testing.T, scenario SenderTestScenario) {
+	t.Helper()
+
+	// Increment scenario counter to ensure unique metrics
+
+	// Count current requests BEFORE updating metrics
+	initialCount := len(ctx.Receiver.GetRequests())
+
+	// Update scrape target with new metrics
+	// Add a unique counter metric to ensure Prometheus sends new data every time
+	metricsWithCounter := fmt.Sprintf("%s\n# Unique counter to force new data\ntest_scenario_counter\n",
+		scenario.ScrapeData)
+	ctx.ScrapeTarget.UpdateMetrics(metricsWithCounter)
+
+	// Wait intelligently for NEW requests after the update
+	// Prometheus scrapes every 1s, so new data should arrive within 1-2s
+	waitTime := scenario.WaitTime
+	if waitTime == 0 {
+		waitTime = 5 * time.Second // Max wait for new scrape cycles
+	}
+
+	expectedNewCount := scenario.ExpectedRequestCount
+	if expectedNewCount == 0 {
+		expectedNewCount = 1
+	}
+
+	// Wait for total count to increase (initial + expected new requests)
+	targetCount := initialCount + expectedNewCount
+	allRequests := ctx.Receiver.WaitForRequests(targetCount, waitTime)
+
+	// Extract only the NEW requests (after initialCount)
+	if len(allRequests) < targetCount {
+		t.Fatalf("Expected at least %d new request(s), got %d (initial: %d, total: %d)",
+			expectedNewCount, len(allRequests)-initialCount, initialCount, len(allRequests))
+	}
+
+	// Get the NEW requests for validation
+	newRequests := allRequests[initialCount:]
+
+	// Run validator on the LAST new request
+	if scenario.Validator != nil && len(newRequests) > 0 {
+		lastReq := &newRequests[len(newRequests)-1]
+		scenario.Validator(t, lastReq)
+	}
 }
 
 // forEachSender runs the provided test function for each configured sender.
