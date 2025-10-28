@@ -23,18 +23,12 @@ import (
 
 // TestBatchingBehavior validates sender batching and queueing behavior.
 func TestBatchingBehavior(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-		rfcLevel    string
-		scrapeData  string
-		validator   func(*testing.T, *CapturedRequest)
-	}{
+	tests := []TestCase{
 		{
-			name:        "multiple_series_per_request",
-			description: "Sender SHOULD batch multiple series in single request",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# Multiple metrics to batch
+			Name:        "multiple_series_per_request",
+			Description: "Sender SHOULD batch multiple series in single request",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# Multiple metrics to batch
 http_requests_total{method="GET",status="200"} 1000
 http_requests_total{method="POST",status="200"} 500
 http_requests_total{method="GET",status="404"} 50
@@ -42,7 +36,7 @@ cpu_usage_percent 45.2
 memory_usage_bytes 1048576
 disk_io_bytes_total 1000000
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				// Count unique metric names
 				metricNames := make(map[string]bool)
 				for _, ts := range req.Request.Timeseries {
@@ -58,10 +52,10 @@ disk_io_bytes_total 1000000
 			},
 		},
 		{
-			name:        "batch_size_reasonable",
-			description: "Sender SHOULD use reasonable batch sizes",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# Many metrics
+			Name:        "batch_size_reasonable",
+			Description: "Sender SHOULD use reasonable batch sizes",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# Many metrics
 metric_1 1
 metric_2 2
 metric_3 3
@@ -83,7 +77,7 @@ metric_18 18
 metric_19 19
 metric_20 20
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
 
 				// Batches shouldn't be too small (inefficient) or too large (risk)
@@ -96,11 +90,11 @@ metric_20 20
 			},
 		},
 		{
-			name:        "time_based_flushing",
-			description: "Sender SHOULD flush batches based on time intervals",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:        "time_based_flushing",
+			Description: "Sender SHOULD flush batches based on time intervals",
+			RFCLevel:    "SHOULD",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				// Verify that data is sent even with small amounts
 				// This indicates time-based flushing
 				should(t, len(req.Request.Timeseries) > 0, "Sender should flush small batches based on time")
@@ -109,10 +103,10 @@ metric_20 20
 			},
 		},
 		{
-			name:        "handles_varying_cardinality",
-			description: "Sender SHOULD handle varying label cardinality efficiently",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# High cardinality metrics
+			Name:        "handles_varying_cardinality",
+			Description: "Sender SHOULD handle varying label cardinality efficiently",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# High cardinality metrics
 api_calls{endpoint="/users",method="GET",region="us-east",status="200"} 100
 api_calls{endpoint="/users",method="POST",region="us-east",status="201"} 50
 api_calls{endpoint="/posts",method="GET",region="us-west",status="200"} 200
@@ -120,7 +114,7 @@ api_calls{endpoint="/posts",method="DELETE",region="eu-west",status="204"} 10
 api_calls{endpoint="/comments",method="GET",region="ap-south",status="200"} 500
 low_cardinality_metric 42
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				// Check symbol table efficiency with varying cardinality
 				symbols := req.Request.Symbols
 				uniqueSymbols := make(map[string]bool)
@@ -138,17 +132,17 @@ low_cardinality_metric 42
 			},
 		},
 		{
-			name:        "efficient_symbol_reuse",
-			description: "Sender SHOULD reuse symbols efficiently across batches",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# Metrics with shared labels
+			Name:        "efficient_symbol_reuse",
+			Description: "Sender SHOULD reuse symbols efficiently across batches",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# Metrics with shared labels
 http_requests{service="api",method="GET"} 100
 http_requests{service="api",method="POST"} 50
 http_requests{service="web",method="GET"} 200
 http_duration{service="api",method="GET"} 0.5
 http_duration{service="api",method="POST"} 0.3
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 
 				// Count occurrences of common strings
@@ -168,10 +162,10 @@ http_duration{service="api",method="POST"} 0.3
 			},
 		},
 		{
-			name:        "metadata_batching",
-			description: "Sender SHOULD batch metadata with samples efficiently",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# HELP http_requests_total Total HTTP requests
+			Name:        "metadata_batching",
+			Description: "Sender SHOULD batch metadata with samples efficiently",
+			RFCLevel:    "SHOULD",
+			ScrapeData: `# HELP http_requests_total Total HTTP requests
 # TYPE http_requests_total counter
 http_requests_total{method="GET"} 1000
 http_requests_total{method="POST"} 500
@@ -180,7 +174,7 @@ http_requests_total{method="POST"} 500
 # TYPE memory_usage_bytes gauge
 memory_usage_bytes 1048576
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				var withMetadata int
 				var withoutMetadata int
 
@@ -205,20 +199,7 @@ memory_usage_bytes 1048576
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.scrapeData,
-					Validator:  tt.validator,
-					WaitTime:   5 * time.Second,
-				})
-			})
-		})
-	}
+	runTestCases(t, tests)
 }
 
 // TestConcurrentRequests validates parallel request handling.

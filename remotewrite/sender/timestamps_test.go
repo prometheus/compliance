@@ -16,25 +16,17 @@ package main
 import (
 	"testing"
 	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestTimestampEncoding validates timestamp encoding and handling.
 func TestTimestampEncoding(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-		rfcLevel    string
-		scrapeData  string
-		validator   func(*testing.T, *CapturedRequest)
-	}{
+	tests := []TestCase{
 		{
-			name:        "timestamp_int64_milliseconds",
-			description: "Timestamps MUST be encoded as int64 milliseconds since Unix epoch",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_counter_total 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"timestamp_int64_milliseconds",
+			Description:"Timestamps MUST be encoded as int64 milliseconds since Unix epoch",
+			RFCLevel:"MUST",
+			ScrapeData:"test_counter_total 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				must(t).NotEmpty(req.Request.Timeseries, "Request must contain timeseries")
 
 				for _, ts := range req.Request.Timeseries {
@@ -51,15 +43,15 @@ func TestTimestampEncoding(t *testing.T) {
 			},
 		},
 		{
-			name:        "timestamp_ordering_within_series",
-			description: "Within a timeseries, samples MUST be ordered by timestamp (oldest first)",
-			rfcLevel:    "MUST",
-			scrapeData: `# Multiple metrics over time
+			Name:"timestamp_ordering_within_series",
+			Description:"Within a timeseries, samples MUST be ordered by timestamp (oldest first)",
+			RFCLevel:"MUST",
+			ScrapeData: `# Multiple metrics over time
 metric_a 1
 metric_b 2
 metric_c 3
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// Check that if a timeseries has multiple samples, they're ordered
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Samples) > 1 {
@@ -80,13 +72,13 @@ metric_c 3
 			},
 		},
 		{
-			name:        "created_timestamp_for_counters",
-			description: "Sender MAY include created_timestamp for counter metrics",
-			rfcLevel:    "MAY",
-			scrapeData: `# TYPE test_counter counter
+			Name:"created_timestamp_for_counters",
+			Description:"Sender MAY include created_timestamp for counter metrics",
+			RFCLevel:"MAY",
+			ScrapeData: `# TYPE test_counter counter
 test_counter_total 100
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "test_counter_total" {
@@ -101,15 +93,15 @@ test_counter_total 100
 			},
 		},
 		{
-			name:        "created_timestamp_for_histograms",
-			description: "Sender MAY include created_timestamp for histogram metrics",
-			rfcLevel:    "MAY",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:"created_timestamp_for_histograms",
+			Description:"Sender MAY include created_timestamp for histogram metrics",
+			RFCLevel:"MAY",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 250.0
 test_histogram_bucket{le="+Inf"} 100
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					metricName := labels["__name__"]
@@ -125,13 +117,13 @@ test_histogram_bucket{le="+Inf"} 100
 			},
 		},
 		{
-			name:        "created_timestamp_zero_handling",
-			description: "Created timestamp value of 0 SHOULD be treated as unset",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# TYPE test_counter counter
+			Name:"created_timestamp_zero_handling",
+			Description:"Created timestamp value of 0 SHOULD be treated as unset",
+			RFCLevel:"SHOULD",
+			ScrapeData: `# TYPE test_counter counter
 test_counter_total 50
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// If created_timestamp is 0, it should be treated as unset
 				for _, ts := range req.Request.Timeseries {
 					if ts.CreatedTimestamp == 0 {
@@ -145,11 +137,11 @@ test_counter_total 50
 			},
 		},
 		{
-			name:        "timestamp_precision",
-			description: "Sender SHOULD preserve millisecond precision in timestamps",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"timestamp_precision",
+			Description:"Sender SHOULD preserve millisecond precision in timestamps",
+			RFCLevel:"SHOULD",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Samples) > 0 {
 						timestamp := ts.Samples[0].Timestamp
@@ -175,11 +167,11 @@ test_counter_total 50
 			},
 		},
 		{
-			name:        "timestamp_future_values",
-			description: "Sender SHOULD handle timestamps slightly in the future",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"timestamp_future_values",
+			Description:"Sender SHOULD handle timestamps slightly in the future",
+			RFCLevel:"SHOULD",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				now := time.Now().UnixMilli()
 
 				for _, ts := range req.Request.Timeseries {
@@ -199,13 +191,13 @@ test_counter_total 50
 			},
 		},
 		{
-			name:        "created_timestamp_before_sample_timestamp",
-			description: "Created timestamp SHOULD be before or equal to sample timestamp",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# TYPE test_counter counter
+			Name:"created_timestamp_before_sample_timestamp",
+			Description:"Created timestamp SHOULD be before or equal to sample timestamp",
+			RFCLevel:"SHOULD",
+			ScrapeData: `# TYPE test_counter counter
 test_counter_total 100
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				for _, ts := range req.Request.Timeseries {
 					if ts.CreatedTimestamp != 0 && len(ts.Samples) > 0 {
 						sampleTimestamp := ts.Samples[0].Timestamp
@@ -222,18 +214,5 @@ test_counter_total 100
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.scrapeData,
-					Validator:  tt.validator,
-				})
-			})
-		})
-	}
+	runTestCases(t, tests)
 }

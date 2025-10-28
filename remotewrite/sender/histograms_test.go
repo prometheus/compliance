@@ -15,130 +15,70 @@ package main
 
 import (
 	"testing"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
-
-	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
 
 // TestHistogramEncoding validates native histogram encoding.
 func TestHistogramEncoding(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-		rfcLevel    string
-		scrapeData  string
-		validator   func(*testing.T, *CapturedRequest)
-	}{
+	tests := []TestCase{
 		{
-			name:        "native_histogram_structure",
-			description: "Sender MUST correctly encode native histogram structure",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:        "native_histogram_structure",
+			Description: "Sender MUST correctly encode native histogram structure",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 10
 test_histogram_sum 25.5
 test_histogram_bucket{le="1"} 2
 test_histogram_bucket{le="5"} 7
 test_histogram_bucket{le="+Inf"} 10
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				// Note: This is a classic histogram, not native histogram.
 				// Native histograms use exponential buckets notation.
 				// For classic histograms, senders typically send as multiple timeseries.
-				var foundBucket, foundCount bool
-
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					metricName := labels["__name__"]
-
-					if metricName == "test_histogram_bucket" {
-						foundBucket = true
-					} else if metricName == "test_histogram_count" {
-						foundCount = true
-					}
-				}
-
-				must(t).True(foundCount || foundBucket,
+				classicFound, nativeTS := findHistogramData(req, "test_histogram")
+				must(t).True(classicFound || nativeTS != nil,
 					"Histogram data must be present (either as count/sum/bucket or native format)")
 			},
 		},
 		{
-			name:        "histogram_count_present",
-			description: "Sender MUST include histogram count",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:        "histogram_count_present",
+			Description: "Sender MUST include histogram count",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 250.5
 test_histogram_bucket{le="+Inf"} 100
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
-				var foundCount bool
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					if labels["__name__"] == "test_histogram_count" {
-						must(t).NotEmpty(ts.Samples, "Histogram count must have samples")
-						must(t).Equal(100.0, ts.Samples[0].Value,
-							"Histogram count value must be correct")
-						foundCount = true
-						break
-					}
-
-					// Check native histogram format
-					if labels["__name__"] == "test_histogram" && len(ts.Histograms) > 0 {
-						hist := ts.Histograms[0]
-						var count uint64
-						if hist.Count != nil {
-							if countInt, ok := hist.Count.(*writev2.Histogram_CountInt); ok {
-								count = countInt.CountInt
-							} else if countFloat, ok := hist.Count.(*writev2.Histogram_CountFloat); ok {
-								count = uint64(countFloat.CountFloat)
-							}
-						}
-						must(t).Greater(count, uint64(0), "Native histogram count must be present")
-						foundCount = true
-						break
-					}
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				count, found := extractHistogramCount(req, "test_histogram")
+				may(t, found, "Histogram count should be present in some form")
+				if found {
+					must(t).Equal(100.0, count, "Histogram count value must be correct")
 				}
-				may(t, foundCount, "Histogram count should be present in some form")
 			},
 		},
 		{
-			name:        "histogram_sum_present",
-			description: "Sender MUST include histogram sum",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:        "histogram_sum_present",
+			Description: "Sender MUST include histogram sum",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 250.5
 test_histogram_bucket{le="+Inf"} 100
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
-				var foundSum bool
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					if labels["__name__"] == "test_histogram_sum" {
-						must(t).NotEmpty(ts.Samples, "Histogram sum must have samples")
-						must(t).Equal(250.5, ts.Samples[0].Value,
-							"Histogram sum value must be correct")
-						foundSum = true
-						break
-					}
-
-					// Check native histogram format
-					if labels["__name__"] == "test_histogram" && len(ts.Histograms) > 0 {
-						hist := ts.Histograms[0]
-						must(t).NotZero(hist.Sum, "Native histogram sum must be non-zero")
-						foundSum = true
-						break
-					}
+			Validator: func(t *testing.T, req *CapturedRequest) {
+				sum, found := extractHistogramSum(req, "test_histogram")
+				may(t, found, "Histogram sum should be present in some form")
+				if found {
+					must(t).Equal(250.5, sum, "Histogram sum value must be correct")
 				}
-				may(t, foundSum, "Histogram sum should be present in some form")
 			},
 		},
 		{
-			name:        "histogram_buckets_ordered",
-			description: "Sender SHOULD send histogram buckets in order",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# TYPE request_duration histogram
+			Name:"histogram_buckets_ordered",
+			Description:"Sender SHOULD send histogram buckets in order",
+			RFCLevel:"SHOULD",
+			ScrapeData:`# TYPE request_duration histogram
 request_duration_bucket{le="0.1"} 10
 request_duration_bucket{le="0.5"} 50
 request_duration_bucket{le="1.0"} 100
@@ -147,7 +87,7 @@ request_duration_bucket{le="+Inf"} 250
 request_duration_sum 500.0
 request_duration_count 250
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// Classic histograms are sent as separate timeseries, order is not guaranteed
 				// Native histograms have internal bucket structure
 				var foundHistogram bool
@@ -162,14 +102,14 @@ request_duration_count 250
 			},
 		},
 		{
-			name:        "histogram_positive_buckets",
-			description: "Native histogram MAY include positive buckets",
-			rfcLevel:    "MAY",
-			scrapeData: `# TYPE test_native_histogram histogram
+			Name:"histogram_positive_buckets",
+			Description:"Native histogram MAY include positive buckets",
+			RFCLevel:"MAY",
+			ScrapeData:`# TYPE test_native_histogram histogram
 test_native_histogram_count 100
 test_native_histogram_sum 250.0
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// Check if sender supports native histograms
 				var foundNative bool
 				for _, ts := range req.Request.Timeseries {
@@ -184,14 +124,14 @@ test_native_histogram_sum 250.0
 			},
 		},
 		{
-			name:        "histogram_negative_buckets",
-			description: "Native histogram MAY include negative buckets",
-			rfcLevel:    "MAY",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:"histogram_negative_buckets",
+			Description:"Native histogram MAY include negative buckets",
+			RFCLevel:"MAY",
+			ScrapeData:`# TYPE test_histogram histogram
 test_histogram_count 50
 test_histogram_sum -25.0
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// Negative buckets are optional in native histograms
 				var foundNative bool
 				for _, ts := range req.Request.Timeseries {
@@ -204,14 +144,14 @@ test_histogram_sum -25.0
 			},
 		},
 		{
-			name:        "histogram_zero_bucket",
-			description: "Native histogram MAY include zero bucket",
-			rfcLevel:    "MAY",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:"histogram_zero_bucket",
+			Description:"Native histogram MAY include zero bucket",
+			RFCLevel:"MAY",
+			ScrapeData:`# TYPE test_histogram histogram
 test_histogram_count 10
 test_histogram_sum 0.0
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				var foundNative bool
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Histograms) > 0 {
@@ -223,14 +163,14 @@ test_histogram_sum 0.0
 			},
 		},
 		{
-			name:        "histogram_schema",
-			description: "Native histogram MUST specify schema if using native format",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:"histogram_schema",
+			Description:"Native histogram MUST specify schema if using native format",
+			RFCLevel:"MUST",
+			ScrapeData:`# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 500.0
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// If native histograms are present, they must have a schema
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Histograms) > 0 {
@@ -244,15 +184,15 @@ test_histogram_sum 500.0
 			},
 		},
 		{
-			name:        "histogram_timestamp",
-			description: "Histogram MUST include valid timestamp",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:"histogram_timestamp",
+			Description:"Histogram MUST include valid timestamp",
+			RFCLevel:"MUST",
+			ScrapeData:`# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 250.0
 test_histogram_bucket{le="+Inf"} 100
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				var foundTimestamp bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -277,14 +217,14 @@ test_histogram_bucket{le="+Inf"} 100
 			},
 		},
 		{
-			name:        "histogram_no_mixed_with_samples",
-			description: "Sender MUST NOT mix histogram and sample data in same timeseries",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:"histogram_no_mixed_with_samples",
+			Description:"Sender MUST NOT mix histogram and sample data in same timeseries",
+			RFCLevel:"MUST",
+			ScrapeData:`# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 250.0
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// Check that no timeseries has both samples and histograms
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Samples) > 0 && len(ts.Histograms) > 0 {
@@ -294,15 +234,15 @@ test_histogram_sum 250.0
 			},
 		},
 		{
-			name:        "histogram_empty_buckets",
-			description: "Sender SHOULD handle histograms with no observations",
-			rfcLevel:    "SHOULD",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:"histogram_empty_buckets",
+			Description:"Sender SHOULD handle histograms with no observations",
+			RFCLevel:"SHOULD",
+			ScrapeData:`# TYPE test_histogram histogram
 test_histogram_count 0
 test_histogram_sum 0
 test_histogram_bucket{le="+Inf"} 0
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				var foundEmpty bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -316,15 +256,15 @@ test_histogram_bucket{le="+Inf"} 0
 			},
 		},
 		{
-			name:        "histogram_large_counts",
-			description: "Sender MUST handle histograms with large observation counts",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:"histogram_large_counts",
+			Description:"Sender MUST handle histograms with large observation counts",
+			RFCLevel:"MUST",
+			ScrapeData:`# TYPE test_histogram histogram
 test_histogram_count 1000000000
 test_histogram_sum 5000000000.0
 test_histogram_bucket{le="+Inf"} 1000000000
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				var foundLarge bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -340,18 +280,5 @@ test_histogram_bucket{le="+Inf"} 1000000000
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.scrapeData,
-					Validator:  tt.validator,
-				})
-			})
-		})
-	}
+	runTestCases(t, tests)
 }

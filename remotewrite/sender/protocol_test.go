@@ -23,83 +23,77 @@ import (
 
 // TestProtocolCompliance validates HTTP protocol requirements for Remote Write 2.0 senders.
 func TestProtocolCompliance(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-		rfcLevel    string
-		scrapeData  string
-		validator   func(*testing.T, *CapturedRequest)
-	}{
+	tests := []TestCase{
 		{
-			name:        "content_type_protobuf",
-			description: "Sender MUST use Content-Type: application/x-protobuf",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"content_type_protobuf",
+			Description:"Sender MUST use Content-Type: application/x-protobuf",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				contentType := req.Headers.Get("Content-Type")
 				must(t).Contains(contentType, "application/x-protobuf",
 					"Content-Type header must contain application/x-protobuf")
 			},
 		},
 		{
-			name:        "content_type_with_proto_param",
-			description: "Sender SHOULD include proto parameter in Content-Type for RW 2.0",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"content_type_with_proto_param",
+			Description:"Sender SHOULD include proto parameter in Content-Type for RW 2.0",
+			RFCLevel:"SHOULD",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				contentType := req.Headers.Get("Content-Type")
 				should(t, strings.Contains(contentType, "proto=io.prometheus.write.v2.Request"), "Content-Type should include proto parameter for RW 2.0")
 			},
 		},
 		{
-			name:        "content_encoding_snappy",
-			description: "Sender MUST use Content-Encoding: snappy",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"content_encoding_snappy",
+			Description:"Sender MUST use Content-Encoding: snappy",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				encoding := req.Headers.Get("Content-Encoding")
 				must(t).Equal("snappy", encoding,
 					"Content-Encoding header must be 'snappy'")
 			},
 		},
 		{
-			name:        "version_header_present",
-			description: "Sender MUST include X-Prometheus-Remote-Write-Version header",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"version_header_present",
+			Description:"Sender MUST include X-Prometheus-Remote-Write-Version header",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 				must(t).NotEmpty(version,
 					"X-Prometheus-Remote-Write-Version header must be present")
 			},
 		},
 		{
-			name:        "version_header_value",
-			description: "Sender SHOULD use version 2.0.0 for RW 2.0 receivers",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"version_header_value",
+			Description:"Sender SHOULD use version 2.0.0 for RW 2.0 receivers",
+			RFCLevel:"SHOULD",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 				should(t, strings.HasPrefix(version, "2.0"), fmt.Sprintf("Version should be 2.0.x for RW 2.0, got: %s", version))
 			},
 		},
 		{
-			name:        "user_agent_present",
-			description: "Sender MUST include User-Agent header (RFC 9110)",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"user_agent_present",
+			Description:"Sender MUST include User-Agent header (RFC 9110)",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				userAgent := req.Headers.Get("User-Agent")
 				must(t).NotEmpty(userAgent,
 					"User-Agent header must be present per RFC 9110")
 			},
 		},
 		{
-			name:        "snappy_block_format",
-			description: "Sender MUST use snappy block format, not framed format",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"snappy_block_format",
+			Description:"Sender MUST use snappy block format, not framed format",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// Snappy framed format starts with specific magic bytes: 0xff 0x06 0x00 0x00 0x73 0x4e 0x61 0x50 0x50 0x59
 				// Snappy block format does not have these magic bytes.
 				body := req.Body
@@ -121,11 +115,11 @@ func TestProtocolCompliance(t *testing.T) {
 			},
 		},
 		{
-			name:        "protobuf_parseable",
-			description: "Sender MUST send valid protobuf messages that can be parsed",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"protobuf_parseable",
+			Description:"Sender MUST send valid protobuf messages that can be parsed",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// The request was already parsed in MockReceiver.handleRequest
 				// If we got here, the protobuf was successfully parsed.
 				must(t).NotNil(req.Request, "Protobuf message must be parseable")
@@ -135,20 +129,7 @@ func TestProtocolCompliance(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.scrapeData,
-					Validator:  tt.validator,
-				})
-			})
-		})
-	}
+	runTestCases(t, tests)
 }
 
 // TestHTTPMethod validates that senders use POST method for remote write.

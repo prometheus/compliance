@@ -24,19 +24,13 @@ import (
 
 // TestEdgeCases validates sender behavior in edge case scenarios.
 func TestEdgeCases(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-		rfcLevel    string
-		scrapeData  string
-		validator   func(*testing.T, *CapturedRequest)
-	}{
+	tests := []TestCase{
 		{
-			name:        "empty_scrape",
-			description: "Sender SHOULD handle scrapes with no metrics gracefully",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "# No metrics\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"empty_scrape",
+			Description:"Sender SHOULD handle scrapes with no metrics gracefully",
+			RFCLevel:"SHOULD",
+			ScrapeData: "# No metrics\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// Empty scrape may result in no request, or empty request
 				// Both are acceptable
 				if req.Request != nil {
@@ -49,14 +43,14 @@ func TestEdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name:        "huge_label_values",
-			description: "Sender SHOULD handle very large label values (10KB+)",
-			rfcLevel:    "SHOULD",
-			scrapeData: func() string {
+			Name:"huge_label_values",
+			Description:"Sender SHOULD handle very large label values (10KB+)",
+			RFCLevel:"SHOULD",
+			ScrapeData:func() string {
 				largeValue := strings.Repeat("x", 10000)
 				return `test_metric{large_label="` + largeValue + `"} 42` + "\n"
 			}(),
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				var foundLarge bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -73,11 +67,11 @@ func TestEdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name:        "unicode_in_labels",
-			description: "Sender MUST preserve Unicode characters in labels",
-			rfcLevel:    "MUST",
-			scrapeData:  `test_metric{emoji="🚀",chinese="测试",arabic="مرحبا",vietnamese="việt nam"} 42` + "\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"unicode_in_labels",
+			Description:"Sender MUST preserve Unicode characters in labels",
+			RFCLevel:"MUST",
+			ScrapeData: `test_metric{emoji="🚀",chinese="测试",arabic="مرحبا",vietnamese="việt nam"} 42` + "\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				var foundUnicode bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -102,10 +96,10 @@ func TestEdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name:        "many_timeseries",
-			description: "Sender SHOULD efficiently handle many timeseries",
-			rfcLevel:    "SHOULD",
-			scrapeData: func() string {
+			Name:"many_timeseries",
+			Description:"Sender SHOULD efficiently handle many timeseries",
+			RFCLevel:"SHOULD",
+			ScrapeData:func() string {
 				var sb strings.Builder
 				// Generate 100 metrics (in practice, tests with 10k+ would need special setup)
 				for i := 0; i < 100; i++ {
@@ -118,7 +112,7 @@ func TestEdgeCases(t *testing.T) {
 				}
 				return sb.String()
 			}(),
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
 				should(t, seriesCount >= 10, "Should handle multiple timeseries efficiently")
 
@@ -131,10 +125,10 @@ func TestEdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name:        "high_cardinality",
-			description: "Sender SHOULD handle high cardinality label sets",
-			rfcLevel:    "SHOULD",
-			scrapeData: func() string {
+			Name:"high_cardinality",
+			Description:"Sender SHOULD handle high cardinality label sets",
+			RFCLevel:"SHOULD",
+			ScrapeData:func() string {
 				var sb strings.Builder
 				// Create high cardinality by varying one label across many values
 				for i := 0; i < 50; i++ {
@@ -147,7 +141,7 @@ func TestEdgeCases(t *testing.T) {
 				}
 				return sb.String()
 			}(),
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
 				should(t, seriesCount >= 20, "Should handle high cardinality metrics")
 
@@ -166,14 +160,14 @@ func TestEdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name:        "very_long_metric_name",
-			description: "Sender SHOULD handle very long metric names",
-			rfcLevel:    "SHOULD",
-			scrapeData: func() string {
+			Name:"very_long_metric_name",
+			Description:"Sender SHOULD handle very long metric names",
+			RFCLevel:"SHOULD",
+			ScrapeData:func() string {
 				longName := "metric_" + strings.Repeat("very_long_name_", 50)
 				return longName + " 42\n"
 			}(),
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				var foundLongName bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -189,16 +183,16 @@ func TestEdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name:        "special_float_combinations",
-			description: "Sender MUST handle special float value combinations",
-			rfcLevel:    "MUST",
-			scrapeData: `special_values{type="nan"} NaN
+			Name:"special_float_combinations",
+			Description:"Sender MUST handle special float value combinations",
+			RFCLevel:"MUST",
+			ScrapeData:`special_values{type="nan"} NaN
 special_values{type="inf"} +Inf
 special_values{type="ninf"} -Inf
 special_values{type="zero"} 0
 special_values{type="negative"} -123.45
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				foundSpecial := make(map[string]bool)
 
 				for _, ts := range req.Request.Timeseries {
@@ -238,11 +232,11 @@ special_values{type="negative"} -123.45
 			},
 		},
 		{
-			name:        "zero_timestamp",
-			description: "Sender SHOULD handle timestamp value of 0",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42 0\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"zero_timestamp",
+			Description:"Sender SHOULD handle timestamp value of 0",
+			RFCLevel:"SHOULD",
+			ScrapeData: "test_metric 42 0\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// Timestamp of 0 might be rejected or normalized
 				// Sender should handle gracefully
 				for _, ts := range req.Request.Timeseries {
@@ -255,14 +249,14 @@ special_values{type="negative"} -123.45
 			},
 		},
 		{
-			name:        "future_timestamp",
-			description: "Sender SHOULD handle timestamps in the future",
-			rfcLevel:    "SHOULD",
-			scrapeData: func() string {
+			Name:"future_timestamp",
+			Description:"Sender SHOULD handle timestamps in the future",
+			RFCLevel:"SHOULD",
+			ScrapeData:func() string {
 				future := time.Now().Add(24 * time.Hour).Unix()
 				return "test_metric 42 " + string(rune(future)) + "\n"
 			}(),
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				now := time.Now().UnixMilli()
 
 				for _, ts := range req.Request.Timeseries {
@@ -280,11 +274,11 @@ special_values{type="negative"} -123.45
 			},
 		},
 		{
-			name:        "metric_name_with_colons",
-			description: "Sender MUST handle metric names with colons",
-			rfcLevel:    "MUST",
-			scrapeData:  "http:request:duration:seconds 0.5\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"metric_name_with_colons",
+			Description:"Sender MUST handle metric names with colons",
+			RFCLevel:"MUST",
+			ScrapeData: "http:request:duration:seconds 0.5\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				var foundColon bool
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -302,11 +296,11 @@ special_values{type="negative"} -123.45
 			},
 		},
 		{
-			name:        "stale_marker",
-			description: "Sender SHOULD handle stale marker (StaleNaN)",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric StaleNaN\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"stale_marker",
+			Description:"Sender SHOULD handle stale marker (StaleNaN)",
+			RFCLevel:"SHOULD",
+			ScrapeData: "test_metric StaleNaN\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				// StaleNaN is a special NaN value
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
@@ -320,10 +314,10 @@ special_values{type="negative"} -123.45
 			},
 		},
 		{
-			name:        "mixed_sample_and_histogram_families",
-			description: "Sender MUST handle different metric types in same payload",
-			rfcLevel:    "MUST",
-			scrapeData: `# Counter
+			Name:"mixed_sample_and_histogram_families",
+			Description:"Sender MUST handle different metric types in same payload",
+			RFCLevel:"MUST",
+			ScrapeData:`# Counter
 requests_total 100
 
 # Gauge
@@ -341,7 +335,7 @@ rpc_duration{quantile="0.9"} 0.1
 rpc_duration_sum 50.0
 rpc_duration_count 1000
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				metricTypes := make(map[string]bool)
 
 				for _, ts := range req.Request.Timeseries {
@@ -366,21 +360,7 @@ rpc_duration_count 1000
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.scrapeData,
-					Validator:  tt.validator,
-					WaitTime:   6 * time.Second,
-				})
-			})
-		})
-	}
+	runTestCases(t, tests)
 }
 
 // TestRobustnessUnderLoad validates sender behavior under stress.

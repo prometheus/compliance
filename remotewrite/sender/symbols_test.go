@@ -22,19 +22,13 @@ import (
 
 // TestSymbolTable validates symbol table requirements for Remote Write 2.0.
 func TestSymbolTable(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-		rfcLevel    string
-		scrapeData  string
-		validator   func(*testing.T, *CapturedRequest)
-	}{
+	tests := []TestCase{
 		{
-			name:        "empty_string_at_index_zero",
-			description: "Symbol table MUST have empty string at index 0",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"empty_string_at_index_zero",
+			Description:"Symbol table MUST have empty string at index 0",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 				must(t).NotEmpty(symbols, "Symbol table must not be empty")
 				must(t).Equal("", symbols[0],
@@ -42,15 +36,15 @@ func TestSymbolTable(t *testing.T) {
 			},
 		},
 		{
-			name:        "string_deduplication",
-			description: "Symbol table MUST deduplicate repeated strings",
-			rfcLevel:    "MUST",
-			scrapeData: `# Multiple metrics with same label keys/values
+			Name:"string_deduplication",
+			Description:"Symbol table MUST deduplicate repeated strings",
+			RFCLevel:"MUST",
+			ScrapeData: `# Multiple metrics with same label keys/values
 test_metric{foo="bar",baz="qux"} 1
 test_metric{foo="bar",baz="qux"} 2
 another_metric{foo="bar"} 3
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 				must(t).NotEmpty(symbols, "Symbol table must not be empty")
 
@@ -69,11 +63,11 @@ another_metric{foo="bar"} 3
 			},
 		},
 		{
-			name:        "labels_refs_valid_indices",
-			description: "All label refs MUST point to valid symbol table indices",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric{label=\"value\"} 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"labels_refs_valid_indices",
+			Description:"All label refs MUST point to valid symbol table indices",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric{label=\"value\"} 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				symbols := req.Request.Symbols
 				timeseries := req.Request.Timeseries
 
@@ -89,11 +83,11 @@ another_metric{foo="bar"} 3
 			},
 		},
 		{
-			name:        "labels_refs_even_length",
-			description: "Label refs array length MUST be even (key-value pairs)",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_metric{label=\"value\"} 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:"labels_refs_even_length",
+			Description:"Label refs array length MUST be even (key-value pairs)",
+			RFCLevel:"MUST",
+			ScrapeData:"test_metric{label=\"value\"} 42\n",
+			Validator:func(t *testing.T, req *CapturedRequest) {
 				timeseries := req.Request.Timeseries
 				must(t).NotEmpty(timeseries, "Request must contain at least one timeseries")
 
@@ -107,20 +101,7 @@ another_metric{foo="bar"} 3
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.scrapeData,
-					Validator:  tt.validator,
-				})
-			})
-		})
-	}
+	runTestCases(t, tests)
 }
 
 // TestSymbolTableEfficiency validates that symbol tables are efficiently constructed.

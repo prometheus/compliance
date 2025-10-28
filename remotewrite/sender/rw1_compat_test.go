@@ -24,19 +24,13 @@ import (
 // Note: These tests require sender to be configured for RW 1.0 mode.
 // Most senders default to RW 2.0, so RW 1.0 tests are informational.
 func TestRemoteWrite1Compatibility(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-		rfcLevel    string
-		scrapeData  string
-		validator   func(*testing.T, *CapturedRequest)
-	}{
+	tests := []TestCase{
 		{
-			name:        "rw1_version_header",
-			description: "When using RW 1.0, sender SHOULD use version 0.1.0",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:        "rw1_version_header",
+			Description: "When using RW 1.0, sender SHOULD use version 0.1.0",
+			RFCLevel:    "SHOULD",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
 				// Check if this is RW 1.0 or RW 2.0
@@ -55,11 +49,11 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 			},
 		},
 		{
-			name:        "rw1_content_type",
-			description: "RW 1.0 SHOULD use basic content-type without proto parameter",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:        "rw1_content_type",
+			Description: "RW 1.0 SHOULD use basic content-type without proto parameter",
+			RFCLevel:    "SHOULD",
+			ScrapeData:  "test_metric 42\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				contentType := req.Headers.Get("Content-Type")
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
@@ -79,11 +73,11 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 			},
 		},
 		{
-			name:        "rw1_samples_encoding",
-			description: "RW 1.0 MUST encode samples correctly",
-			rfcLevel:    "MUST",
-			scrapeData:  "test_counter_total 100\n",
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:        "rw1_samples_encoding",
+			Description: "RW 1.0 MUST encode samples correctly",
+			RFCLevel:    "MUST",
+			ScrapeData:  "test_counter_total 100\n",
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
 				if strings.HasPrefix(version, "2.0") {
@@ -99,11 +93,11 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 			},
 		},
 		{
-			name:        "rw1_labels_encoding",
-			description: "RW 1.0 MUST encode labels correctly",
-			rfcLevel:    "MUST",
-			scrapeData:  `test_metric{label="value"} 42`,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Name:        "rw1_labels_encoding",
+			Description: "RW 1.0 MUST encode labels correctly",
+			RFCLevel:    "MUST",
+			ScrapeData:  `test_metric{label="value"} 42`,
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
 				if strings.HasPrefix(version, "2.0") {
@@ -117,15 +111,15 @@ func TestRemoteWrite1Compatibility(t *testing.T) {
 			},
 		},
 		{
-			name:        "rw1_no_native_histograms",
-			description: "RW 1.0 does not support native histograms",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_histogram histogram
+			Name:        "rw1_no_native_histograms",
+			Description: "RW 1.0 does not support native histograms",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 100
 test_histogram_sum 250.0
 test_histogram_bucket{le="+Inf"} 100
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
 				if strings.HasPrefix(version, "2.0") {
@@ -144,13 +138,13 @@ test_histogram_bucket{le="+Inf"} 100
 			},
 		},
 		{
-			name:        "rw1_no_created_timestamp",
-			description: "RW 1.0 does not support created_timestamp field",
-			rfcLevel:    "MUST",
-			scrapeData: `# TYPE test_counter counter
+			Name:        "rw1_no_created_timestamp",
+			Description: "RW 1.0 does not support created_timestamp field",
+			RFCLevel:    "MUST",
+			ScrapeData: `# TYPE test_counter counter
 test_counter_total 100
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
 				if strings.HasPrefix(version, "2.0") {
@@ -169,14 +163,14 @@ test_counter_total 100
 			},
 		},
 		{
-			name:        "rw1_metadata_handling",
-			description: "RW 1.0 MAY send metadata separately",
-			rfcLevel:    "MAY",
-			scrapeData: `# HELP test_metric Test metric description
+			Name:        "rw1_metadata_handling",
+			Description: "RW 1.0 MAY send metadata separately",
+			RFCLevel:    "MAY",
+			ScrapeData: `# HELP test_metric Test metric description
 # TYPE test_metric counter
 test_metric 42
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
 				if strings.HasPrefix(version, "2.0") {
@@ -191,13 +185,13 @@ test_metric 42
 			},
 		},
 		{
-			name:        "rw1_symbol_table_not_used",
-			description: "RW 1.0 does not use symbol table optimization",
-			rfcLevel:    "MUST",
-			scrapeData: `http_requests{method="GET",status="200"} 100
+			Name:        "rw1_symbol_table_not_used",
+			Description: "RW 1.0 does not use symbol table optimization",
+			RFCLevel:    "MUST",
+			ScrapeData: `http_requests{method="GET",status="200"} 100
 http_requests{method="POST",status="200"} 50
 `,
-			validator: func(t *testing.T, req *CapturedRequest) {
+			Validator: func(t *testing.T, req *CapturedRequest) {
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
 				if strings.HasPrefix(version, "2.0") {
@@ -214,22 +208,7 @@ http_requests{method="POST",status="200"} 50
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			t.Attr("rfcLevel", tt.rfcLevel)
-			t.Attr("description", tt.description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				// Note: Most senders will be in RW 2.0 mode by default
-				// These tests are informational and will skip if RW 2.0 is detected
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.scrapeData,
-					Validator:  tt.validator,
-				})
-			})
-		})
-	}
+	runTestCases(t, tests)
 }
 
 // TestRemoteWrite1Configuration tests if sender can be configured for RW 1.0.

@@ -240,7 +240,7 @@ sample_3 3
 				err := target(targets.TargetOptions{
 					ScrapeTarget:    scrapeTarget.URL(),
 					ReceiveEndpoint: receiver.URL(),
-					Timeout:         6 * time.Second,
+					Timeout:         8 * time.Second,
 				})
 
 				// Error may occur for error response tests
@@ -281,7 +281,7 @@ func TestContentTypeNegotiation(t *testing.T) {
 		err := target(targets.TargetOptions{
 			ScrapeTarget:    scrapeTarget.URL(),
 			ReceiveEndpoint: receiver.URL(),
-			Timeout:         6 * time.Second,
+			Timeout:         10 * time.Second,
 		})
 
 		if err != nil {

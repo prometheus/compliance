@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -395,4 +396,125 @@ func isSorted(labels map[string]string, symbols []string, refs []uint32) bool {
 // Exemplars in OpenMetrics format are indicated by "# {" after a metric value.
 func containsExemplars(metrics string) bool {
 	return strings.Contains(metrics, "# {")
+}
+
+// ===== REFACTORED HELPER FUNCTIONS TO REDUCE DUPLICATION =====
+
+// TestCase represents a single test case for compliance testing.
+type TestCase struct {
+	Name        string
+	Description string
+	RFCLevel    string
+	ScrapeData  string
+	Validator   func(*testing.T, *CapturedRequest)
+}
+
+// runTestCases is a helper that eliminates the common test table runner pattern.
+// This pattern was duplicated across 15+ test files.
+func runTestCases(t *testing.T, tests []TestCase) {
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			t.Parallel()
+			t.Attr("rfcLevel", tt.RFCLevel)
+			t.Attr("description", tt.Description)
+
+			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+				runSenderTest(t, targetName, target, SenderTestScenario{
+					ScrapeData: tt.ScrapeData,
+					Validator:  tt.Validator,
+				})
+			})
+		})
+	}
+}
+
+// findTimeseriesByMetricName finds a timeseries by metric name from a captured request.
+// Returns the timeseries and labels if found, or nil if not found.
+// This eliminates the "var found bool; for loop" pattern repeated 30+ times.
+func findTimeseriesByMetricName(req *CapturedRequest, metricName string) (*writev2.TimeSeries, map[string]string) {
+	for i := range req.Request.Timeseries {
+		ts := &req.Request.Timeseries[i]
+		labels := extractLabels(ts, req.Request.Symbols)
+		if labels["__name__"] == metricName {
+			return ts, labels
+		}
+	}
+	return nil, nil
+}
+
+// requireTimeseriesByMetricName finds a timeseries by metric name and fails the test if not found.
+// This is the most common pattern - find metric and assert it exists.
+func requireTimeseriesByMetricName(t *testing.T, req *CapturedRequest, metricName string) (*writev2.TimeSeries, map[string]string) {
+	t.Helper()
+	ts, labels := findTimeseriesByMetricName(req, metricName)
+	must(t).NotNil(ts, "Timeseries with metric name %q must be present", metricName)
+	return ts, labels
+}
+
+// findHistogramData attempts to find histogram data in both classic and native formats.
+// Returns (classicFound, nativeTS) where:
+//   - classicFound: true if classic histogram metrics (_count, _sum, _bucket) are found
+//   - nativeTS: pointer to timeseries containing native histogram, or nil if not found
+//
+// This eliminates the duplicate histogram format checking pattern repeated 10+ times.
+func findHistogramData(req *CapturedRequest, baseName string) (classicFound bool, nativeTS *writev2.TimeSeries) {
+	for i := range req.Request.Timeseries {
+		ts := &req.Request.Timeseries[i]
+		labels := extractLabels(ts, req.Request.Symbols)
+		metricName := labels["__name__"]
+
+		// Check for classic histogram components
+		if metricName == baseName+"_count" || metricName == baseName+"_sum" || metricName == baseName+"_bucket" {
+			classicFound = true
+		}
+
+		// Check for native histogram format
+		if metricName == baseName && len(ts.Histograms) > 0 {
+			nativeTS = ts
+		}
+	}
+	return classicFound, nativeTS
+}
+
+// extractHistogramCount extracts count from either classic or native histogram format.
+// Returns (count, found) where found indicates if count was successfully extracted.
+func extractHistogramCount(req *CapturedRequest, baseName string) (float64, bool) {
+	// Try classic format first
+	ts, _ := findTimeseriesByMetricName(req, baseName+"_count")
+	if ts != nil && len(ts.Samples) > 0 {
+		return ts.Samples[0].Value, true
+	}
+
+	// Try native format
+	ts, _ = findTimeseriesByMetricName(req, baseName)
+	if ts != nil && len(ts.Histograms) > 0 {
+		hist := ts.Histograms[0]
+		if hist.Count != nil {
+			if countInt, ok := hist.Count.(*writev2.Histogram_CountInt); ok {
+				return float64(countInt.CountInt), true
+			} else if countFloat, ok := hist.Count.(*writev2.Histogram_CountFloat); ok {
+				return countFloat.CountFloat, true
+			}
+		}
+	}
+
+	return 0, false
+}
+
+// extractHistogramSum extracts sum from either classic or native histogram format.
+// Returns (sum, found) where found indicates if sum was successfully extracted.
+func extractHistogramSum(req *CapturedRequest, baseName string) (float64, bool) {
+	// Try classic format first
+	ts, _ := findTimeseriesByMetricName(req, baseName+"_sum")
+	if ts != nil && len(ts.Samples) > 0 {
+		return ts.Samples[0].Value, true
+	}
+
+	// Try native format
+	ts, _ = findTimeseriesByMetricName(req, baseName)
+	if ts != nil && len(ts.Histograms) > 0 {
+		return ts.Histograms[0].Sum, true
+	}
+
+	return 0, false
 }

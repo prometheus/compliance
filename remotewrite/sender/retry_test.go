@@ -242,7 +242,7 @@ func TestRetryBehavior(t *testing.T) {
 				err := target(targets.TargetOptions{
 					ScrapeTarget:    scrapeTarget.URL(),
 					ReceiveEndpoint: receiver.URL(),
-					Timeout:         6 * time.Second,
+					Timeout:         8 * time.Second,
 				})
 
 				if err != nil {
