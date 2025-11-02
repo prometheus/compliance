@@ -145,7 +145,7 @@ func forEachSender(t *testing.T, f func(*testing.T, string, targets.Target)) {
 	// Run test for each target.
 	for name, target := range targetsToTest {
 		t.Run(name, func(t *testing.T) {
-			t.Attr("sender", name)
+			t.Attr("rw", name)
 			f(t, name, target)
 		})
 	}
