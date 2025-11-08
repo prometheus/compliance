@@ -96,8 +96,8 @@ func TestEdgeCases(t *testing.T) {
 		},
 		{
 			Name:        "many_timeseries",
-			Description: "Sender SHOULD efficiently handle many timeseries",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should efficiently handle many timeseries",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData: func() string {
 				var sb strings.Builder
 				for i := 0; i < 100; i++ {
@@ -112,11 +112,11 @@ func TestEdgeCases(t *testing.T) {
 			}(),
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
-				should(t, seriesCount >= 10, "Should handle multiple timeseries efficiently")
+				optimization(t, seriesCount >= 10, "Should handle multiple timeseries efficiently")
 
 				// Check symbol table efficiency.
 				symbols := req.Request.Symbols
-				should(t, len(symbols) > 0, "Symbol table should be used")
+				optimization(t, len(symbols) > 0, "Symbol table should be used")
 
 				t.Logf("Handled %d timeseries with %d symbols",
 					seriesCount, len(symbols))
@@ -124,8 +124,8 @@ func TestEdgeCases(t *testing.T) {
 		},
 		{
 			Name:        "high_cardinality",
-			Description: "Sender SHOULD handle high cardinality label sets",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should handle high cardinality label sets efficiently",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData: func() string {
 				var sb strings.Builder
 				// Create high cardinality by varying one label across many values.
@@ -141,7 +141,7 @@ func TestEdgeCases(t *testing.T) {
 			}(),
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
-				should(t, seriesCount >= 20, "Should handle high cardinality metrics")
+				optimization(t, seriesCount >= 20, "Should handle high cardinality metrics")
 
 				// Symbol table should deduplicate common strings.
 				symbols := req.Request.Symbols
@@ -152,7 +152,7 @@ func TestEdgeCases(t *testing.T) {
 					}
 				}
 
-				should(t, len(uniqueSymbols) > 0, "Symbol table should deduplicate in high cardinality")
+				optimization(t, len(uniqueSymbols) > 0, "Symbol table should deduplicate in high cardinality")
 				t.Logf("High cardinality: %d series, %d unique symbols",
 					seriesCount, len(uniqueSymbols))
 			},

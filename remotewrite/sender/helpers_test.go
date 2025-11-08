@@ -332,6 +332,16 @@ func may(t *testing.T, condition bool, msg string) {
 	}
 }
 
+// optimization marks a test as having an "OPTIMIZATION" compliance level.
+// These tests check for performance optimizations that are not required by the spec.
+func optimization(t *testing.T, condition bool, msg string) {
+	t.Helper()
+	t.Attr("rfcLevel", "OPTIMIZATION")
+	if !condition {
+		t.Errorf("🔧 OPTIMIZATION not implemented (performance enhancement): %s", msg)
+	}
+}
+
 // validateSymbolTable validates that the symbol table follows RW 2.0 requirements.
 func validateSymbolTable(t *testing.T, symbols []string) {
 	t.Helper()

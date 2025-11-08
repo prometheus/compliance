@@ -179,8 +179,8 @@ request_duration_seconds_count 100
 		},
 		{
 			Name:        "high_cardinality_labels",
-			Description: "Sender SHOULD efficiently handle high cardinality label sets",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should efficiently handle high cardinality label sets",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData: `# TYPE http_requests_total counter
 http_requests_total{method="GET",path="/api/v1/users",status="200"} 100
 http_requests_total{method="GET",path="/api/v1/posts",status="200"} 200
@@ -201,7 +201,7 @@ http_requests_total{method="DELETE",path="/api/v1/users",status="204"} 10
 				}
 
 				// Check that common strings are deduplicated.
-				should(t, len(uniqueSymbols) > 0, "Symbol table should contain unique symbols")
+				optimization(t, len(uniqueSymbols) > 0, "Symbol table should contain unique symbols")
 
 				httpRequestsSeries := 0
 				for _, ts := range req.Request.Timeseries {
@@ -211,7 +211,7 @@ http_requests_total{method="DELETE",path="/api/v1/users",status="204"} 10
 					}
 				}
 
-				should(t, httpRequestsSeries >= 6,
+				optimization(t, httpRequestsSeries >= 6,
 					"High cardinality metrics should have multiple series")
 				t.Logf("Found %d unique symbols, %d http_requests_total series",
 					len(uniqueSymbols), httpRequestsSeries)

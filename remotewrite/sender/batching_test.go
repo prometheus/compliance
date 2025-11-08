@@ -26,8 +26,8 @@ func TestBatchingBehavior(t *testing.T) {
 	tests := []TestCase{
 		{
 			Name:        "multiple_series_per_request",
-			Description: "Sender SHOULD batch multiple series in single request",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should batch multiple series in single request for efficiency",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData: `# Multiple metrics to batch
 http_requests_total{method="GET",status="200"} 1000
 http_requests_total{method="POST",status="200"} 500
@@ -44,8 +44,8 @@ disk_io_bytes_total 1000000
 					metricNames[labels["__name__"]] = true
 				}
 
-				should(t, len(req.Request.Timeseries) >= 3, fmt.Sprintf("Sender should batch multiple series, got %d series", len(req.Request.Timeseries)))
-				should(t, len(metricNames) >= 2, fmt.Sprintf("Sender should batch different metrics, got %d unique metrics", len(metricNames)))
+				optimization(t, len(req.Request.Timeseries) >= 3, fmt.Sprintf("Sender should batch multiple series, got %d series", len(req.Request.Timeseries)))
+				optimization(t, len(metricNames) >= 2, fmt.Sprintf("Sender should batch different metrics, got %d unique metrics", len(metricNames)))
 
 				t.Logf("Batched %d timeseries with %d unique metrics",
 					len(req.Request.Timeseries), len(metricNames))
@@ -53,8 +53,8 @@ disk_io_bytes_total 1000000
 		},
 		{
 			Name:        "batch_size_reasonable",
-			Description: "Sender SHOULD use reasonable batch sizes",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should use reasonable batch sizes for performance",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData: `# Many metrics
 metric_1 1
 metric_2 2
@@ -81,31 +81,31 @@ metric_20 20
 				seriesCount := len(req.Request.Timeseries)
 
 				// Batches shouldn't be too small (inefficient) or too large (risk).
-				should(t, seriesCount >= 1, "Request should contain at least one series")
+				optimization(t, seriesCount >= 1, "Request should contain at least one series")
 
 				// Most senders batch at least several series together.
-				should(t, seriesCount <= 10000, "Batch size should be reasonable (not too large)")
+				optimization(t, seriesCount <= 10000, "Batch size should be reasonable (not too large)")
 
 				t.Logf("Batch contains %d timeseries", seriesCount)
 			},
 		},
 		{
 			Name:        "time_based_flushing",
-			Description: "Sender SHOULD flush batches based on time intervals",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should flush batches based on time intervals for efficiency",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData:  "test_metric 42\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				// Verify that data is sent even with small amounts.
 				// This indicates time-based flushing.
-				should(t, len(req.Request.Timeseries) > 0, "Sender should flush small batches based on time")
+				optimization(t, len(req.Request.Timeseries) > 0, "Sender should flush small batches based on time")
 
 				t.Logf("Time-based flush sent %d timeseries", len(req.Request.Timeseries))
 			},
 		},
 		{
 			Name:        "handles_varying_cardinality",
-			Description: "Sender SHOULD handle varying label cardinality efficiently",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should handle varying label cardinality efficiently",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData: `# High cardinality metrics
 api_calls{endpoint="/users",method="GET",region="us-east",status="200"} 100
 api_calls{endpoint="/users",method="POST",region="us-east",status="201"} 50
@@ -124,8 +124,8 @@ low_cardinality_metric 42
 					}
 				}
 
-				should(t, len(uniqueSymbols) > 0, "Symbol table should deduplicate")
-				should(t, len(req.Request.Timeseries) >= 2, "Should handle mixed cardinality metrics")
+				optimization(t, len(uniqueSymbols) > 0, "Symbol table should deduplicate")
+				optimization(t, len(req.Request.Timeseries) >= 2, "Should handle mixed cardinality metrics")
 
 				t.Logf("Symbol table: %d unique symbols for %d timeseries",
 					len(uniqueSymbols), len(req.Request.Timeseries))
@@ -133,8 +133,8 @@ low_cardinality_metric 42
 		},
 		{
 			Name:        "efficient_symbol_reuse",
-			Description: "Sender SHOULD reuse symbols efficiently across batches",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should reuse symbols efficiently across batches",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData: `# Metrics with shared labels
 http_requests{service="api",method="GET"} 100
 http_requests{service="api",method="POST"} 50
@@ -154,7 +154,7 @@ http_duration{service="api",method="POST"} 0.3
 				// Common strings should appear only once (deduplicated).
 				for sym, count := range symbolCounts {
 					if sym != "" {
-						should(t, count == 1, fmt.Sprintf("Symbol %q should appear only once in table, got %d", sym, count))
+						optimization(t, count == 1, fmt.Sprintf("Symbol %q should appear only once in table, got %d", sym, count))
 					}
 				}
 
@@ -163,8 +163,8 @@ http_duration{service="api",method="POST"} 0.3
 		},
 		{
 			Name:        "metadata_batching",
-			Description: "Sender SHOULD batch metadata with samples efficiently",
-			RFCLevel:    "SHOULD",
+			Description: "Sender should batch metadata with samples efficiently",
+			RFCLevel:    "OPTIMIZATION",
 			ScrapeData: `# HELP http_requests_total Total HTTP requests
 # TYPE http_requests_total counter
 http_requests_total{method="GET"} 1000
@@ -191,7 +191,7 @@ memory_usage_bytes 1048576
 					}
 				}
 
-				should(t, len(req.Request.Timeseries) >= 2, "Should batch multiple series")
+				optimization(t, len(req.Request.Timeseries) >= 2, "Should batch multiple series")
 
 				t.Logf("Batched timeseries: %d with metadata, %d without",
 					withMetadata, withoutMetadata)
