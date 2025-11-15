@@ -332,13 +332,12 @@ func may(t *testing.T, condition bool, msg string) {
 	}
 }
 
-// optimization marks a test as having an "OPTIMIZATION" compliance level.
-// These tests check for performance optimizations that are not required by the spec.
-func optimization(t *testing.T, condition bool, msg string) {
+// recommended marks a test as having an "RECOMMENDED" compliance level.
+func recommended(t *testing.T, condition bool, msg string) {
 	t.Helper()
-	t.Attr("rfcLevel", "OPTIMIZATION")
+	t.Attr("rfcLevel", "RECOMMENDED")
 	if !condition {
-		t.Errorf("🔧 OPTIMIZATION not implemented (performance enhancement): %s", msg)
+		t.Errorf("🔧 RECOMMENDED not implemented (performance enhancement): %s", msg)
 	}
 }
 

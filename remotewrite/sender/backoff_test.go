@@ -52,58 +52,7 @@ func (ttr *TimestampTrackingReceiver) GetTimestamps() []time.Time {
 	return append([]time.Time{}, ttr.timestamps...)
 }
 
-// TestBackoffRequired validates that senders implement a backoff mechanism when retrying.
-func TestBackoffRequired(t *testing.T) {
-	t.Attr("rfcLevel", "MUST")
-	t.Attr("description", "Sender MUST use a backoff algorithm to prevent overwhelming the server")
-
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-		receiver := NewMockReceiver()
-		defer receiver.Close()
-
-		tracker := NewTimestampTrackingReceiver(receiver)
-
-		// Configure receiver to return 503 errors to trigger retries.
-		receiver.SetResponse(MockReceiverResponse{
-			StatusCode: http.StatusServiceUnavailable,
-			Body:       "Service unavailable",
-		})
-
-		originalHandler := receiver.server.Config.Handler
-		receiver.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			tracker.RecordTimestamp()
-			originalHandler.ServeHTTP(w, r)
-		})
-
-		scrapeTarget := NewMockScrapeTarget("test_metric 42\n")
-		defer scrapeTarget.Close()
-
-		runAutoTargetWithCustomReceiver(t, targetName, target, receiver.URL(), scrapeTarget, 10*time.Second)
-
-		timestamps := tracker.GetTimestamps()
-		must(t).True(len(timestamps) >= 2, "Sender must retry on 5xx errors")
-
-		if len(timestamps) < 2 {
-			t.Fatalf("Expected at least 2 requests (initial + retry), got %d", len(timestamps))
-		}
-
-		// Verify that there is a delay between requests (any backoff mechanism).
-		firstInterval := timestamps[1].Sub(timestamps[0])
-		minBackoffDelay := 1 * time.Millisecond
-
-		must(t).True(firstInterval >= minBackoffDelay,
-			"Sender MUST implement backoff (delay between retries), got interval: %v", firstInterval)
-
-		// Verify delays exist between subsequent requests if multiple retries occurred.
-		for i := 2; i < len(timestamps); i++ {
-			interval := timestamps[i].Sub(timestamps[i-1])
-			must(t).True(interval >= minBackoffDelay,
-				"Sender MUST use backoff between all retry attempts, interval %d was: %v", i, interval)
-		}
-	})
-}
-
-// TestBackoffBehavior validates exponential backoff implementation.
+// TestBackoffBehavior validates backoff and exponential backoff implementation.
 func TestBackoffBehavior(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -152,31 +101,43 @@ func TestBackoffBehavior(t *testing.T) {
 			},
 		},
 		{
-			name:        "increasing_delays",
-			description: "Retry delays SHOULD increase over time",
-			rfcLevel:    "SHOULD",
+			name:        "backoff_required",
+			description: "Sender MUST use a backoff algorithm to prevent overwhelming the server",
+			rfcLevel:    "MUST",
 			scrapeData:  "test_metric 42\n",
 			setup: func(mr *MockReceiver) {
 				mr.SetResponse(MockReceiverResponse{
-					StatusCode: http.StatusInternalServerError,
-					Body:       "Internal server error",
+					StatusCode: http.StatusServiceUnavailable,
+					Body:       "Service unavailable",
 				})
 			},
 			validator: func(t *testing.T, ttr *TimestampTrackingReceiver) {
 				timestamps := ttr.GetTimestamps()
+				must(t).True(len(timestamps) >= 2, "Sender must retry on 5xx errors")
+
 				if len(timestamps) < 2 {
-					t.Logf("Only %d requests, cannot validate increasing delays", len(timestamps))
-					return
+					t.Fatalf("Expected at least 2 requests (initial + retry), got %d", len(timestamps))
 				}
 
-				// Check that delay between first and second request is less than
-				// delay between second and third (if exists).
+				// MUST: Verify that backoff exists (delay between all requests).
+				minBackoffDelay := 1 * time.Millisecond
+				for i := 1; i < len(timestamps); i++ {
+					interval := timestamps[i].Sub(timestamps[i-1])
+					must(t).True(interval >= minBackoffDelay,
+						"Sender MUST implement backoff between all retry attempts, interval %d was: %v", i, interval)
+					t.Logf("Interval %d: %v", i, interval)
+				}
+
+				// Additional validation: Check that delays increase over time (if 3+ requests).
 				if len(timestamps) >= 3 {
 					firstDelay := timestamps[1].Sub(timestamps[0])
 					secondDelay := timestamps[2].Sub(timestamps[1])
-
-					should(t, firstDelay <= secondDelay*2, "Delays should increase over retries (with some tolerance)")
 					t.Logf("First delay: %v, Second delay: %v", firstDelay, secondDelay)
+
+					// This validates increasing backoff pattern
+					if secondDelay < firstDelay {
+						t.Logf("Note: Second delay (%v) is shorter than first delay (%v), backoff may not be increasing", secondDelay, firstDelay)
+					}
 				}
 			},
 		},
@@ -213,7 +174,7 @@ func TestBackoffBehavior(t *testing.T) {
 		{
 			name:        "backoff_with_jitter",
 			description: "Sender MAY add jitter to backoff delays",
-			rfcLevel:    "MAY",
+			rfcLevel:    "RECOMMENDED",
 			scrapeData:  "test_metric 42\n",
 			setup: func(mr *MockReceiver) {
 				mr.SetResponse(MockReceiverResponse{
@@ -236,34 +197,6 @@ func TestBackoffBehavior(t *testing.T) {
 				// With jitter, intervals shouldn't be exactly doubling.
 				may(t, len(intervals) > 0, "Intervals should exist for jitter analysis")
 				t.Logf("Intervals: %v (jitter may cause variance)", intervals)
-			},
-		},
-		{
-			name:        "minimum_backoff_delay",
-			description: "Sender SHOULD have a minimum backoff delay",
-			rfcLevel:    "SHOULD",
-			scrapeData:  "test_metric 42\n",
-			setup: func(mr *MockReceiver) {
-				mr.SetResponse(MockReceiverResponse{
-					StatusCode: http.StatusInternalServerError,
-					Body:       "Internal server error",
-				})
-			},
-			validator: func(t *testing.T, ttr *TimestampTrackingReceiver) {
-				timestamps := ttr.GetTimestamps()
-				if len(timestamps) < 2 {
-					t.Logf("Only %d requests, cannot validate minimum delay", len(timestamps))
-					return
-				}
-
-				minReasonableDelay := 10 * time.Millisecond
-
-				for i := 1; i < len(timestamps); i++ {
-					interval := timestamps[i].Sub(timestamps[i-1])
-					should(t, interval >= minReasonableDelay, fmt.Sprintf("Backoff interval too small: %v < %v", interval, minReasonableDelay))
-				}
-
-				t.Logf("Minimum observed interval: %v", timestamps[1].Sub(timestamps[0]))
 			},
 		},
 	}

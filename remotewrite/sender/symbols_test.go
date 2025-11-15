@@ -38,7 +38,7 @@ func TestSymbolTable(t *testing.T) {
 		{
 			Name:        "string_deduplication",
 			Description: "Symbol table should deduplicate repeated strings for efficiency",
-			RFCLevel:    "OPTIMIZATION",
+			RFCLevel:    "RECOMMENDED",
 			ScrapeData: `# Multiple metrics with same label keys/values
 test_metric{foo="bar",baz="qux"} 1
 test_metric{foo="bar",baz="qux"} 2
@@ -55,7 +55,7 @@ another_metric{foo="bar"} 3
 						continue // Empty string can appear multiple times (though should only be at index 0).
 					}
 					if prevIdx, exists := seen[sym]; exists {
-						optimization(t, false, fmt.Sprintf("Duplicate string %q found at indices %d and %d (deduplication is a performance optimization)",
+						recommended(t, false, fmt.Sprintf("Duplicate string %q found at indices %d and %d (deduplication is a performance recommended)",
 							sym, prevIdx, i))
 					}
 					seen[sym] = i
@@ -106,7 +106,7 @@ another_metric{foo="bar"} 3
 
 // TestSymbolTableEfficiency validates that symbol tables are efficiently constructed.
 func TestSymbolTableEfficiency(t *testing.T) {
-	t.Attr("rfcLevel", "OPTIMIZATION")
+	t.Attr("rfcLevel", "RECOMMENDED")
 	t.Attr("description", "Symbol table should be efficiently constructed with good compression")
 
 	scrapeData := `# Multiple series with shared labels
@@ -137,7 +137,7 @@ http_requests_total{method="GET",status="200",handler="/api/v2"} 75
 				// For the above scrape data, we expect around 11-15 unique symbols:
 				// metric name (1), label keys (3), label values (7-8)
 				// If the symbol table is much larger, deduplication may not be working.
-				optimization(t, uniqueCount <= 30, fmt.Sprintf(
+				recommended(t, uniqueCount <= 30, fmt.Sprintf(
 					"Symbol table should be efficiently deduplicated (found %d unique symbols)",
 					uniqueCount))
 
