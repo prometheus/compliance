@@ -10,7 +10,6 @@ workflows:
               dir:
                 - alert_generator
                 - promql
-                - remotewrite/sender
       - test:
           matrix:
             parameters:

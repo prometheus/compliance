@@ -1,6 +1,6 @@
 # Prometheus Remote-Write v2 Compliance Test Suite
 
-This repository contains compliance test suites for both **senders** and **receivers** of the Prometheus Remote-Write Protocol v2. It validates proper implementation of the Remote-Write v2 specification according to the [official protocol requirements](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/).
+This repository contains compliance test suites for both **senders** and **receivers** of the Prometheus Remote-Write Protocol 2.0. It validates implementation of the Remote-Write v2 specification according to the [official protocol requirements](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/) as well as some more strict Prometheus implementation aspects.
 
 ## Overview
 
@@ -137,22 +137,5 @@ go test -json | tee results.json
 Tests are marked with compliance levels according to RFC specifications:
 - **MUST**: Required by specification
 - **SHOULD**: Recommended by specification
-
-Tests use `t.Attr("rfcLevel", "MUST")` or `t.Attr("rfcLevel", "SHOULD")` to identify compliance levels.
-
-## Validation Details
-
-### Sender Request Validation
-The test suite validates sender behavior by examining:
-- Request payload structure and encoding (protobuf format)
-- Required request headers (Content-Type, Content-Encoding, etc.)
-- Proper compression (snappy)
-- Correct retry behavior on receiver errors
-- Backoff strategy implementation
-- Batching and queueing behavior
-- Metadata and symbol handling
-
-### Receiver Response Validation
-The test suite validates:
-- HTTP status codes (2xx for success, 4xx for client errors, 5xx for server errors)
-- Required response headers (`X-Prometheus-Remote-Write-*-Written`)
+- **MAY**: Could have by specification
+- **RECOMMENDED**: Not in specification but recommended for performance 
