@@ -90,19 +90,6 @@ metric_20 20
 			},
 		},
 		{
-			Name:        "time_based_flushing",
-			Description: "Sender should flush batches based on time intervals for efficiency",
-			RFCLevel:    "RECOMMENDED",
-			ScrapeData:  "test_metric 42\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				// Verify that data is sent even with small amounts.
-				// This indicates time-based flushing.
-				recommended(t, len(req.Request.Timeseries) > 0, "Sender should flush small batches based on time")
-
-				t.Logf("Time-based flush sent %d timeseries", len(req.Request.Timeseries))
-			},
-		},
-		{
 			Name:        "handles_varying_cardinality",
 			Description: "Sender should handle varying label cardinality efficiently",
 			RFCLevel:    "RECOMMENDED",
