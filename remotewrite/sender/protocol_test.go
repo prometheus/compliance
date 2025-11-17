@@ -94,8 +94,6 @@ func TestProtocolCompliance(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_metric 42\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// Snappy framed format starts with specific magic bytes: 0xff 0x06 0x00 0x00 0x73 0x4e 0x61 0x50 0x50 0x59.
-				// Snappy block format does not have these magic bytes.
 				body := req.Body
 				must(t).NotEmpty(body, "Request body must not be empty")
 

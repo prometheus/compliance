@@ -32,7 +32,7 @@ func TestTimestampEncoding(t *testing.T) {
 				for _, ts := range req.Request.Timeseries {
 					if len(ts.Samples) > 0 {
 						timestamp := ts.Samples[0].Timestamp
-						// Verify it's in milliseconds range
+						// Verify it's in milliseconds range.
 						must(t).Greater(timestamp, int64(1e12),
 							"Timestamp should be in milliseconds, not seconds")
 						must(t).Less(timestamp, int64(1e16),

@@ -40,13 +40,11 @@ func TestErrorHandling(t *testing.T) {
 			setup: func() *httptest.Server {
 				// Return a server that immediately closes
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// This will be closed before sender connects
 				}))
-				server.Close() // Close immediately
+				server.Close()
 				return server
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
-				// Sender should handle connection refused without crashing
 				should(t, true, "Sender should handle connection refused")
 				t.Logf("Sender handled connection refused scenario")
 			},
@@ -62,7 +60,6 @@ func TestErrorHandling(t *testing.T) {
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
-				// Sender should timeout and handle gracefully
 				should(t, true, "Sender should handle timeouts")
 				t.Logf("Sender handled timeout scenario")
 			},
@@ -74,10 +71,8 @@ func TestErrorHandling(t *testing.T) {
 			scrapeData:  "test_metric 42\n",
 			setup: func() *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Write partial response and close
 					w.WriteHeader(http.StatusOK)
 					w.Write([]byte("partial"))
-					// Connection will be closed abruptly
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
@@ -92,7 +87,6 @@ func TestErrorHandling(t *testing.T) {
 			scrapeData:  "test_metric 42\n",
 			setup: func() *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Send invalid HTTP response
 					w.WriteHeader(http.StatusOK)
 					w.Write([]byte("Not valid response headers\r\n"))
 				}))
@@ -109,13 +103,13 @@ func TestErrorHandling(t *testing.T) {
 			scrapeData:  "test_metric 42\n",
 			setup: func() *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Return error but sender should keep trying
+					// Return error but sender should keep trying.
 					w.WriteHeader(http.StatusInternalServerError)
 					w.Write([]byte("Internal server error"))
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
-				// Sender should not crash and keep running
+				// Sender should not crash and keep running.
 				must(t).True(true, "Sender must continue running after errors")
 				t.Logf("Sender continues running after errors")
 			},
@@ -127,7 +121,6 @@ func TestErrorHandling(t *testing.T) {
 			scrapeData:  "test_metric 42\n",
 			setup: func() *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Send unusual status code
 					w.WriteHeader(999)
 				}))
 			},
@@ -143,9 +136,7 @@ func TestErrorHandling(t *testing.T) {
 			scrapeData:  "test_metric 42\n",
 			setup: func() *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Send 200 with no body
 					w.WriteHeader(http.StatusOK)
-					// No response body
 				}))
 			},
 			validator: func(t *testing.T, server *httptest.Server) {
@@ -183,7 +174,6 @@ func TestErrorHandling(t *testing.T) {
 			t.Attr("description", tt.description)
 
 			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				// Setup error scenario
 				server := tt.setup()
 				var serverURL string
 				if server != nil {
@@ -196,13 +186,9 @@ func TestErrorHandling(t *testing.T) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-				// Run target with custom error server
 				runAutoTargetWithCustomReceiver(t, targetName, target, serverURL, scrapeTarget, 8*time.Second)
 
-				// Run validator
 				tt.validator(t, server)
-
-				// Verify sender process is still running (didn't crash)
 			})
 		})
 	}
@@ -237,7 +223,6 @@ func TestNetworkErrors(t *testing.T) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-				// Run target with invalid URL - sender should handle gracefully
 				runAutoTargetWithCustomReceiver(t, targetName, target, tt.serverURL, scrapeTarget, 5*time.Second)
 
 				should(t, true, "Sender handled network error without crashing")

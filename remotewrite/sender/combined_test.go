@@ -56,7 +56,6 @@ http_requests_total{method="POST",status="201"} 500
 					}
 				}
 
-				// Metric must be present
 				if !foundMetric {
 					t.Fatalf("Expected to find http_requests_total metric")
 				}

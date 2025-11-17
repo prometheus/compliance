@@ -100,7 +100,6 @@ func TestLabelValidation(t *testing.T) {
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 
-					// Check for duplicates by comparing length: If duplicates exist, the map will have fewer entries than pairs.
 					expectedPairs := len(ts.LabelsRefs) / 2
 					must(t).Equal(expectedPairs, len(labels),
 						"No duplicate label names allowed")
@@ -130,14 +129,12 @@ func TestLabelValidation(t *testing.T) {
 			RFCLevel:    "MAY",
 			ScrapeData:  `test_metric{empty=""} 42`,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// Empty label values are allowed.
 				symbols := req.Request.Symbols
 				for _, ts := range req.Request.Timeseries {
 					refs := ts.LabelsRefs
 					for i := 1; i < len(refs); i += 2 {
 						valueRef := refs[i]
 						labelValue := symbols[valueRef]
-						// Empty values are allowed.
 						may(t, len(labelValue) >= 0, "Label values may be empty")
 					}
 				}
@@ -149,7 +146,6 @@ func TestLabelValidation(t *testing.T) {
 			RFCLevel:    "SHOULD",
 			ScrapeData:  `test_metric{normal="value"} 42`,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// Check that user-defined labels don't use __ prefix.
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					for labelName := range labels {

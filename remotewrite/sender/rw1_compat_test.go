@@ -152,7 +152,6 @@ test_counter_total 100
 				// RW 1.0 format doesn't have created_timestamp field.
 				// If sender is truly in RW 1.0 mode, this field should be 0/unset.
 				for _, ts := range req.Request.Timeseries {
-					// In RW 1.0, created_timestamp should not be used
 					should(t, int64(0) == ts.CreatedTimestamp, "RW 1.0 should not use created_timestamp field")
 				}
 
