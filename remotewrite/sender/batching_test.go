@@ -15,6 +15,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,40 +54,25 @@ disk_io_bytes_total 1000000
 		},
 		{
 			Name:        "batch_size_reasonable",
-			Description: "Sender should use reasonable batch sizes for performance",
+			Description: "Sender should use reasonable batch sizes (10k series max) for performance",
 			RFCLevel:    "RECOMMENDED",
-			ScrapeData: `# Many metrics
-metric_1 1
-metric_2 2
-metric_3 3
-metric_4 4
-metric_5 5
-metric_6 6
-metric_7 7
-metric_8 8
-metric_9 9
-metric_10 10
-metric_11 11
-metric_12 12
-metric_13 13
-metric_14 14
-metric_15 15
-metric_16 16
-metric_17 17
-metric_18 18
-metric_19 19
-metric_20 20
-`,
+			ScrapeData: func() string {
+				var ret strings.Builder
+				ret.WriteString("# Large scrape to test batch size handling\n")
+				for i := range 12000 {
+					ret.WriteString(fmt.Sprintf("metric{label=\"%d\"} 1\n", i))
+				}
+				return ret.String()
+			}(),
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				seriesCount := len(req.Request.Timeseries)
 
 				// Batches shouldn't be too small (inefficient) or too large (risk).
 				recommended(t, seriesCount >= 1, "Request should contain at least one series")
 
-				// Most senders batch at least several series together.
-				recommended(t, seriesCount <= 10000, "Batch size should be reasonable (not too large)")
+				recommended(t, seriesCount <= 10000, fmt.Sprintf("Batch size should be reasonable (less than 10k series), got %d", seriesCount))
 
-				t.Logf("Batch contains %d timeseries", seriesCount)
+				t.Logf("Batch contains %d timeseries from 12k available metrics", seriesCount)
 			},
 		},
 		{
