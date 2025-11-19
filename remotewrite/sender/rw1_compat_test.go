@@ -135,8 +135,8 @@ test_histogram_bucket{le="+Inf"} 100
 			},
 		},
 		{
-			Name:        "rw1_no_created_timestamp",
-			Description: "RW 1.0 does not support created_timestamp field",
+			Name:        "rw1_no_start_timestamp",
+			Description: "RW 1.0 does not support start_timestamp field",
 			RFCLevel:    "MUST",
 			ScrapeData: `# TYPE test_counter counter
 test_counter_total 100
@@ -145,17 +145,19 @@ test_counter_total 100
 				version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
 
 				if strings.HasPrefix(version, "2.0") {
-					t.Logf("RW 2.0 detected, skipping RW 1.0 created_timestamp test")
+					t.Logf("RW 2.0 detected, skipping RW 1.0 start_timestamp test")
 					return
 				}
 
-				// RW 1.0 format doesn't have created_timestamp field.
+				// RW 1.0 format doesn't have start_timestamp field.
 				// If sender is truly in RW 1.0 mode, this field should be 0/unset.
 				for _, ts := range req.Request.Timeseries {
-					should(t, int64(0) == ts.CreatedTimestamp, "RW 1.0 should not use created_timestamp field")
+					for _, sample := range ts.Samples {
+						should(t, int64(0) == sample.StartTimestamp, "RW 1.0 should not use start_timestamp field in samples")
+					}
 				}
 
-				t.Logf("RW 1.0: No created_timestamp field used")
+				t.Logf("RW 1.0: No start_timestamp field used")
 			},
 		},
 		{

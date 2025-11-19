@@ -72,8 +72,8 @@ metric_c 3
 			},
 		},
 		{
-			Name:        "created_timestamp_for_counters",
-			Description: "Sender MAY include created_timestamp for counter metrics",
+			Name:        "start_timestamp_for_counters",
+			Description: "Sender MAY include start_timestamp for counter metrics",
 			RFCLevel:    "MAY",
 			ScrapeData: `# TYPE test_counter counter
 test_counter_total 100
@@ -82,10 +82,10 @@ test_counter_total 100
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "test_counter_total" {
-						if ts.CreatedTimestamp != 0 {
-							may(t, ts.CreatedTimestamp > int64(0), "Created timestamp may be present for counters")
-							may(t, ts.CreatedTimestamp > int64(1e12), "Created timestamp should be in milliseconds")
-							t.Logf("Found created_timestamp: %d", ts.CreatedTimestamp)
+						if len(ts.Samples) > 0 && ts.Samples[0].StartTimestamp != 0 {
+							may(t, ts.Samples[0].StartTimestamp > int64(0), "Start timestamp may be present for counters")
+							may(t, ts.Samples[0].StartTimestamp > int64(1e12), "Start timestamp should be in milliseconds")
+							t.Logf("Found start_timestamp: %d", ts.Samples[0].StartTimestamp)
 						}
 						break
 					}
@@ -93,8 +93,8 @@ test_counter_total 100
 			},
 		},
 		{
-			Name:        "created_timestamp_for_histograms",
-			Description: "Sender MAY include created_timestamp for histogram metrics",
+			Name:        "start_timestamp_for_histograms",
+			Description: "Sender MAY include start_timestamp for histogram metrics",
 			RFCLevel:    "MAY",
 			ScrapeData: `# TYPE test_histogram histogram
 test_histogram_count 100
@@ -107,9 +107,9 @@ test_histogram_bucket{le="+Inf"} 100
 					metricName := labels["__name__"]
 
 					if metricName == "test_histogram_count" || metricName == "test_histogram" {
-						if ts.CreatedTimestamp != 0 {
-							may(t, ts.CreatedTimestamp > int64(0), "Created timestamp may be present for histograms")
-							t.Logf("Found created_timestamp for histogram: %d", ts.CreatedTimestamp)
+						if len(ts.Samples) > 0 && ts.Samples[0].StartTimestamp != 0 {
+							may(t, ts.Samples[0].StartTimestamp > int64(0), "Start timestamp may be present for histogram samples")
+							t.Logf("Found start_timestamp for histogram sample: %d", ts.Samples[0].StartTimestamp)
 						}
 						break
 					}
@@ -117,19 +117,21 @@ test_histogram_bucket{le="+Inf"} 100
 			},
 		},
 		{
-			Name:        "created_timestamp_zero_handling",
-			Description: "Created timestamp value of 0 SHOULD be treated as unset",
+			Name:        "start_timestamp_zero_handling",
+			Description: "Start timestamp value of 0 SHOULD be treated as unset",
 			RFCLevel:    "SHOULD",
 			ScrapeData: `# TYPE test_counter counter
 test_counter_total 50
 `,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				// If created_timestamp is 0, it should be treated as unset.
+				// If start_timestamp is 0, it should be treated as unset.
 				for _, ts := range req.Request.Timeseries {
-					if ts.CreatedTimestamp == 0 {
-						should(t, int64(0) == ts.CreatedTimestamp, "Created timestamp of 0 means unset")
-					} else {
-						should(t, ts.CreatedTimestamp > int64(1e12), "Non-zero created timestamp should be valid milliseconds")
+					for _, sample := range ts.Samples {
+						if sample.StartTimestamp == 0 {
+							should(t, int64(0) == sample.StartTimestamp, "Start timestamp of 0 means unset")
+						} else {
+							should(t, sample.StartTimestamp > int64(1e12), "Non-zero start timestamp should be valid milliseconds")
+						}
 					}
 				}
 			},
@@ -185,23 +187,19 @@ test_counter_total 50
 			},
 		},
 		{
-			Name:        "created_timestamp_before_sample_timestamp",
-			Description: "Created timestamp SHOULD be before or equal to sample timestamp",
+			Name:        "start_timestamp_before_sample_timestamp",
+			Description: "Start timestamp SHOULD be before or equal to sample timestamp",
 			RFCLevel:    "SHOULD",
 			ScrapeData: `# TYPE test_counter counter
 test_counter_total 100
 `,
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				for _, ts := range req.Request.Timeseries {
-					if ts.CreatedTimestamp != 0 && len(ts.Samples) > 0 {
-						sampleTimestamp := ts.Samples[0].Timestamp
-						should(t, ts.CreatedTimestamp <= sampleTimestamp, "Created timestamp should be before or equal to sample timestamp")
-						t.Logf("Created: %d, Sample: %d", ts.CreatedTimestamp, sampleTimestamp)
-					}
-
-					if ts.CreatedTimestamp != 0 && len(ts.Histograms) > 0 {
-						histTimestamp := ts.Histograms[0].Timestamp
-						should(t, ts.CreatedTimestamp <= histTimestamp, "Created timestamp should be before or equal to histogram timestamp")
+					for _, sample := range ts.Samples {
+						if sample.StartTimestamp != 0 {
+							should(t, sample.StartTimestamp <= sample.Timestamp, "Start timestamp should be before or equal to sample timestamp")
+							t.Logf("Start: %d, Sample: %d", sample.StartTimestamp, sample.Timestamp)
+						}
 					}
 				}
 			},
