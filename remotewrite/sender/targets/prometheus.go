@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.7.1/prometheus-3.7.1.{{.OS}}-{{.Arch}}.tar.gz"
+const prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.8.0/prometheus-3.8.0.{{.OS}}-{{.Arch}}.tar.gz"
 
 func RunPrometheus(opts TargetOptions) error {
 	binary, err := downloadBinary(prometheusDownloadURL, "prometheus")
