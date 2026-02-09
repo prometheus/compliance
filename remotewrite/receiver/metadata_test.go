@@ -277,11 +277,12 @@ func TestMetadataWithComplexLabels(t *testing.T) {
 func TestMetadataValidation(t *testing.T) {
 	should(t)
 	testCases := []struct {
-		name        string
-		labels      map[string]string
-		metricType  writev2.Metadata_MetricType
-		success     bool
-		description string
+		name          string
+		labels        map[string]string
+		metricType    writev2.Metadata_MetricType
+		success       bool
+		unsafeRequest bool
+		description   string
 	}{
 		{
 			name:        "metadata_without_name_label",
@@ -291,11 +292,12 @@ func TestMetadataValidation(t *testing.T) {
 			description: "Metadata without __name__ label should be rejected",
 		},
 		{
-			name:        "metadata_with_empty_name",
-			labels:      map[string]string{"__name__": ""},
-			metricType:  writev2.Metadata_METRIC_TYPE_GAUGE,
-			success:     false,
-			description: "Metadata with empty metric name should be rejected",
+			name:          "metadata_with_empty_name",
+			labels:        map[string]string{"__name__": ""},
+			metricType:    writev2.Metadata_METRIC_TYPE_GAUGE,
+			success:       false,
+			unsafeRequest: true,
+			description:   "Metadata with empty metric name should be rejected",
 		},
 		{
 			name:        "metadata_with_valid_name",
@@ -312,7 +314,8 @@ func TestMetadataValidation(t *testing.T) {
 			metadata := MetadataWithLabels{Labels: tc.labels, Type: tc.metricType, Help: "Test help", Unit: "unit"}
 
 			opts := RequestOpts{
-				Metadata: []MetadataWithLabels{metadata},
+				Metadata:      []MetadataWithLabels{metadata},
+				UnsafeRequest: tc.unsafeRequest,
 			}
 
 			sample := SampleWithLabels{Labels: tc.labels, Value: 1.0}

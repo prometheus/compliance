@@ -232,10 +232,11 @@ func generateRequest(opts RequestOpts) *http.Request {
 	var timeseries []writev2.TimeSeries
 
 	// Build metadata lookup by metric name for fast access.
+	// When UnsafeRequest is true, also include metadata with empty __name__ to allow testing invalid cases.
 	metadataByName := make(map[string]writev2.Metadata)
 	for _, mw := range opts.Metadata {
 		metricName := mw.Labels["__name__"]
-		if metricName != "" {
+		if metricName != "" || opts.UnsafeRequest {
 			metadataByName[metricName] = writev2.Metadata{
 				Type:    mw.Type,
 				HelpRef: symbols.Symbolize(mw.Help),
@@ -310,7 +311,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 			ts.CreatedTimestamp = s.CreatedTimestamp.UnixMilli()
 		}
 
-		if metricName := s.Labels["__name__"]; metricName != "" {
+		if metricName := s.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
 			if metadata, found := metadataByName[metricName]; found {
 				ts.Metadata = metadata
 			}
@@ -381,7 +382,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 			ts.CreatedTimestamp = hw.CreatedTimestamp.UnixMilli()
 		}
 
-		if metricName := hw.Labels["__name__"]; metricName != "" {
+		if metricName := hw.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
 			if metadata, found := metadataByName[metricName]; found {
 				ts.Metadata = metadata
 			}
