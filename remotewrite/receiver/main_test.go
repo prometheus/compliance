@@ -24,6 +24,7 @@ import (
 
 	cconfig "github.com/prometheus/common/config"
 	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/storage/remote/googleiam"
 	"github.com/prometheus/sigv4"
 	"github.com/stretchr/testify/require"
 )
@@ -135,6 +136,12 @@ func runRequest(t *testing.T, req *http.Request, expectedResp requestParams) {
 		if rw.SigV4Config != nil {
 			transport, err = sigv4.NewSigV4RoundTripper(rw.SigV4Config, transport)
 			require.NoError(t, err, "failed to create SigV4 round tripper for Remote-Write config %q", rw.Name)
+		}
+
+		// Add Google IAM authentication if configured
+		if rw.GoogleIAMConfig != nil {
+			transport, err = googleiam.NewRoundTripper(rw.GoogleIAMConfig, transport)
+			require.NoError(t, err, "failed to create Google IAM round tripper for Remote-Write config %q", rw.Name)
 		}
 
 		if len(rw.Headers) > 0 {
