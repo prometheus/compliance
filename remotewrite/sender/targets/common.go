@@ -5,9 +5,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,15 +18,14 @@ import (
 	"sync"
 	"syscall"
 	"text/template"
-	"time"
 )
 
-type Target func(TargetOptions) error
+type Target func(context.Context, TargetOptions) error
 
 type TargetOptions struct {
-	ScrapeTarget    string
-	ReceiveEndpoint string
-	Timeout         time.Duration
+	ScrapeTargetURL    string
+	ReceiveEndpointURL string
+	RemoteWriteMessage string
 }
 
 var downloadMtx sync.Mutex
@@ -240,8 +239,8 @@ func writeTempFile(contents, name string) (filename string, err error) {
 	return f.Name(), f.Close()
 }
 
-// runCommand runs the given command with the given args.
-func runCommand(prog string, timeout time.Duration, args ...string) error {
+// runCommand runs the given command with the given args until context is done.
+func runCommand(ctx context.Context, prog string, args ...string) error {
 	cwd, err := os.MkdirTemp("", "")
 	if err != nil {
 		return err
@@ -266,17 +265,22 @@ func runCommand(prog string, timeout time.Duration, args ...string) error {
 	cmd.Dir = cwd
 	cmd.Stdout = output
 	cmd.Stderr = output
-	err = cmd.Start()
-	if err != nil {
+	if err = cmd.Start(); err != nil {
 		return err
 	}
 
+	cmdStopped := make(chan error)
 	go func() {
-		time.Sleep(timeout)
-		if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
-			log.Fatalf("failed to send signal: %v", err)
-		}
+		cmdStopped <- cmd.Wait()
 	}()
 
-	return cmd.Wait()
+	select {
+	case <-ctx.Done():
+		if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+			return fmt.Errorf("failed to send signal: %w", err)
+		}
+		return <-cmdStopped
+	case err := <-cmdStopped:
+		return err
+	}
 }
