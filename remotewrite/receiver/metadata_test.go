@@ -296,7 +296,7 @@ func TestMetadataValidation(t *testing.T) {
 			labels:        map[string]string{"__name__": ""},
 			metricType:    writev2.Metadata_METRIC_TYPE_GAUGE,
 			success:       false,
-			unsafeRequest: true,
+			unsafeRequest: true, // Enable unsafe to avoid sanitization of test case requests e.g. removing metadata with empty __name__.
 			description:   "Metadata with empty metric name should be rejected",
 		},
 		{

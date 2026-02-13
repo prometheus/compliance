@@ -201,9 +201,6 @@ func generateRequest(opts RequestOpts) *http.Request {
 		// Check: All metadata are attached to samples or histograms (have same metric name).
 		for _, metadata := range opts.Metadata {
 			metadataName := metadata.Labels["__name__"]
-			if metadataName == "" {
-				continue // Skip metadata without __name__.
-			}
 			found := false
 			// Check against samples.
 			for _, sample := range opts.Samples {
