@@ -1,7 +1,0 @@
-bin/
-
-*.test
-*.out
-
-config.yml
-results.json

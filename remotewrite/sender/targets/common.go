@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"text/template"
+
+	"github.com/prometheus/client_golang/exp/api/remote"
 )
 
 // Target is a test target for sender compliance tests.
@@ -29,7 +31,7 @@ type Target func(context.Context, TargetOptions) error
 type TargetOptions struct {
 	ScrapeTargetURL    string
 	ReceiveEndpointURL string
-	RemoteWriteMessage string
+	RemoteWriteMessage remote.WriteMessageType
 }
 
 var downloadMtx sync.Mutex
@@ -251,16 +253,11 @@ func runCommand(ctx context.Context, prog string, args ...string) error {
 	}
 	defer os.RemoveAll(cwd)
 
-	var output *os.File
+	var output = io.Discard
 	// Suppress output to avoid cluttering test results.
 	suppressOutput := os.Getenv("DEBUG") == ""
 	if suppressOutput {
-		output, err = os.CreateTemp("", "")
-		if err != nil {
-			return err
-		}
-		defer output.Close()
-		defer os.Remove(output.Name())
+		output = io.Discard
 	} else {
 		output = os.Stdout
 	}

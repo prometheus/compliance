@@ -7,35 +7,39 @@ Both [sender](#sender-compliance-sender) and [receiver](#receiver-compliance-rec
 To generate and view results, add `-json` flag to `go test` command and `tee` the results to a file called `results.json`.
 
 Tests are marked with compliance levels according to RFC specifications:
-- **MUST**: Required by specification
-- **SHOULD**: Recommended by specification
-- **MAY**: Could have by specification
-- **RECOMMENDED**: Not in specification but recommended for performance
+- **MUST**: Required by Remote Write specification
+- **SHOULD**: Recommended by Remote Write specification
+- **MAY**: Could have by Remote Write specification
+- **RECOMMENDED**: Not in Remote Write specification, but recommended for performance or Prometheus compatibility reasons
 
 ## Sender Compliance (`/sender`)
 
-Tests that Remote-Write senders properly implement the protocol by forking sender instances (e.g., Prometheus), examining generated requests, and validating them against the specification.
+Tests that Remote-Write senders implement the RW2 protocol by running tests cases with:
+
+1. Scraper exposing OpenMetrics 1.0
+2. Target sender to test (e.g., Prometheus),
+3. Special receiver that tests various elements of the request(s).
 
 Tests cover:
+- Series encoding
 - Float samples encoding
 - Native Histograms encoding
 - Exemplars encoding
-- Protocol headers and content negotiation
-- Error handling and retry logic
-- Backoff and batching behavior
-- Metadata and symbol table management
+- Metadata encoding
+- Protocol headers
+- Error handling, basic batching and retry logic
 - Request formatting and compression
-
-### Limitations
-
-The test suite validates the format and structure of requests sent by the sender but does not verify end-to-end data flow or persistence. Because senders may have different configuration options and capabilities, passing all tests does not guarantee a sender supports every Remote-Write feature (such as Native Histograms). Some senders may not expose certain features or may require specific configuration.
+- Various Prometheus / OpenMetrics 1.0 semantics as "RECOMMENDED" (staleness, upness). Because this test depends on scraping behaviour we
+are testing some elements of the exposition format support too.
 
 ### Prerequisites
 
 - Go 1.23 or later
-- The sender binary to test (e.g., Prometheus)
+- The sender binary you want to test (e.g., Prometheus)
+  - Requires OpenMetrics 1.0 scrape capability.
+  - Required Remote Write sending capability.
 
-The test suite automatically downloads and runs Prometheus as the reference sender implementation. For testing custom senders, place the binary in the `bin/` directory.
+The test suite automatically downloads and runs Prometheus as the reference sender implementation.
 
 ### Configuration
 
@@ -47,6 +51,15 @@ The test suite uses environment variables:
 PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus"
 ```
 
+Currently supported senders:
+- `prometheus` - The reference Prometheus implementation (automatically downloaded).
+- `process`  - For custom sender that is a local binary.
+
+For testing custom senders:
+
+* Add target running code and register it the `sender/main_test.go`.
+* Use custom process target via `PROMETHEUS_COMPLIANCE_RW_SENDERS="process"` and `PROMETHEUS_COMPLIANCE_RW_PROCESS_BINARY=<path>` envvars.
+
 **Debug output:**
 
 Debug variable controls if the tested process suppresses output (empty DEBUG) or not. 
@@ -55,27 +68,19 @@ Debug variable controls if the tested process suppresses output (empty DEBUG) or
 DEBUG="1"
 ```
 
-Currently supported senders:
-- `prometheus` - The reference Prometheus implementation (automatically downloaded)
-
 ### Running Tests
 
 ```bash
-pushd ./sender
-# Run compliance tests e.g. for the default prometheus binary ...
-PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus" go test -v
-popd
+make sender
 ```
 
-To use visualization HTML page, export data to JSON and generate `results.json` e.g.
+To use visualization HTML page:
 
 ```bash
-pushd ./sender
-PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus" go test -json | tee results.json
-popd
-
-# Open ./index.html in your browser and see results.
+make sender-html
 ```
+
+See Makefile for detailed invocation.
 
 ## Receiver Compliance (`/receiver`)
 
@@ -136,21 +141,14 @@ export PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus,mimir"
 
 ### Running Tests
 
-Simply run `go test` in the `receiver` directory. For example:
-
 ```bash
-pushd ./receiver
-# Run compliance tests e.g. for the local-prometheus remote write endpoint defined in your PROMETHEUS_RW2_COMPLIANCE_CONFIG_FILE.
-PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus" go test -v
-popd
+make receiver
 ```
 
-To use visualization HTML page, export data to JSON and generate `results.json` e.g.
+To use visualization HTML page:
 
 ```bash
-pushd ./receiver
-PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus" go test -json | tee results.json
-popd
-
-# Open ./index.html in your browser and see results.
+make receiver-html
 ```
+
+See Makefile for detailed invocation.

@@ -13,13 +13,8 @@
 
 package main
 
-import (
-	"strings"
-	"testing"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
-)
-
+/*
+TODO(bwplotka): Convert and revise.
 // TestRemoteWrite1Compatibility validates RW 1.0 backward compatibility.
 // Note: These tests require sender to be configured for RW 1.0 mode.
 // Most senders default to RW 2.0, so RW 1.0 tests are informational.
@@ -239,3 +234,4 @@ func TestRemoteWrite1Configuration(t *testing.T) {
 		})
 	})
 }
+*/

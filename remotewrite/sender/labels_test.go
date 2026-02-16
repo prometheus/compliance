@@ -14,243 +14,220 @@
 package main
 
 import (
-	"fmt"
-	"regexp"
 	"testing"
+
+	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance/remotewrite/sender/sendertest"
+	"github.com/stretchr/testify/require"
 )
 
-// TestLabelValidation validates label encoding and formatting.
-func TestLabelValidation(t *testing.T) {
-	tests := []TestCase{
-		{
-			Name:        "label_lexicographic_ordering",
-			Description: "Labels MUST be sorted in lexicographic order",
-			RFCLevel:    "MUST",
-			ScrapeData: `test_metric{aaa="1",bbb="2",zzz="3"} 42
-`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					if labels["__name__"] == "test_metric" {
-						must(t).True(isSorted(labels, req.Request.Symbols, ts.LabelsRefs),
-							"Labels must be sorted in lexicographic order")
-						break
-					}
-				}
+// TestLabels validates label related requirements for Remote Write 2.0.
+func TestLabels(t *testing.T) {
+	sendertest.Run(t,
+		targetsToTest,
+		sendertest.Case{
+			RFCLevel: sendertest.MustLevel,
+			ScrapeData: `
+test_metric{foo="bar",baz="qux"} 1
+test_metric1{foo="bar",baz="qux"} 2
+another_metric{foo="bar"} 3`,
+			Version: remote.WriteV2MessageType,
+			Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+				require.GreaterOrEqual(t, len(res.Requests), 1)
+				require.Greater(t, len(res.Requests[0].RW2.Timeseries), 3, "Request must contain at least 3 timeseries")
 			},
-		},
-		{
-			Name:        "metric_name_label_present",
-			Description: "Timeseries MUST include __name__ label",
-			RFCLevel:    "MUST",
-			ScrapeData:  "test_metric 42\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				must(t).NotEmpty(req.Request.Timeseries, "Request must contain timeseries")
+			ValidateCases: []sendertest.ValidateCase{
+				{
+					Name:        "symbols_empty_at_index_zero",
+					RFCLevel:    sendertest.MustLevel,
+					Description: "Symbol table MUST have empty string at index 0",
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						symbols := res.Requests[0].RW2.Symbols
+						require.NotEmpty(t, len(symbols))
+						require.Equal(t, "", symbols[0], "Symbol at index 0 must be empty string, got: %q", symbols[0])
+					},
+				},
+				{
+					Name:        "symbols_deduplication",
+					RFCLevel:    sendertest.RecommendedLevel,
+					Description: "Symbol table should deduplicate repeated strings for efficiency",
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						symbols := res.Requests[0].RW2.Symbols
 
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					must(t).NotEmpty(labels["__name__"],
-						"Timeseries must include __name__ label")
-				}
-			},
-		},
-		{
-			Name:        "metric_name_format_valid",
-			Description: "Metric name MUST match [a-zA-Z_:][a-zA-Z0-9_:]* regex",
-			RFCLevel:    "MUST",
-			ScrapeData:  "valid_metric_name:subsystem_total 42\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				metricNameRegex := regexp.MustCompile(`^[a-zA-Z_:][a-zA-Z0-9_:]*$`)
-
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					metricName := labels["__name__"]
-					must(t).NotEmpty(metricName, "Metric name must not be empty")
-					must(t).True(metricNameRegex.MatchString(metricName),
-						"Metric name must match regex [a-zA-Z_:][a-zA-Z0-9_:]*, got: %s", metricName)
-				}
-			},
-		},
-		{
-			Name:        "label_name_format_valid",
-			Description: "Label names MUST match [a-zA-Z_][a-zA-Z0-9_]* regex (except __name__)",
-			RFCLevel:    "MUST",
-			ScrapeData:  `test_metric{valid_label="value",another_1="val2"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				labelNameRegex := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
-
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					for labelName := range labels {
-						if labelName == "" {
-							continue
+						// Check for duplicate non-empty strings.
+						seen := make(map[string]int)
+						for i, sym := range symbols {
+							if sym == "" {
+								continue // Empty string can appear multiple times (though should only be at index 0).
+							}
+							if prevIdx, exists := seen[sym]; exists {
+								t.Fatalf("Duplicate string %q found at indices %d and %d (deduplication is a performance recommended)",
+									sym, prevIdx, i)
+							}
+							seen[sym] = i
 						}
-						must(t).True(labelNameRegex.MatchString(labelName) || labelName == "__name__",
-							"Label name must match regex [a-zA-Z_][a-zA-Z0-9_]*, got: %s", labelName)
-					}
-				}
-			},
-		},
-		{
-			Name:        "no_duplicate_label_names",
-			Description: "Timeseries MUST NOT have duplicate label names",
-			RFCLevel:    "MUST",
-			ScrapeData:  `test_metric{foo="bar",baz="qux"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
+					},
+				},
+				{
+					Name:        "labels_refs_valid_indices",
+					RFCLevel:    sendertest.MustLevel,
+					Description: "All label refs MUST point to valid symbol table indices",
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						symbols := res.Requests[0].RW2.Symbols
+						tss := res.Requests[0].RW2.Timeseries
 
-					expectedPairs := len(ts.LabelsRefs) / 2
-					must(t).Equal(expectedPairs, len(labels),
-						"No duplicate label names allowed")
-				}
-			},
-		},
-		{
-			Name:        "label_names_not_empty",
-			Description: "Label names MUST NOT be empty",
-			RFCLevel:    "MUST",
-			ScrapeData:  `test_metric{label="value"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				symbols := req.Request.Symbols
-				for _, ts := range req.Request.Timeseries {
-					refs := ts.LabelsRefs
-					for i := 0; i < len(refs); i += 2 {
-						keyRef := refs[i]
-						labelName := symbols[keyRef]
-						must(t).NotEmpty(labelName, "Label names must not be empty")
-					}
-				}
-			},
-		},
-		{
-			Name:        "label_values_may_be_empty",
-			Description: "Label values MAY be empty strings",
-			RFCLevel:    "MAY",
-			ScrapeData:  `test_metric{empty=""} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				symbols := req.Request.Symbols
-				for _, ts := range req.Request.Timeseries {
-					refs := ts.LabelsRefs
-					for i := 1; i < len(refs); i += 2 {
-						valueRef := refs[i]
-						labelValue := symbols[valueRef]
-						may(t, len(labelValue) >= 0, "Label values may be empty")
-					}
-				}
-			},
-		},
-		{
-			Name:        "reserved_label_prefix",
-			Description: "Labels with __ prefix SHOULD be reserved for internal use",
-			RFCLevel:    "SHOULD",
-			ScrapeData:  `test_metric{normal="value"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					for labelName := range labels {
-						if labelName == "__name__" {
-							continue // __name__ is allowed
-						}
-						if len(labelName) >= 2 && labelName[0:2] == "__" {
-							should(t, labelName == "__name__", fmt.Sprintf("Labels with __ prefix should be reserved, found: %s", labelName))
-						}
-					}
-				}
-			},
-		},
-		{
-			Name:        "unicode_in_label_values",
-			Description: "Sender MUST handle Unicode characters in label values",
-			RFCLevel:    "MUST",
-			ScrapeData:  `test_metric{emoji="🚀",chinese="测试"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				var foundUnicode bool
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					for _, value := range labels {
-						// Check if value contains non-ASCII characters.
-						for _, r := range value {
-							if r > 127 {
-								foundUnicode = true
-								must(t).NotEmpty(value, "Unicode values must be preserved")
-								break
+						for i, ts := range tss {
+							for refIdx, ref := range ts.LabelsRefs {
+								require.Less(t, int(ref), len(symbols),
+									"Timeseries[%v].LabelsRefs[%v] = %d points outside symbol table (size: %d)",
+									i, refIdx, ref, len(symbols))
 							}
 						}
-					}
-				}
-				may(t, foundUnicode || len(req.Request.Timeseries) > 0, "Unicode characters may be present in labels")
-			},
-		},
-		{
-			Name:        "special_chars_in_label_values",
-			Description: "Sender MUST handle special characters in label values",
-			RFCLevel:    "MUST",
-			ScrapeData:  `test_metric{path="/api/v1/users",query="foo=bar&baz=qux"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				var foundSpecial bool
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					for key, value := range labels {
-						if key == "path" || key == "query" {
-							must(t).NotEmpty(value, "Special characters must be preserved")
-							foundSpecial = true
-						}
-					}
-				}
-				should(t, foundSpecial || len(req.Request.Timeseries) > 0, "Special characters should be handled correctly")
-			},
-		},
-		{
-			Name:        "very_long_label_names",
-			Description: "Sender SHOULD handle long label names (within reasonable limits)",
-			RFCLevel:    "SHOULD",
-			ScrapeData:  `test_metric{very_long_label_name_that_exceeds_normal_length_but_is_still_valid="value"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					for labelName := range labels {
-						if len(labelName) > 50 {
-							should(t, len(labelName) > 0, "Long label names should be handled")
-							t.Logf("Found long label name: %s (length: %d)", labelName, len(labelName))
-						}
-					}
-				}
-			},
-		},
-		{
-			Name:        "very_long_label_values",
-			Description: "Sender SHOULD handle long label values (within reasonable limits)",
-			RFCLevel:    "SHOULD",
-			ScrapeData:  `test_metric{description="This is a very long label value that contains a lot of text to test how senders handle long strings in label values which might be common in real-world scenarios"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					for _, value := range labels {
-						if len(value) > 100 {
-							should(t, len(value) > 0, "Long label values should be handled")
-							t.Logf("Found long label value (length: %d)", len(value))
-						}
-					}
-				}
-			},
-		},
-		{
-			Name:        "many_labels_per_series",
-			Description: "Sender SHOULD handle timeseries with many labels",
-			RFCLevel:    "SHOULD",
-			ScrapeData:  `test_metric{l1="v1",l2="v2",l3="v3",l4="v4",l5="v5",l6="v6",l7="v7",l8="v8",l9="v9",l10="v10"} 42`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				for _, ts := range req.Request.Timeseries {
-					labels := extractLabels(&ts, req.Request.Symbols)
-					if len(labels) > 5 {
-						should(t, len(labels) >= 5, "Sender should handle timeseries with many labels")
-						t.Logf("Found timeseries with %d labels", len(labels))
-					}
-				}
-			},
-		},
-	}
+					},
+				},
+				{
+					Name:        "labels_refs_even_length",
+					RFCLevel:    sendertest.MustLevel,
+					Description: "Label refs array length MUST be even (key-value pairs)",
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						tss := res.Requests[0].RW2.Timeseries
 
-	runTestCases(t, tests)
+						for i, ts := range tss {
+							refsLen := len(ts.LabelsRefs)
+							require.Equal(t, 0, refsLen%2,
+								"Timeseries[%v].LabelsRefs has odd length %d (must be even for key-value pairs)",
+								i, refsLen)
+						}
+					},
+				},
+				{
+					Name:        "label_lexicographic_ordering",
+					RFCLevel:    sendertest.MustLevel,
+					Description: "Label names MUST be sorted in lexicographic order",
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						symbols := res.Requests[0].RW2.Symbols
+						tss := res.Requests[0].RW2.Timeseries
+
+						for i, ts := range tss {
+							require.True(t, isSorted(symbols, ts.LabelsRefs),
+								"Timeseries[%v].LabelsRefs are not sorted in lexicographic order", i)
+						}
+					},
+				},
+				{
+					Name:        "metric_name_label_present",
+					RFCLevel:    sendertest.MustLevel,
+					Description: "Labels MUST include __name__ label",
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						symbols := res.Requests[0].RW2.Symbols
+						tss := res.Requests[0].RW2.Timeseries
+
+						for _, ts := range tss {
+							labels := extractLabels(&ts, symbols)
+							require.NotEmpty(t, labels["__name__"],
+								"Timeseries[%v].LabelsRefs do not include __name__ label", labels)
+						}
+					},
+				},
+			},
+		},
+		// 1.0.
+		sendertest.Case{
+			RFCLevel: sendertest.MustLevel,
+			ScrapeData: `
+test_metric{foo="bar",baz="qux"} 1
+test_metric1{foo="bar",baz="qux"} 2
+another_metric{foo="bar"} 3`,
+			Version: remote.WriteV1MessageType,
+			Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+				require.GreaterOrEqual(t, len(res.Requests), 1)
+				require.Greater(t, len(res.Requests[0].RW1.Timeseries), 3, "Request must contain at least 3 timeseries")
+			},
+			ValidateCases: []sendertest.ValidateCase{
+				{
+					Name:        "label_lexicographic_ordering",
+					RFCLevel:    sendertest.MustLevel,
+					Description: "Label names MUST be sorted in lexicographic order",
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						tss := res.Requests[0].RW1.Timeseries
+						for i, ts := range tss {
+							require.True(t, isSortedRW1(ts.Labels),
+								"Timeseries[%v].Labels are not sorted in lexicographic order", i)
+						}
+					},
+				},
+				{
+					Name:        "metric_name_label_present",
+					RFCLevel:    sendertest.MustLevel,
+					Description: "Labels MUST include __name__ label",
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						tss := res.Requests[0].RW1.Timeseries
+
+						for _, ts := range tss {
+							var names int
+							for _, label := range ts.Labels {
+								if label.Name == "__name__" {
+									names++
+								}
+							}
+							require.Equal(t, 1, names, "Timeseries[%v].Labels must include a single __name__ label", ts.Labels)
+						}
+					},
+				},
+			},
+		},
+	)
+}
+
+func TestLabelsEdgeCases(t *testing.T) {
+	sendertest.Run(t, targetsToTest,
+		sendertest.Case{
+			Name:        "unicode_in_label_values",
+			Description: "Sender handles Unicode characters in label values",
+			RFCLevel:    sendertest.RecommendedLevel, // This depends on UTF-8 feature on scrape, thus recommended level.
+			ScrapeData:  `test_metric{emoji="🚀",chinese="测试"} 42`,
+			Version:     remote.WriteV2MessageType,
+			Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+				require.GreaterOrEqual(t, len(res.Requests), 1)
+
+				_, labels := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_metric")
+				require.Equal(t, map[string]string{
+					"__name__": "test_metric",
+					"emoji":    "🚀",
+					"chinese":  "测试",
+				}, labels)
+			},
+		},
+		sendertest.Case{
+			Name:        "empty_label_value",
+			Description: "Sender MUST NOT send empty label values",
+			RFCLevel:    sendertest.MustLevel,
+			ScrapeData:  `test_metric{foo="",bar="qux"} 42`,
+			Version:     remote.WriteV2MessageType,
+			Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+				require.GreaterOrEqual(t, len(res.Requests), 1)
+
+				_, labels := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_metric")
+				require.Equal(t, map[string]string{
+					"__name__": "test_metric",
+					"bar":      "qux",
+				}, labels)
+			},
+		},
+		sendertest.Case{
+			Name:        "metric_name_with_colons",
+			Description: "Sender MUST handle metric names with colons",
+			RFCLevel:    sendertest.MustLevel,
+			ScrapeData:  "http:request:duration:seconds 0.5",
+			Version:     remote.WriteV2MessageType,
+			Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+				require.GreaterOrEqual(t, len(res.Requests), 1)
+
+				_, labels := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_metric")
+				require.Equal(t, map[string]string{
+					"__name__": "http:request:duration:seconds",
+				}, labels)
+			},
+		},
+	)
 }

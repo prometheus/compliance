@@ -22,25 +22,27 @@ import (
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
+const senderEnvVar = "PROMETHEUS_COMPLIANCE_RW_SENDERS"
+
 var (
 	// registeredTargets holds pre-defined targets to choose from.
 	//
 	// Custom targets could be considered for adding here, however the process target likely offers enough flexibility.
 	registeredTargets = map[string]targets.Target{
-		"prometheus": targets.RunPrometheus, // Default if no PROMETHEUS_RW2_COMPLIANCE_RECEIVERS is specified.
+		"prometheus": targets.RunPrometheus, // Default if no senderEnvVar is specified.
 		"process":    targets.RunProcess,
 	}
 	// targetsToTest is a global variable controlling senders to test.
-	// It is adjusted in TestMain via PROMETHEUS_RW2_COMPLIANCE_RECEIVERS variable.
+	// It is adjusted in TestMain via senderEnvVar variable.
 	targetsToTest = map[string]targets.Target{
 		"prometheus": registeredTargets["prometheus"],
 	}
 )
 
 // TestMain sets up the test environment by filtering registeredTargets (senders to tests) using
-// PROMETHEUS_RW2_COMPLIANCE_RECEIVERS envvar.
+// PROMETHEUS_COMPLIANCE_RW_SENDERS envvar.
 func TestMain(m *testing.M) {
-	senderNames := os.Getenv("PROMETHEUS_RW2_COMPLIANCE_SENDERS")
+	senderNames := os.Getenv(senderEnvVar)
 	if senderNames != "" {
 		targetsToTest = make(map[string]targets.Target)
 		nameList := strings.Split(senderNames, ",")
@@ -51,7 +53,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 		if len(targetsToTest) == 0 {
-			fmt.Println("FAIL: No targets found matching PROMETHEUS_RW2_COMPLIANCE_SENDERS=", senderNames)
+			fmt.Println("FAIL: No targets found matching PROMETHEUS_COMPLIANCE_RW_SENDERS=", senderNames)
 			os.Exit(1)
 		}
 	}
