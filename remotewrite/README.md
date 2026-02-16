@@ -44,7 +44,7 @@ The test suite uses environment variables:
 **Sender Selection:**
 
 ```bash
-export PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus"
+PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus"
 ```
 
 **Debug output:**
@@ -52,7 +52,7 @@ export PROMETHEUS_RW2_COMPLIANCE_SENDERS="prometheus"
 Debug variable controls if the tested process suppresses output (empty DEBUG) or not. 
 
 ```bash
-export DEBUG="1"
+DEBUG="1"
 ```
 
 Currently supported senders:

@@ -29,6 +29,144 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type rfcLevel = string
+
+const (
+	mustLevel        rfcLevel = "MUST"
+	shouldLevel      rfcLevel = "SHOULD"
+	mayLevel         rfcLevel = "MAY"
+	recommendedLevel rfcLevel = "RECOMMENDED"
+)
+
+// must marks a test as having a "MUST" RFC compliance level.
+// Tests marked with must() will fail on assertion failures.
+func must(t *testing.T) *require.Assertions {
+	t.Helper()
+	t.Attr("rfcLevel", mustLevel)
+	return require.New(t)
+}
+
+// should marks a test as having a "SHOULD" RFC compliance level.
+func should(t *testing.T, condition bool, msg string) {
+	t.Helper()
+	t.Attr("rfcLevel", shouldLevel)
+	if !condition {
+		t.Errorf("⚠️  SHOULD level requirement not met (recommended): %s", msg)
+	}
+}
+
+// may marks a test as having a "MAY" RFC compliance level.
+func may(t *testing.T, condition bool, msg string) {
+	t.Helper()
+	t.Attr("rfcLevel", mayLevel)
+	if !condition {
+		t.Errorf("ℹ️  MAY level feature not present (optional): %s", msg)
+	}
+}
+
+// recommended marks a test as having an "RECOMMENDED" compliance level.
+func recommended(t *testing.T, condition bool, msg string) {
+	t.Helper()
+	t.Attr("rfcLevel", recommendedLevel)
+	if !condition {
+		t.Errorf("🔧 RECOMMENDED not implemented (performance enhancement): %s", msg)
+	}
+}
+
+// TestCase defines a test scenario to run against a single sender for a single test.
+type TestCase struct {
+	RFCLevel    rfcLevel
+	Description string
+
+	ScrapeData           string
+	ReceiverResponse     MockReceiverResponse
+	Validator            func(t *testing.T, req *CapturedRequest)
+	WaitTime             time.Duration
+	ExpectedRequestCount int
+
+	UseRW1 bool
+}
+
+// RunTest runs a test scenario for each configured target.
+func RunTest(t *testing.T, tc TestCase) {
+	t.Helper()
+
+	require.NotEmpty(t, tc.RFCLevel)
+	require.NotEmpty(t, tc.Description)
+
+	t.Attr("rfcLevel", tc.RFCLevel)
+	t.Attr("description", tc.Description)
+
+	for name, target := range targetsToTest {
+		t.Run(fmt.Sprintf("target=%v", name), func(t *testing.T) {
+			t.Attr("rw", name)
+
+			receiver := NewMockReceiver()
+			defer receiver.Close()
+
+			scrapeTarget := NewMockScrapeTarget(tc.ScrapeData)
+			defer scrapeTarget.Close()
+
+			if tc.ReceiverResponse.StatusCode == 0 {
+				tc.ReceiverResponse.StatusCode = http.StatusNoContent
+			}
+			receiver.SetResponse(tc.ReceiverResponse)
+
+			rwMessage := "io.prometheus.write.v2.Request"
+			if tc.UseRW1 {
+				rwMessage = "prometheus.WriteRequest"
+			}
+
+			err := target(t.Context(), targets.TargetOptions{
+				ScrapeTargetURL:    scrapeTarget.URL(),
+				ReceiveEndpointURL: receiver.URL(),
+				RemoteWriteMessage: rwMessage,
+			})
+
+			// Check for the expected error (some might be expected).
+			if err != nil {
+				t.Fatalf("Target failed: %v", err)
+			}
+
+			requests := receiver.GetRequests()
+			if len(requests) < tc.ExpectedRequestCount {
+				t.Fatalf("Expected at least %d request(s), got %d", tc.ExpectedRequestCount, len(requests))
+			}
+
+			if tc.Validator != nil && len(requests) > 0 {
+				lastReq := &requests[len(requests)-1]
+				tc.Validator(t, lastReq)
+			}
+		})
+	}
+}
+
+//// runAutoTargetWithCustomReceiver runs an auto-target with a custom receiver (for special test cases).
+//// Use this when you need custom receiver behavior (e.g., TimestampTrackingReceiver, FallbackTrackingReceiver).
+//func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target targets.Target, receiverURL string, scrapeTarget *MockScrapeTarget, waitTime time.Duration) error {
+//	t.Helper()
+//
+//	if waitTime == 0 {
+//		waitTime = 15 * time.Second
+//	}
+//
+//	t.Logf("Running %s with custom receiver at %s", targetName, receiverURL)
+//
+//	err := target(targets.TargetOptions{
+//		ScrapeTarget:    scrapeTarget.URL(),
+//		ReceiveEndpoint: receiverURL,
+//		Timeout:         waitTime,
+//	})
+//
+//	if err != nil {
+//		t.Logf("Target finished with error (may be expected): %v", err)
+//	} else {
+//		t.Logf("Target completed successfully")
+//	}
+//
+//	return err
+//}
+
 // CapturedRequest represents a captured HTTP request from a sender.
 type CapturedRequest struct {
 	Headers http.Header
@@ -306,41 +444,6 @@ func extractExemplarLabels(ex *writev2.Exemplar, symbols []string) map[string]st
 	return labels
 }
 
-// must marks a test as having a "MUST" RFC compliance level.
-// Tests marked with must() will fail on assertion failures.
-func must(t *testing.T) *require.Assertions {
-	t.Helper()
-	t.Attr("rfcLevel", "MUST")
-	return require.New(t)
-}
-
-// should marks a test as having a "SHOULD" RFC compliance level.
-func should(t *testing.T, condition bool, msg string) {
-	t.Helper()
-	t.Attr("rfcLevel", "SHOULD")
-	if !condition {
-		t.Errorf("⚠️  SHOULD level requirement not met (recommended): %s", msg)
-	}
-}
-
-// may marks a test as having a "MAY" RFC compliance level.
-func may(t *testing.T, condition bool, msg string) {
-	t.Helper()
-	t.Attr("rfcLevel", "MAY")
-	if !condition {
-		t.Errorf("ℹ️  MAY level feature not present (optional): %s", msg)
-	}
-}
-
-// recommended marks a test as having an "RECOMMENDED" compliance level.
-func recommended(t *testing.T, condition bool, msg string) {
-	t.Helper()
-	t.Attr("rfcLevel", "RECOMMENDED")
-	if !condition {
-		t.Errorf("🔧 RECOMMENDED not implemented (performance enhancement): %s", msg)
-	}
-}
-
 // validateSymbolTable validates that the symbol table follows RW 2.0 requirements.
 func validateSymbolTable(t *testing.T, symbols []string) {
 	t.Helper()
@@ -396,33 +499,6 @@ func isSorted(labels map[string]string, symbols []string, refs []uint32) bool {
 // Exemplars in OpenMetrics format are indicated by "# {" after a metric value.
 func containsExemplars(metrics string) bool {
 	return strings.Contains(metrics, "# {")
-}
-
-// TestCase represents a single test case for compliance testing.
-type TestCase struct {
-	Name        string
-	Description string
-	RFCLevel    string
-	ScrapeData  string
-	Validator   func(*testing.T, *CapturedRequest)
-}
-
-// runTestCases is a helper that eliminates the common test table runner pattern.
-func runTestCases(t *testing.T, tests []TestCase) {
-	for _, tt := range tests {
-		t.Run(tt.Name, func(t *testing.T) {
-			t.Parallel()
-			t.Attr("rfcLevel", tt.RFCLevel)
-			t.Attr("description", tt.Description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.ScrapeData,
-					Validator:  tt.Validator,
-				})
-			})
-		})
-	}
 }
 
 // findTimeseriesByMetricName finds a timeseries by metric name from a captured request.

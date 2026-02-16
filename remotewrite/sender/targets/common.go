@@ -20,6 +20,10 @@ import (
 	"text/template"
 )
 
+// Target is a test target for sender compliance tests.
+// Target generally needs to be able to collect (scrape) data from a Prometheus metric endpoint and send t
+// the designated endpoint using Remote Write protocol.
+// TODO(bwplotka): At this point we should rename to 'sender'. Targets can get confused with "a remote write target."
 type Target func(context.Context, TargetOptions) error
 
 type TargetOptions struct {
