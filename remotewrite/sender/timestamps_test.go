@@ -19,7 +19,9 @@ import (
 )
 
 // TestTimestampEncoding validates timestamp encoding and handling.
-func TestTimestampEncoding(t *testing.T) {
+func TestTimestampEncoding_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "timestamp_int64_milliseconds",

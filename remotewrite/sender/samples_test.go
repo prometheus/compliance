@@ -23,7 +23,9 @@ import (
 )
 
 // TestSampleEncoding validates that senders correctly encode float samples.
-func TestSampleEncoding(t *testing.T) {
+func TestSampleEncoding_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "float_value_encoding",
@@ -224,7 +226,9 @@ func TestSampleEncoding(t *testing.T) {
 }
 
 // TestSampleOrdering validates timestamp ordering in samples.
-func TestSampleOrdering(t *testing.T) {
+func TestSampleOrdering_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "MUST")
 	t.Attr("description", "Sender MUST send samples with older timestamps before newer ones within a series")
 

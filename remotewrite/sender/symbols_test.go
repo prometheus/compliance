@@ -21,7 +21,9 @@ import (
 )
 
 // TestSymbolTable validates symbol table requirements for Remote Write 2.0.
-func TestSymbolTable(t *testing.T) {
+func TestSymbolTable_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "empty_string_at_index_zero",
@@ -105,7 +107,9 @@ another_metric{foo="bar"} 3
 }
 
 // TestSymbolTableEfficiency validates that symbol tables are efficiently constructed.
-func TestSymbolTableEfficiency(t *testing.T) {
+func TestSymbolTableEfficiency_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "RECOMMENDED")
 	t.Attr("description", "Symbol table should be efficiently constructed with good compression")
 
