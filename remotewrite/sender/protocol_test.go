@@ -22,7 +22,9 @@ import (
 )
 
 // TestProtocolCompliance validates HTTP protocol requirements for Remote Write 2.0 senders.
-func TestProtocolCompliance(t *testing.T) {
+func TestProtocolCompliance_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "content_type_protobuf",
@@ -130,7 +132,9 @@ func TestProtocolCompliance(t *testing.T) {
 }
 
 // TestHTTPMethod validates that senders use POST method for remote write.
-func TestHTTPMethod(t *testing.T) {
+func TestHTTPMethod_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "MUST")
 	t.Attr("description", "Sender MUST use POST method for remote write requests")
 

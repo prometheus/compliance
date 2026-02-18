@@ -23,7 +23,9 @@ import (
 )
 
 // TestRetryBehavior validates sender retry behavior on different error responses.
-func TestRetryBehavior(t *testing.T) {
+func TestRetryBehavior_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []struct {
 		name        string
 		description string

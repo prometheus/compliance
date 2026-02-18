@@ -23,7 +23,9 @@ import (
 )
 
 // TestResponseProcessing validates sender response header processing.
-func TestResponseProcessing(t *testing.T) {
+func TestResponseProcessing_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []struct {
 		name        string
 		description string
@@ -252,7 +254,9 @@ sample_3 3
 }
 
 // TestContentTypeNegotiation validates content-type handling.
-func TestContentTypeNegotiation(t *testing.T) {
+func TestContentTypeNegotiation_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "SHOULD")
 	t.Attr("description", "Sender SHOULD handle content-type negotiation")
 

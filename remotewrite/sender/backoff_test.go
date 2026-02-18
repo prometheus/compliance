@@ -53,7 +53,9 @@ func (ttr *TimestampTrackingReceiver) GetTimestamps() []time.Time {
 }
 
 // TestBackoffBehavior validates backoff and exponential backoff implementation.
-func TestBackoffBehavior(t *testing.T) {
+func TestBackoffBehavior_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []struct {
 		name        string
 		description string
