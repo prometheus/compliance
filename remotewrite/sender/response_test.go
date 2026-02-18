@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
@@ -236,15 +235,7 @@ sample_3 3
 
 				t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
 
-				err := target(targets.TargetOptions{
-					ScrapeTarget:    scrapeTarget.URL(),
-					ReceiveEndpoint: receiver.URL(),
-					Timeout:         8 * time.Second,
-				})
-
-				if err != nil {
-					t.Logf("Target exited with error (may be expected): %v", err)
-				}
+				t.Fatal("was creating target here; to remove")
 
 				requests := receiver.GetRequests()
 				tt.validator(t, requests)
@@ -276,15 +267,7 @@ func TestContentTypeNegotiation_Old(t *testing.T) {
 		scrapeTarget := NewMockScrapeTarget(scrapeData)
 		defer scrapeTarget.Close()
 
-		err := target(targets.TargetOptions{
-			ScrapeTarget:    scrapeTarget.URL(),
-			ReceiveEndpoint: receiver.URL(),
-			Timeout:         10 * time.Second,
-		})
-
-		if err != nil {
-			t.Fatalf("Target failed: %v", err)
-		}
+		t.Fatal("was creating target here; to remove")
 
 		requests := receiver.GetRequests()
 		should(t, len(requests) >= 1, "Should send at least one request")

@@ -19,8 +19,115 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance/remotewrite/sender/sendertest"
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/stretchr/testify/require"
 )
+
+func formatTimeAsOpenMetricsTimestamp(t time.Time) string {
+	v := float64(timestamp.FromTime(t)) / 1000
+	return labels.FormatOpenMetricsFloat(v)
+}
+
+func TestSample(t *testing.T) {
+	timeNow := time.Now()
+	st := timeNow.Add(-2 * time.Hour)
+	explicitTS := timeNow
+
+	sendertest.Run(t,
+		targetsToTest,
+		sendertest.Case{
+			// TODO(bwplotka): Fix 2.0 spec - MUST value and timestamp are not mentioned (only in proto).
+			Name:        "sample",
+			Description: "Senders MUST send valid samples",
+			RFCLevel:    sendertest.MustLevel,
+			ScrapeData: fmt.Sprintf(`# TYPE test_counter counter
+test_counter_total 101.13
+test_counter_created %v
+# TYPE test_histogram histogram
+test_histogram_count 100
+test_histogram_sum 250.0
+test_histogram_bucket{le="+Inf"} 100
+test_histogram_created %v
+# TYPE test_gauge_with_ts gauge
+test_gauge_with_ts 2 %v
+`,
+				timestamp.FromTime(st),
+				timestamp.FromTime(st),
+				formatTimeAsOpenMetricsTimestamp(explicitTS),
+			),
+			Version: remote.WriteV2MessageType,
+			Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+				require.GreaterOrEqual(t, len(res.Requests), 1)
+				require.Greater(t, len(res.Requests[0].RW2.Timeseries), 6, "Request must contain at least 6 timeseries")
+			},
+			ValidateCases: []sendertest.ValidateCase{
+				{
+					Name:        "value",
+					Description: "Sample MUST have value",
+					RFCLevel:    sendertest.MustLevel,
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						ts, _ := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
+						require.NotEmpty(t, ts.Samples, "Timeseries test_counter_total must contain samples")
+						require.Len(t, ts.Samples, 1, "Timeseries test_counter_total must contain a single sample")
+						require.Equal(t, 101.13, ts.Samples[0].Value,
+							"Sample value for test_counter_total must be correctly encoded")
+					},
+				},
+				{
+					Name:        "timestamp",
+					Description: "Sample MUST have timestamp",
+					RFCLevel:    sendertest.MustLevel,
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						for _, ts := range res.Requests[0].RW2.Timeseries {
+							require.Len(t, ts.Samples, 1, "Timeseries must contain a single sample")
+							require.GreaterOrEqual(t, ts.Samples[0].Timestamp, timestamp.FromTime(timeNow), "Timeseries must contain a fresh timestamp")
+						}
+					},
+				},
+				// TODO(bwplotka): Make it work, somehow OM parser kills test_gauge_with_ts metric with no log.
+				//{
+				//	Name:        "explicit_timestamp",
+				//	Description: "Sample with the explicit timestamp work",
+				//	RFCLevel:    sendertest.RecommendedLevel, // Prometheus spec, not Remote Write.
+				//	Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+				//		ts, _ := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_gauge_with_ts")
+				//		require.NotEmpty(t, ts.Samples, "Timeseries test_gauge_with_ts must contain samples")
+				//		require.Len(t, ts.Samples, 1, "Timeseries test_gauge_with_ts must contain a single sample")
+				//		require.Equal(t, timestamp.FromTime(explicitTS), ts.Samples[0].Timestamp)
+				//	},
+				//},
+				{
+					Name:        "start_timestamp for counters",
+					Description: "Sample SHOULD have start timestamp for a counter",
+					RFCLevel:    sendertest.ShouldLevel,
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						ts, _ := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
+						require.NotEmpty(t, ts.Samples, "Timeseries test_counter_total must contain samples")
+						require.Len(t, ts.Samples, 1, "Timeseries test_counter_total must contain a single sample")
+						require.Equal(t, timestamp.FromTime(st), ts.Samples[0].StartTimestamp,
+							"Sample for test_counter_total does not have ST")
+					},
+				},
+				{
+					Name:        "start_timestamp for histograms",
+					Description: "Sample SHOULD have start timestamp for a histogram",
+					RFCLevel:    sendertest.ShouldLevel,
+					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
+						ts, _ := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_histogram_count")
+						require.NotEmpty(t, ts.Samples, "Timeseries test_histogram_count must contain samples")
+						require.Len(t, ts.Samples, 1, "Timeseries test_histogram_count must contain a single sample")
+						require.Equal(t, timestamp.FromTime(st), ts.Samples[0].StartTimestamp,
+							"Sample for test_histogram_count does not have ST")
+					},
+				},
+			},
+		},
+	)
+}
 
 // TestSampleEncoding validates that senders correctly encode float samples.
 func TestSampleEncoding_Old(t *testing.T) {
@@ -34,7 +141,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			ScrapeData:  "test_metric 123.45\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
 				must(t).NotEmpty(req.Request.Timeseries, "Request must contain timeseries")
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_metric")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_metric")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).Equal(123.45, ts.Samples[0].Value,
 					"Sample value must be correctly encoded")
@@ -46,7 +153,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_counter_total 42\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_counter_total")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_counter_total")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).Equal(42.0, ts.Samples[0].Value,
 					"Integer value must be encoded as float")
@@ -58,7 +165,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_gauge 0\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_gauge")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_gauge")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).Equal(0.0, ts.Samples[0].Value,
 					"Zero value must be correctly encoded")
@@ -70,7 +177,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "temperature_celsius -15.5\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "temperature_celsius")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "temperature_celsius")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).Equal(-15.5, ts.Samples[0].Value,
 					"Negative value must be correctly encoded")
@@ -82,7 +189,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_gauge +Inf\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_gauge")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_gauge")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).True(math.IsInf(ts.Samples[0].Value, 1),
 					"Positive infinity must be correctly encoded")
@@ -94,7 +201,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_gauge -Inf\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_gauge")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_gauge")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).True(math.IsInf(ts.Samples[0].Value, -1),
 					"Negative infinity must be correctly encoded")
@@ -106,59 +213,10 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_gauge NaN\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_gauge")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_gauge")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).True(math.IsNaN(ts.Samples[0].Value),
 					"NaN must be correctly encoded")
-			},
-		},
-		{
-			Name:        "timestamp_milliseconds_format",
-			Description: "Sender MUST encode timestamps as milliseconds since Unix epoch",
-			RFCLevel:    "MUST",
-			ScrapeData:  "test_metric 42\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_metric")
-				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
-
-				timestamp := ts.Samples[0].Timestamp
-				must(t).Greater(timestamp, int64(1e12),
-					"Timestamp should be in milliseconds, not seconds")
-				must(t).Less(timestamp, int64(1e16),
-					"Timestamp should be in milliseconds, not nanoseconds")
-			},
-		},
-		{
-			Name:        "timestamp_recent",
-			Description: "Sender SHOULD send timestamps close to current time for fresh scrapes",
-			RFCLevel:    "SHOULD",
-			ScrapeData:  "test_metric 42\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_metric")
-				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
-
-				timestamp := ts.Samples[0].Timestamp
-				now := time.Now().UnixMilli()
-
-				diff := now - timestamp
-				if diff < 0 {
-					diff = -diff
-				}
-				should(t, diff < int64(5*60*1000), fmt.Sprintf(
-					"Timestamp should be recent (within 5 minutes), diff: %dms", diff))
-			},
-		},
-		{
-			Name:        "multiple_samples_same_series",
-			Description: "Sender MAY send multiple samples for the same series in different requests",
-			RFCLevel:    "MAY",
-			ScrapeData:  "test_counter_total 100\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := findTimeseriesByMetricName(req, "test_counter_total")
-				if ts != nil {
-					may(t, len(ts.Samples) > 0, "Timeseries may contain samples")
-				}
-				may(t, ts != nil, "test_counter_total may be present")
 			},
 		},
 		{
@@ -167,7 +225,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_large 1.7976931348623157e+308\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_large")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_large")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).Greater(ts.Samples[0].Value, 1e307,
 					"Large float value must be correctly encoded")
@@ -179,7 +237,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_small 2.2250738585072014e-308\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_small")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_small")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).Less(ts.Samples[0].Value, 1e-307,
 					"Small float value must be correctly encoded")
@@ -193,7 +251,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "MUST",
 			ScrapeData:  "test_scientific 1.23e-4\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_scientific")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_scientific")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 				must(t).InDelta(0.000123, ts.Samples[0].Value, 0.0000001,
 					"Scientific notation value must be correctly parsed and encoded")
@@ -205,7 +263,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "SHOULD",
 			ScrapeData:  "test_precision 0.123456789012345\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				ts, _ := requireTimeseriesByMetricName(t, req, "test_precision")
+				ts, _ := requireTimeseriesByMetricName(t, req.Request, "test_precision")
 				must(t).NotEmpty(ts.Samples, "Timeseries must contain samples")
 			},
 		},
@@ -215,7 +273,7 @@ func TestSampleEncoding_Old(t *testing.T) {
 			RFCLevel:    "SHOULD",
 			ScrapeData:  "test_metric 42\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				_, labels := requireTimeseriesByMetricName(t, req, "test_metric")
+				_, labels := requireTimeseriesByMetricName(t, req.Request, "test_metric")
 				should(t, len(labels["job"]) > 0, "Sample should include 'job' label")
 				should(t, len(labels["instance"]) > 0, "Sample should include 'instance' label")
 			},

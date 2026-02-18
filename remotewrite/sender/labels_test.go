@@ -34,7 +34,7 @@ func TestLabelValidation_Old(t *testing.T) {
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "test_metric" {
-						must(t).True(isSorted(labels, req.Request.Symbols, ts.LabelsRefs),
+						must(t).True(isSorted(req.Request.Symbols, ts.LabelsRefs),
 							"Labels must be sorted in lexicographic order")
 						break
 					}

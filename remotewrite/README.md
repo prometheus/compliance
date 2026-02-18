@@ -59,7 +59,6 @@ For testing custom senders:
 
 * Add target running code and register it the `sender/main_test.go`.
 
-TODO: Implement that.
 * Use custom process target via `PROMETHEUS_COMPLIANCE_RW_SENDERS="process"` and `PROMETHEUS_COMPLIANCE_RW_PROCESS_BINARY=<path>` envvars.
 
 **Debug output:**
