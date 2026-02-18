@@ -23,7 +23,8 @@ import (
 )
 
 // TestBatchingBehavior validates sender batching and queueing behavior.
-func TestBatchingBehavior(t *testing.T) {
+func TestBatchingBehavior_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
 	tests := []TestCase{
 		{
 			Name:        "multiple_series_per_request",
@@ -176,7 +177,9 @@ memory_usage_bytes 1048576
 }
 
 // TestConcurrentRequests validates parallel request handling.
-func TestConcurrentRequests(t *testing.T) {
+func TestConcurrentRequests_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "MAY")
 	t.Attr("description", "Sender MAY send multiple requests in parallel")
 

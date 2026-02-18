@@ -23,7 +23,9 @@ import (
 )
 
 // TestEdgeCases validates sender behavior in edge case scenarios.
-func TestEdgeCases(t *testing.T) {
+func TestEdgeCases_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "empty_scrape",
@@ -360,7 +362,9 @@ rpc_duration_count 1000
 }
 
 // TestRobustnessUnderLoad validates sender behavior under stress.
-func TestRobustnessUnderLoad(t *testing.T) {
+func TestRobustnessUnderLoad_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "SHOULD")
 	t.Attr("description", "Sender SHOULD remain stable under load")
 

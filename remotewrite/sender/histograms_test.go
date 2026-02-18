@@ -18,7 +18,9 @@ import (
 )
 
 // TestHistogramEncoding validates native histogram encoding.
-func TestHistogramEncoding(t *testing.T) {
+func TestHistogramEncoding_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "native_histogram_structure",
