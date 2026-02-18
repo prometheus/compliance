@@ -1,3 +1,18 @@
+<!--
+Copyright The Prometheus Authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -35,11 +50,6 @@
     <header class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 class="text-xl font-semibold tracking-tight">Remote-Write v2 — Test Matrix</h1>
         <div class="flex items-center gap-2">
-            <!-- Navigation Tabs -->
-            <a href="?mode=receiver" id="tab-receiver" class="px-3 py-1.5 text-sm font-medium rounded border transition-colors">Receiver</a>
-            <a href="?mode=sender" id="tab-sender" class="px-3 py-1.5 text-sm font-medium rounded border transition-colors">Sender</a>
-
-            <!-- Controls -->
             <label class="cursor-pointer flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-slate-50">
                 <input id="hideSuccessCheckbox" type="checkbox" class="rounded" />
                 Hide success
@@ -118,27 +128,39 @@
 </button>
 
 <script>
+    // ---------- Optional, preloaded result data ----------
+    // This variable allows preloading results.json content. Useful when opening results on-demand,
+    // when CORS block the local file loading.
+    const PRELOADED_RESULT_DATA = ``;
+
     // ---------- Utilities ----------
+    // STATUS defines the possible test result statuses.
     const STATUS = { PASS: 'pass', FAIL: 'fail', SKIP: 'skip' };
+    // byAlpha provides alphanumeric comparison for sorting.
     const byAlpha = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
+    // toLinesOrArray parses JSON or NDJSON text into an array of event objects.
     function toLinesOrArray(text) {
         text = text.trim();
         if (!text) return [];
         try {
             const parsed = JSON.parse(text);
             if (Array.isArray(parsed)) return parsed;
+            // allow { "events": [...] } or { "Events": [...] }
             if (parsed.events && Array.isArray(parsed.events)) return parsed.events;
             if (parsed.Events && Array.isArray(parsed.Events)) return parsed.Events;
-        } catch (_) { }
+            // else fall through to NDJSON parse
+        } catch (_) { /* NDJSON fallback below */ }
         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         const out = [];
         for (const line of lines) {
-            try { out.push(JSON.parse(line)); } catch (e) { }
+            try { out.push(JSON.parse(line)); } catch (e) { /* ignore junk lines */ }
         }
         return out;
     }
 
+    // getAttrFor finds the most specific attribute value for a test name using longest-prefix matching.
+    // Returns {value, pathLen, path} or null.
     function getAttrFor(testName, key, attrs) {
         let best = null;
         for (const a of attrs) {
@@ -152,23 +174,40 @@
         return best;
     }
 
-    function uniq(arr) { return Array.from(new Set(arr)); }
+    // uniq returns an array with duplicate values removed.
+    function uniq(arr) {
+        return Array.from(new Set(arr));
+    }
 
+    // checkResultsCompleteness verifies if results.json contains a complete test run.
+    // A complete results.json should end with a package-level pass/fail event with an Elapsed field.
     function checkResultsCompleteness(events) {
         if (!events || events.length === 0) return false;
+
+        // Look for the final event - should be a package-level pass/fail event.
         const lastEvent = events[events.length - 1];
+
+        // A complete results.json ends with an event that has:
+        // - Action: "pass" or "fail".
+        // - No Test field (package-level result).
+        // - An Elapsed field.
         return lastEvent &&
             (lastEvent.Action === 'pass' || lastEvent.Action === 'fail') &&
             !lastEvent.Test &&
             typeof lastEvent.Elapsed !== 'undefined';
     }
 
+    // showIncompleteWarning toggles the visibility of the incomplete results warning banner.
     function showIncompleteWarning(show) {
         const warningElement = document.getElementById('incompleteWarning');
-        if (show) warningElement.classList.remove('hidden');
-        else warningElement.classList.add('hidden');
+        if (show) {
+            warningElement.classList.remove('hidden');
+        } else {
+            warningElement.classList.add('hidden');
+        }
     }
 
+    // findRelatedTests finds tests with the same base name but different RW receivers.
     function findRelatedTests(currentTest, allTestDetails) {
         const currentBaseTest = removeOneSegment(currentTest.testName, currentTest.rw);
         return allTestDetails.filter(test => {
@@ -177,6 +216,8 @@
         });
     }
 
+    // removeOneSegment removes exactly one segment equal to target from the path.
+    // Prefers the last occurrence.
     function removeOneSegment(path, targetSegment) {
         const segs = path.split('/');
         let idx = -1;
@@ -184,9 +225,11 @@
             if (segs[i] === targetSegment) { idx = i; break; }
         }
         if (idx === -1) return path;
-        return segs.slice(0, idx).concat(segs.slice(idx + 1)).join('/');
+        const without = segs.slice(0, idx).concat(segs.slice(idx + 1));
+        return without.join('/');
     }
 
+    // statusBadge generates an HTML badge for test status with optional link to detailed results.
     function statusBadge(status, rfcLevel, testName = null, rw = null) {
         const lvl = (rfcLevel || '').toUpperCase();
         let cls = 'bg-slate-100 text-slate-500';
@@ -196,43 +239,57 @@
             if (lvl === 'SHOULD' || lvl === 'MAY') { cls = 'bg-gray-300 text-gray-800'; label = 'FAIL'; }
             else { cls = 'bg-red-100 text-red-800'; label = 'FAIL'; }
         } else if (status === STATUS.SKIP) { cls = 'bg-yellow-100 text-yellow-900'; label = 'SKIP'; }
+
         const badge = `<span class="inline-block rounded px-2 py-0.5 font-medium ${cls}">${label}</span>`;
+
+        // If we have test name and rw, make it a clickable link
         if (testName && rw && status !== '—') {
             const targetId = `test-${encodeURIComponent(testName)}-${encodeURIComponent(rw)}`;
             return `<a href="#${targetId}" class="hover:opacity-75 transition-opacity">${badge}</a>`;
         }
+
         return badge;
     }
 
     // ---------- Core parsing & matrix build ----------
+    // buildMatrix parses test events and constructs the test result matrix.
+    // Returns {rows, rws, testDetails, startTime} containing organized test results.
     function buildMatrix(events) {
         const attrs = events.filter(e => e.Action === 'attr' && e.Test && e.Key && typeof e.Value !== 'undefined');
-        const endEvents = events.filter(e => e.Test && (e.Action === 'pass' || e.Action === 'fail' || e.Action === 'skip'));
+        const endEvents = events.filter(e =>
+            e.Test && (e.Action === 'pass' || e.Action === 'fail' || e.Action === 'skip')
+        );
         const outputEvents = events.filter(e => e.Action === 'output' && e.Test && e.Output);
 
+        // Extract start time from the first event with a Time field
         let startTime = null;
         for (const ev of events) {
-            if (ev.Time) { startTime = ev.Time; break; }
+            if (ev.Time) {
+                startTime = ev.Time;
+                break;
+            }
         }
 
-        const rows = new Map();
+        const rows = new Map(); // key -> { testName, rfcLevel, rfcAttrLen, resultsByRw: { rw -> status } }
         const allRws = new Set();
-        const testDetails = new Map();
+        const testDetails = new Map(); // key -> { testName, rw, status, rfcLevel, duration, output }
 
         for (const ev of endEvents) {
             const test = ev.Test;
             const rwAttr = getAttrFor(test, 'rw', attrs);
             const rfcAttr = getAttrFor(test, 'rfcLevel', attrs);
-            if (!rwAttr || !rfcAttr) continue;
+            if (!rwAttr || !rfcAttr) continue; // ignore tests without both attrs (direct or inherited)
 
             const rw = rwAttr.value;
             allRws.add(rw);
 
+            // Collect test output for this specific test
             const testOutput = outputEvents
                 .filter(e => e.Test === test)
                 .map(e => e.Output)
                 .join('');
 
+            // Store detailed test information
             const detailKey = `${test}#${rw}`;
             testDetails.set(detailKey, {
                 testName: test,
@@ -243,7 +300,10 @@
                 output: testOutput
             });
 
+            // Row key is the test path with the rw segment removed once.
             const baseTest = removeOneSegment(test, rw);
+
+            // Ensure row exists
             if (!rows.has(baseTest)) {
                 rows.set(baseTest, {
                     testName: baseTest,
@@ -252,11 +312,16 @@
                     resultsByRw: Object.create(null),
                 });
             }
+
             const row = rows.get(baseTest);
+
+            // Prefer the most specific rfcLevel (longest attr path)
             if (rfcAttr.pathLen > row.rfcAttrLen) {
                 row.rfcLevel = rfcAttr.value;
                 row.rfcAttrLen = rfcAttr.pathLen;
             }
+
+            // Store status (if multiple results for same pair, prioritize FAIL > SKIP > PASS)
             const prev = row.resultsByRw[rw];
             const now = ev.Action;
             const rank = s => s === STATUS.FAIL ? 3 : (s === STATUS.SKIP ? 2 : (s === STATUS.PASS ? 1 : 0));
@@ -265,60 +330,86 @@
             }
         }
 
+        // Finalize arrays
         const rws = Array.from(allRws).sort(byAlpha);
         const rowList = Array.from(rows.values()).sort((a, b) => byAlpha(a.testName, b.testName));
         const detailsList = Array.from(testDetails.values());
+
         return { rows: rowList, rws, testDetails: detailsList, startTime };
     }
 
     // ---------- Rendering ----------
+    // renderTestDetails renders the detailed test results section with filtering and cross-references.
     function renderTestDetails(testDetails, rws, allTestDetails = testDetails) {
         const content = document.getElementById('testDetailsContent');
         content.innerHTML = '';
+
+        // Check if we should hide successful tests or SHOULD failures.
         const hideSuccess = document.getElementById('hideSuccessCheckbox').checked;
         const hideShouldFails = document.getElementById('hideShouldFailsCheckbox').checked;
 
+        // Filter tests based on checkboxes.
         let filteredTestDetails = testDetails;
+
         if (hideSuccess) {
             filteredTestDetails = filteredTestDetails.filter(test => test.status !== STATUS.PASS);
         }
+
         if (hideShouldFails) {
             filteredTestDetails = filteredTestDetails.filter(test =>
                 !(test.status === STATUS.FAIL && test.rfcLevel.toUpperCase() === 'SHOULD')
             );
         }
 
+        // Group tests by RW.
         const testsByRw = {};
-        for (const rw of rws) testsByRw[rw] = [];
-        for (const test of filteredTestDetails) {
-            if (testsByRw[test.rw]) testsByRw[test.rw].push(test);
+        for (const rw of rws) {
+            testsByRw[rw] = [];
         }
+
+        for (const test of filteredTestDetails) {
+            if (testsByRw[test.rw]) {
+                testsByRw[test.rw].push(test);
+            }
+        }
+
+        // Sort tests within each RW group.
         for (const rw of rws) {
             testsByRw[rw].sort((a, b) => byAlpha(a.testName, b.testName));
         }
 
+        // Render each RW group.
         for (const rw of rws) {
             if (testsByRw[rw].length === 0) continue;
+
             const section = document.createElement('div');
             section.className = 'mb-8';
+
             const header = document.createElement('h3');
             header.className = 'text-md font-semibold mb-4 text-slate-800';
             header.textContent = rw;
             section.appendChild(header);
+
             for (const test of testsByRw[rw]) {
                 const testDiv = document.createElement('div');
                 testDiv.className = 'mb-4 p-4 border border-slate-200 rounded-lg bg-white';
                 testDiv.id = `test-${encodeURIComponent(test.testName)}-${encodeURIComponent(test.rw)}`;
+
                 const durationText = test.duration > 0 ? ` (${test.duration.toFixed(3)}s)` : '';
                 const statusClass = test.status === STATUS.PASS ? 'text-green-700' :
                     test.status === STATUS.FAIL ? 'text-red-700' : 'text-yellow-700';
 
+                // Find related tests across different RW receivers.
                 const relatedTests = findRelatedTests(test, allTestDetails);
+
+                // Generate cross-reference section.
                 let crossRefSection = '';
                 if (relatedTests.length > 0) {
+                    // Group by status.
                     const passingTests = relatedTests.filter(t => t.status === STATUS.PASS);
                     const failingTests = relatedTests.filter(t => t.status === STATUS.FAIL);
                     const skippingTests = relatedTests.filter(t => t.status === STATUS.SKIP);
+
                     const statusGroups = [];
                     if (passingTests.length > 0) {
                         const links = passingTests.map(t =>
@@ -340,6 +431,7 @@
                         ).join(', ');
                         statusGroups.push(`SKIPPED on ${links}`);
                     }
+
                     if (statusGroups.length > 0) {
                         crossRefSection = `
                 <div class="mt-3 pt-3 border-t border-slate-200">
@@ -368,14 +460,18 @@
             ` : ''}
             ${crossRefSection}
           `;
+
                 section.appendChild(testDiv);
             }
+
             content.appendChild(section);
         }
     }
 
+    // renderMatrix renders the main test matrix table and statistics footer.
     function renderMatrix({ rows, rws, testDetails, startTime }, isComplete = true) {
         const thead = document.querySelector('thead tr');
+        // Wipe any prior rw headings.
         while (thead.children.length > 2) thead.removeChild(thead.lastChild);
         for (const rw of rws) {
             const th = document.createElement('th');
@@ -386,14 +482,18 @@
 
         const tbody = document.getElementById('tbody');
         tbody.innerHTML = '';
+
         for (const row of rows) {
             const tr = document.createElement('tr');
             tr.className = 'border-t border-slate-100 hover:bg-slate-50';
+
+            // Test name (sticky first col on wide screens).
             const tdName = document.createElement('td');
             tdName.className = 'sticky left-0 z-[1] bg-white px-4 py-2 font-mono text-[13px]';
             tdName.textContent = row.testName;
             tr.appendChild(tdName);
 
+            // rfcLevel.
             const tdLevel = document.createElement('td');
             tdLevel.className = 'px-4 py-2';
             const levelPill = document.createElement('span');
@@ -402,9 +502,11 @@
             tdLevel.appendChild(levelPill);
             tr.appendChild(tdLevel);
 
+            // Result cells per rw.
             for (const rw of rws) {
                 const td = document.createElement('td');
                 td.className = 'px-4 py-2 whitespace-nowrap';
+                // Find the original test name from testDetails that matches this row and rw.
                 const matchingDetail = testDetails.find(detail =>
                     removeOneSegment(detail.testName, detail.rw) === row.testName && detail.rw === rw
                 );
@@ -412,14 +514,16 @@
                 td.innerHTML = statusBadge(row.resultsByRw[rw], row.rfcLevel, originalTestName, rw);
                 tr.appendChild(td);
             }
+
             tbody.appendChild(tr);
         }
 
-        // Stats
+        // Calculate statistics for footer.
         const stats = {};
         for (const rw of rws) {
             stats[rw] = { mustPass: 0, mustFail: 0, shouldPass: 0, shouldFail: 0, mayPass: 0, mayFail: 0 };
         }
+
         for (const row of rows) {
             const rfcLevel = (row.rfcLevel || '').toUpperCase();
             for (const rw of rws) {
@@ -436,17 +540,24 @@
             }
         }
 
+        // Render footer with statistics.
         const tfoot = document.getElementById('tfoot');
         tfoot.innerHTML = '';
+
         const tr = document.createElement('tr');
+
+        // Empty cell for test name column.
         const tdName = document.createElement('td');
         tdName.className = 'sticky left-0 z-[1] bg-slate-100 px-4 py-2 font-semibold text-sm';
         tdName.textContent = 'Statistics';
         tr.appendChild(tdName);
+
+        // Empty cell for rfcLevel column.
         const tdLevel = document.createElement('td');
         tdLevel.className = 'px-4 py-2';
         tr.appendChild(tdLevel);
 
+        // Statistics for each rw column.
         for (const rw of rws) {
             const td = document.createElement('td');
             td.className = 'px-4 py-2 text-xs text-slate-700';
@@ -460,10 +571,9 @@
 
             const mustTotal = s.mustPass + s.mustFail;
             const shouldTotal = s.shouldPass + s.shouldFail;
+
             const mustPassPercent = mustTotal > 0 ? (s.mustPass / mustTotal) * 100 : 0;
             const shouldPassPercent = shouldTotal > 0 ? (s.shouldPass / shouldTotal) * 100 : 0;
-            const mayTotal = s.mayPass + s.mayFail;
-            const mayPassPercent = mayTotal > 0 ? (s.mayPass / mayTotal) * 100 : 0;
 
             const mustProgressBar = mustTotal > 0 ? `
           <div class="mb-2">
@@ -473,6 +583,7 @@
             </div>
           </div>
         ` : '';
+
             const shouldProgressBar = shouldTotal > 0 ? `
           <div class="mb-2">
             <div class="text-xs font-semibold mb-1">SHOULD: ${s.shouldPass} OK, ${s.shouldFail} FAIL</div>
@@ -481,6 +592,9 @@
             </div>
           </div>
         ` : '';
+
+            const mayTotal = s.mayPass + s.mayFail;
+            const mayPassPercent = mayTotal > 0 ? (s.mayPass / mayTotal) * 100 : 0;
             const mayProgressBar = mayTotal > 0 ? `
           <div class="mb-2">
             <div class="text-xs font-semibold mb-1">MAY: ${s.mayPass} OK, ${s.mayFail} FAIL</div>
@@ -500,6 +614,7 @@
         `;
             tr.appendChild(td);
         }
+
         tfoot.appendChild(tr);
 
         const summary = document.getElementById('summary');
@@ -513,48 +628,55 @@
         }
         summary.textContent = summaryText;
 
+        // Render detailed test results.
         renderTestDetails(testDetails, rws, testDetails);
+
         document.getElementById('status').textContent = rows.length
             ? 'Showing tests that have both an rw and an rfcLevel attribute (with attribute inheritance by prefix).'
             : 'No matching tests found (need both rw and rfcLevel).';
     }
 
     // ---------- Loading ----------
+    // loadFromFetch loads test results from results.json via HTTP fetch.
     async function loadFromFetch() {
         const status = document.getElementById('status');
         status.textContent = 'Loading results.json…';
-
-        const urlParams = new URLSearchParams(window.location.search);
-        const mode = urlParams.get('mode');
-        const resultsPath = (mode === 'sender' ? 'sender' : 'receiver') + '/results.json';
-
-        const res = await fetch(`${resultsPath}?t=${Date.now()}`).catch(() => null);
-        if (!res || !res.ok) throw new Error(`${resultsPath} not found`);
-
+        const res = await fetch(`results.json?t=${Date.now()}`).catch(() => null);
+        if (!res || !res.ok) throw new Error('results.json not found or not fetchable');
         const text = await res.text();
         const events = toLinesOrArray(text);
+
+        // Check if results are complete and show warning if not.
         const isComplete = checkResultsCompleteness(events);
         showIncompleteWarning(!isComplete);
+
         const matrix = buildMatrix(events);
         renderMatrix(matrix, isComplete);
-        status.textContent = `Loaded ${resultsPath}.`;
+        status.textContent = 'Loaded results.json.';
     }
 
+    // loadFromFile loads test results from a user-selected file.
     async function loadFromFile(file) {
         const status = document.getElementById('status');
         status.textContent = `Loading ${file.name}…`;
         const text = await file.text();
         const events = toLinesOrArray(text);
+
+        // Check if results are complete and show warning if not.
         const isComplete = checkResultsCompleteness(events);
         showIncompleteWarning(!isComplete);
+
         const matrix = buildMatrix(events);
         renderMatrix(matrix, isComplete);
         status.textContent = `Loaded ${file.name}.`;
     }
 
-    // ---------- Back to Top ----------
+    // ---------- Back to Top Button ----------
+    // initBackToTop initializes the back-to-top button behavior.
     function initBackToTop() {
         const backToTopBtn = document.getElementById('backToTop');
+
+        // Show/hide button based on scroll position.
         window.addEventListener('scroll', () => {
             if (window.scrollY > 300) {
                 backToTopBtn.classList.remove('opacity-0', 'pointer-events-none');
@@ -564,63 +686,87 @@
                 backToTopBtn.classList.remove('opacity-100');
             }
         });
+
+        // Scroll to top when clicked.
         backToTopBtn.addEventListener('click', () => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     }
 
     // ---------- Boot ----------
+    // boot initializes the application on page load.
     (function boot() {
+        // Initialize back to top button.
         initBackToTop();
 
-        // Set title and header
-        const urlParams = new URLSearchParams(window.location.search);
-        const mode = urlParams.get('mode');
-        const modeName = mode === 'sender' ? 'Sender' : 'Receiver';
-        document.title = `Remote-Write v2 — ${modeName} Test Matrix`;
-        document.querySelector('h1').textContent = `Remote-Write v2 — ${modeName} Test Matrix`;
-
-        // Highlight active tab
-        const receiverTab = document.getElementById('tab-receiver');
-        const senderTab = document.getElementById('tab-sender');
-        if (mode === 'sender') {
-            senderTab.className = senderTab.className.replace('bg-white border-slate-300', 'bg-blue-100 border-blue-300 text-blue-800');
-        } else {
-            receiverTab.className = receiverTab.className.replace('bg-white border-slate-300', 'bg-blue-100 border-blue-300 text-blue-800');
-        }
-
-        // Checkboxes
+        // Restore checkbox states from localStorage.
         const hideSuccessCheckbox = document.getElementById('hideSuccessCheckbox');
         const hideShouldFailsCheckbox = document.getElementById('hideShouldFailsCheckbox');
-        const savedHideSuccess = localStorage.getItem('hideSuccess');
-        if (savedHideSuccess === 'true') hideSuccessCheckbox.checked = true;
-        const savedHideShouldFails = localStorage.getItem('hideShouldFails');
-        if (savedHideShouldFails === 'true') hideShouldFailsCheckbox.checked = true;
 
+        const savedHideSuccess = localStorage.getItem('hideSuccess');
+        if (savedHideSuccess === 'true') {
+            hideSuccessCheckbox.checked = true;
+        }
+
+        const savedHideShouldFails = localStorage.getItem('hideShouldFails');
+        if (savedHideShouldFails === 'true') {
+            hideShouldFailsCheckbox.checked = true;
+        }
+
+        // Store current matrix data for re-rendering.
         let currentMatrix = null;
+
+        // Add checkbox event listeners.
         const handleCheckboxChange = () => {
+            // Save states to localStorage.
             localStorage.setItem('hideSuccess', hideSuccessCheckbox.checked.toString());
             localStorage.setItem('hideShouldFails', hideShouldFailsCheckbox.checked.toString());
-            if (currentMatrix) renderTestDetails(currentMatrix.testDetails, currentMatrix.rws, currentMatrix.testDetails);
+
+            // Re-render test details if we have data.
+            if (currentMatrix) {
+                renderTestDetails(currentMatrix.testDetails, currentMatrix.rws, currentMatrix.testDetails);
+            }
         };
+
         hideSuccessCheckbox.addEventListener('change', handleCheckboxChange);
         hideShouldFailsCheckbox.addEventListener('change', handleCheckboxChange);
 
+        // Modified render function to store matrix data.
         const originalRenderMatrix = renderMatrix;
         renderMatrix = function(matrix) {
             currentMatrix = matrix;
             originalRenderMatrix(matrix);
         };
 
-        // Load
-        loadFromFetch().catch(() => {
-            document.getElementById('status').textContent =
-                'results.json not found — use "Load file…" or serve this directory.';
-        });
+        // Try auto fetch; if it fails, leave UI ready for manual load.
+        // Check for injected preloaded data first.
+        const preloaded = PRELOADED_RESULT_DATA.trim();
+        if (preloaded) {
+            // Case 1: Preloaded data found.
+            document.getElementById('status').textContent = 'Loading preloaded results…';
+            try {
+                const events = toLinesOrArray(preloaded);
+                const isComplete = checkResultsCompleteness(events);
+                showIncompleteWarning(!isComplete);
+                const matrix = buildMatrix(events);
+                renderMatrix(matrix, isComplete);
+                document.getElementById('status').textContent = 'Loaded preloaded results.';
+            } catch (e) {
+                console.error(e);
+                document.getElementById('status').textContent = 'Error parsing preloaded results.';
+            }
+        } else {
+            // Case 2: No preloaded data, try fetching results.json.
+            loadFromFetch().catch(() => {
+                document.getElementById('status').textContent =
+                    'results.json not found via fetch — use "Load file…" or serve this directory.';
+            });
+        }
 
         document.getElementById('reloadBtn').addEventListener('click', () => {
             loadFromFetch().catch(err => {
-                document.getElementById('status').textContent = 'Reload failed.';
+                document.getElementById('status').textContent =
+                    'Reload failed: results.json not found — use "Load file…".';
             });
         });
 
