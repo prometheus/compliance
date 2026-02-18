@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
@@ -209,15 +208,7 @@ func TestRetryBehavior_Old(t *testing.T) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-				err := target(targets.TargetOptions{
-					ScrapeTarget:    scrapeTarget.URL(),
-					ReceiveEndpoint: receiver.URL(),
-					Timeout:         8 * time.Second,
-				})
-
-				if err != nil {
-					t.Logf("Target exited with error (expected for retry tests): %v", err)
-				}
+				t.Fatal("was creating target here; to remove")
 
 				requests := receiver.GetRequests()
 				tt.validator(t, requests)
