@@ -18,4 +18,5 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           persist-credentials: false
-      - run: cd remotewrite && make sender
+      # Skip ST tests on CI as Prometheus does not implement those yet (see PROM-60).
+      - run: cd remotewrite && make sender PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE="TestSample/sample/rw2/prometheus/start_timestamp*"
