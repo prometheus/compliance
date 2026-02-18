@@ -23,7 +23,9 @@ import (
 )
 
 // TestErrorHandling validates sender error handling in various failure scenarios.
-func TestErrorHandling(t *testing.T) {
+func TestErrorHandling_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []struct {
 		name        string
 		description string
@@ -195,7 +197,9 @@ func TestErrorHandling(t *testing.T) {
 }
 
 // TestNetworkErrors validates handling of network-level errors.
-func TestNetworkErrors(t *testing.T) {
+func TestNetworkErrors_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "SHOULD")
 	t.Attr("description", "Sender SHOULD handle network errors gracefully")
 

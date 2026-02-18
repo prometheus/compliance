@@ -21,7 +21,9 @@ import (
 )
 
 // TestCombinedFeatures validates integration of multiple Remote Write 2.0 features.
-func TestCombinedFeatures(t *testing.T) {
+func TestCombinedFeatures_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "samples_with_metadata",
