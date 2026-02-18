@@ -29,7 +29,7 @@ sender: ## Run sender compliance tests for a given senders suitable for humans a
 	cd ./sender && DEBUG=$(DEBUG) PROMETHEUS_COMPLIANCE_RW_SENDERS=$(PROMETHEUS_COMPLIANCE_RW_SENDERS) go test -run $(PROMETHEUS_RW_COMPLIANCE_TEST_RE) -skip $(PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE) -v -timeout=$(TIMEOUT)
 
 .PHONY: sender-web
-sender-html: ## Run sender compliance tests for a given senders with a HTML results view.
+sender-web: ## Run sender compliance tests for a given senders with a HTML results view.
 	@cd ./sender && DEBUG=$(DEBUG) PROMETHEUS_COMPLIANCE_RW_SENDERS=$(PROMETHEUS_COMPLIANCE_RW_SENDERS) go test -run $(PROMETHEUS_RW_COMPLIANCE_TEST_RE) -skip $(PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE) -json | tee $(RESULT_FILE)
 	@$(MAKE) results-web
 
@@ -40,7 +40,7 @@ receiver: ## Run receiver compliance tests for a given receivers suitable for hu
 	cd ./receiver && DEBUG=$(DEBUG) PROMETHEUS_RW2_COMPLIANCE_RECEIVERS=$(PROMETHEUS_RW2_COMPLIANCE_RECEIVERS) go test -run $(PROMETHEUS_RW_COMPLIANCE_TEST_RE) -skip $(PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE) -v -timeout=$(TIMEOUT)
 
 .PHONY: receiver-web
-receiver-html: ## Run receiver compliance tests for a given receivers with a HTML results view.
+receiver-web: ## Run receiver compliance tests for a given receivers with a HTML results view.
 	@cd ./receiver && DEBUG=$(DEBUG) PROMETHEUS_RW2_COMPLIANCE_RECEIVERS=$(PROMETHEUS_RW2_COMPLIANCE_RECEIVERS) go test -run $(PROMETHEUS_RW_COMPLIANCE_TEST_RE) -skip $(PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE) -json | tee $(RESULT_FILE)
 	@$(MAKE) results-web
 
