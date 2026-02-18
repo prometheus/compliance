@@ -41,7 +41,6 @@ func TestSample(t *testing.T) {
 		targetsToTest,
 		sendertest.Case{
 			// TODO(bwplotka): Fix 2.0 spec - MUST value and timestamp are not mentioned (only in proto).
-			Name:        "sample",
 			Description: "Senders MUST send valid samples",
 			RFCLevel:    sendertest.MustLevel,
 			ScrapeData: fmt.Sprintf(`# TYPE test_counter counter

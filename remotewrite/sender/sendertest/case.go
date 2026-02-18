@@ -96,7 +96,8 @@ type Case struct {
 	// TODO(bwplotka): Fix index.html to actually render it.
 	Description string
 	// RFCLevel is the requirement level for a test to pass.
-	// This includes all the errors in the tests, including Validate
+	// This includes all the errors in the '__setup__' stage, including Validate
+	// ValidateCases can have different semantics.
 	RFCLevel RFCLevel
 	// RemoteWrite version to configure the target with. This indicates version of Remote Write protocol,
 	// that the target must use.
@@ -162,18 +163,19 @@ func runTestForEachSender(t *testing.T, name string, testTargets map[string]targ
 		t.Fatalf("unsupported remote write message type: %v", tc.Version)
 	}
 
-	tc.RFCLevel.annotate(t)
-	descAnnotate(t, tc.Description)
+	allLevels := []RFCLevel{tc.RFCLevel}
+	for _, vc := range tc.ValidateCases {
+		allLevels = append(allLevels, vc.RFCLevel)
+	}
 
 	for targetName, runTarget := range testTargets {
 		subCaseName := fmt.Sprintf("%v/%v", protoMsgName, targetName)
 		if name != "" {
 			subCaseName = fmt.Sprintf("%v/%v", name, subCaseName)
 		}
+		t.Attr("version", protoMsgName)
 		t.Run(subCaseName, func(t *testing.T) {
 			t.Parallel()
-			t.Attr("version", protoMsgName)
-			t.Attr("rw", targetName)
 
 			if len(tc.TestResponses) == 0 {
 				tc.TestResponses = []ReceiverResponse{{}} // By default assume a single successful response.
@@ -181,52 +183,77 @@ func runTestForEachSender(t *testing.T, name string, testTargets map[string]targ
 			receiver := NewSyncReceiver(tc.Version, tc.TestResponses)
 			scrapeTarget := newScrapeTarget(tc.ScrapeData)
 
-			ctx, cancel := context.WithCancel(t.Context())
-			t.Cleanup(cancel)
+			// Setup subcase exists to cleanly visualise errors that happens before certain validation cases.
+			// TODO(bwplotka): This is odd for tests with 0 cases and a single validation.
+			// Consider reshaping a bit or not allowing 0 cases tests.
+			// Notably for non-0 cases you have extra MUST calculated etc.
+			setupOk := safeRun(t, "_setup", targetName, tc.Description, tc.RFCLevel, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				t.Cleanup(cancel)
 
-			cancelGroup := func(err error) { cancel() }
+				cancelGroup := func(err error) { cancel() }
 
-			var g run.Group
-			g.Add(func() error {
-				return receiver.Run(ctx)
-			}, cancelGroup)
-			g.Add(func() error {
-				scrapeTarget.Run(ctx)
-				return nil
-			}, cancelGroup)
-			g.Add(func() error {
-				return runTarget(ctx, targets.TargetOptions{
-					ScrapeTargetURL:    scrapeTarget.URL(),
-					ReceiveEndpointURL: receiver.URL(),
-					RemoteWriteMessage: tc.Version,
-				})
-			}, cancelGroup)
-			if err := g.Run(); err != nil {
-				t.Errorf("premature scrape endpoint, receiver or target stop; consider re-runing with DEBUG='1'")
-				// Validate even on error.
-			}
-
-			res := receiver.Result()
-			for i, r := range res.Requests {
-				if r.Err != nil {
-					t.Errorf("sender request %v failed", i)
+				var g run.Group
+				g.Add(func() error {
+					return receiver.Run(ctx)
+				}, cancelGroup)
+				g.Add(func() error {
+					scrapeTarget.Run(ctx)
+					return nil
+				}, cancelGroup)
+				g.Add(func() error {
+					return runTarget(ctx, targets.TargetOptions{
+						ScrapeTargetURL:    scrapeTarget.URL(),
+						ReceiveEndpointURL: receiver.URL(),
+						RemoteWriteMessage: tc.Version,
+					})
+				}, cancelGroup)
+				if err := g.Run(); err != nil {
+					t.Errorf("premature scrape endpoint, receiver or target stop; consider re-runing with DEBUG='1'")
 				}
-			}
 
-			if tc.Validate != nil {
-				tc.Validate(t, res)
-			}
+				res := receiver.Result()
+				for i, r := range res.Requests {
+					if r.Err != nil {
+						t.Errorf("sender request %v failed", i)
+					}
+				}
+				if tc.Validate != nil {
+					tc.Validate(t, res)
+				}
+			})
+
+			// Run sub-cases even if setup failed so the overview is clear.
+			res := receiver.Result()
 			for _, vc := range tc.ValidateCases {
-				t.Run(vc.Name, func(t *testing.T) {
-					t.Parallel()
-					vc.RFCLevel.annotate(t)
-					descAnnotate(t, vc.Description)
+				safeRun(t, vc.Name, targetName, vc.Description, vc.RFCLevel, func(t *testing.T) {
+					if !setupOk {
+						t.Fatal("setup failed")
+					}
 
 					vc.Validate(t, res)
 				})
 			}
 		})
 	}
+}
+
+func safeRun(t *testing.T, name, target, desc string, rfc RFCLevel, f func(t *testing.T)) bool {
+	return t.Run(name, func(t *testing.T) {
+		t.Attr("rw", target)
+		rfc.annotate(t)
+		descAnnotate(t, desc)
+
+		if os.Getenv("DEBUG") == "" {
+			// Only capture panics on non-debug. When debugging, it's useful to know the exact trace.
+			defer func() {
+				if val := recover(); val != nil {
+					t.Fatal("test panicked:", val)
+				}
+			}()
+		}
+		f(t)
+	})
 }
 
 type Receiver struct {
