@@ -11,15 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"math"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestEdgeCases validates sender behavior in edge case scenarios.
@@ -382,7 +380,7 @@ func TestRobustnessUnderLoad_Old(t *testing.T) {
 		scrapeData.WriteString("\n")
 	}
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: scrapeData.String(),
 			Validator: func(t *testing.T, req *CapturedRequest) {

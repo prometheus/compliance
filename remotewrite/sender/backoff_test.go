@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
@@ -19,8 +19,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TimestampTrackingReceiver wraps MockReceiver to track request timestamps.
@@ -209,8 +207,7 @@ func TestBackoffBehavior_Old(t *testing.T) {
 			t.Attr("rfcLevel", tt.rfcLevel)
 			t.Attr("description", tt.description)
 
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-
+			forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 				receiver := NewMockReceiver()
 				defer receiver.Close()
 

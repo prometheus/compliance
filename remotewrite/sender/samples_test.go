@@ -11,122 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
-	"fmt"
 	"math"
 	"testing"
-	"time"
-
-	"github.com/prometheus/client_golang/exp/api/remote"
-	"github.com/prometheus/compliance/remotewrite/sender/sendertest"
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
-	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/model/timestamp"
-	"github.com/stretchr/testify/require"
 )
-
-func formatTimeAsOpenMetricsTimestamp(t time.Time) string {
-	v := float64(timestamp.FromTime(t)) / 1000
-	return labels.FormatOpenMetricsFloat(v)
-}
-
-func TestSample(t *testing.T) {
-	timeNow := time.Now()
-	st := timeNow.Add(-2 * time.Hour)
-	explicitTS := timeNow
-
-	sendertest.Run(t,
-		targetsToTest,
-		sendertest.Case{
-			// TODO(bwplotka): Fix 2.0 spec - MUST value and timestamp are not mentioned (only in proto).
-			Description: "Senders MUST send valid samples",
-			RFCLevel:    sendertest.MustLevel,
-			ScrapeData: fmt.Sprintf(`# TYPE test_counter counter
-test_counter_total 101.13
-test_counter_created %v
-# TYPE test_histogram histogram
-test_histogram_count 100
-test_histogram_sum 250.0
-test_histogram_bucket{le="+Inf"} 100
-test_histogram_created %v
-# TYPE test_gauge_with_ts gauge
-test_gauge_with_ts 2 %v
-`,
-				timestamp.FromTime(st),
-				timestamp.FromTime(st),
-				formatTimeAsOpenMetricsTimestamp(explicitTS),
-			),
-			Version: remote.WriteV2MessageType,
-			Validate: func(t *testing.T, res sendertest.ReceiverResult) {
-				require.GreaterOrEqual(t, len(res.Requests), 1)
-				require.Greater(t, len(res.Requests[0].RW2.Timeseries), 6, "Request must contain at least 6 timeseries")
-			},
-			ValidateCases: []sendertest.ValidateCase{
-				{
-					Name:        "value",
-					Description: "Sample MUST have value",
-					RFCLevel:    sendertest.MustLevel,
-					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
-						ts, _ := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
-						require.NotEmpty(t, ts.Samples, "Timeseries test_counter_total must contain samples")
-						require.Len(t, ts.Samples, 1, "Timeseries test_counter_total must contain a single sample")
-						require.Equal(t, 101.13, ts.Samples[0].Value,
-							"Sample value for test_counter_total must be correctly encoded")
-					},
-				},
-				{
-					Name:        "timestamp",
-					Description: "Sample MUST have timestamp",
-					RFCLevel:    sendertest.MustLevel,
-					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
-						for _, ts := range res.Requests[0].RW2.Timeseries {
-							require.Len(t, ts.Samples, 1, "Timeseries must contain a single sample")
-							require.GreaterOrEqual(t, ts.Samples[0].Timestamp, timestamp.FromTime(timeNow), "Timeseries must contain a fresh timestamp")
-						}
-					},
-				},
-				// TODO(bwplotka): Make it work, somehow OM parser kills test_gauge_with_ts metric with no log.
-				//{
-				//	Name:        "explicit_timestamp",
-				//	Description: "Sample with the explicit timestamp work",
-				//	RFCLevel:    sendertest.RecommendedLevel, // Prometheus spec, not Remote Write.
-				//	Validate: func(t *testing.T, res sendertest.ReceiverResult) {
-				//		ts, _ := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_gauge_with_ts")
-				//		require.NotEmpty(t, ts.Samples, "Timeseries test_gauge_with_ts must contain samples")
-				//		require.Len(t, ts.Samples, 1, "Timeseries test_gauge_with_ts must contain a single sample")
-				//		require.Equal(t, timestamp.FromTime(explicitTS), ts.Samples[0].Timestamp)
-				//	},
-				//},
-				{
-					Name:        "start_timestamp for counters",
-					Description: "Sample SHOULD have start timestamp for a counter",
-					RFCLevel:    sendertest.ShouldLevel,
-					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
-						ts, _ := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
-						require.NotEmpty(t, ts.Samples, "Timeseries test_counter_total must contain samples")
-						require.Len(t, ts.Samples, 1, "Timeseries test_counter_total must contain a single sample")
-						require.Equal(t, timestamp.FromTime(st), ts.Samples[0].StartTimestamp,
-							"Sample for test_counter_total does not have ST")
-					},
-				},
-				{
-					Name:        "start_timestamp for histograms",
-					Description: "Sample SHOULD have start timestamp for a histogram",
-					RFCLevel:    sendertest.ShouldLevel,
-					Validate: func(t *testing.T, res sendertest.ReceiverResult) {
-						ts, _ := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_histogram_count")
-						require.NotEmpty(t, ts.Samples, "Timeseries test_histogram_count must contain samples")
-						require.Len(t, ts.Samples, 1, "Timeseries test_histogram_count must contain a single sample")
-						require.Equal(t, timestamp.FromTime(st), ts.Samples[0].StartTimestamp,
-							"Sample for test_histogram_count does not have ST")
-					},
-				},
-			},
-		},
-	)
-}
 
 // TestSampleEncoding validates that senders correctly encode float samples.
 func TestSampleEncoding_Old(t *testing.T) {
@@ -295,7 +185,7 @@ metric_b 2
 metric_c 3
 `
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: scrapeData,
 			Validator: func(t *testing.T, req *CapturedRequest) {
