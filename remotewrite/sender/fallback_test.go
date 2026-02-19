@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
@@ -20,8 +20,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // FallbackTrackingReceiver tracks version changes across requests.
@@ -234,8 +232,7 @@ func TestFallbackBehavior_Old(t *testing.T) {
 			t.Parallel()
 			t.Attr("rfcLevel", tt.rfcLevel)
 			t.Attr("description", tt.description)
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-
+			forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 				receiver := NewMockReceiver()
 				defer receiver.Close()
 
@@ -292,7 +289,7 @@ func TestNoFallbackOn2xx_Old(t *testing.T) {
 
 	scrapeData := "test_metric 42\n"
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		receiver := NewMockReceiver()
 		defer receiver.Close()
 

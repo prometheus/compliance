@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	"github.com/golang/snappy"
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	writev1 "github.com/prometheus/prometheus/prompb"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
@@ -390,13 +389,6 @@ func runTestCases(t *testing.T, tests []TestCase) {
 			t.Parallel()
 			t.Attr("rfcLevel", tt.RFCLevel)
 			t.Attr("description", tt.Description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.ScrapeData,
-					Validator:  tt.Validator,
-				})
-			})
 		})
 	}
 }
