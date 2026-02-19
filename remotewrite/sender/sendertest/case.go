@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -203,9 +204,10 @@ func runTestForEachSender(t *testing.T, name string, testTargets map[string]targ
 				}, cancelGroup)
 				g.Add(func() error {
 					return runTarget(ctx, targets.TargetOptions{
-						ScrapeTargetURL:    scrapeTarget.URL(),
-						ReceiveEndpointURL: receiver.URL(),
-						RemoteWriteMessage: tc.Version,
+						ScrapeTargetJobName:    "test",
+						ScrapeTargetHostPort:   scrapeTarget.HostPort(t),
+						RemoteWriteEndpointURL: receiver.URL(),
+						RemoteWriteMessage:     tc.Version,
 					})
 				}, cancelGroup)
 				if err := g.Run(); err != nil {
@@ -497,9 +499,13 @@ func (st *scrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// URL returns the URL of the mock scrape target.
-func (st *scrapeTarget) URL() string {
-	return st.server.URL
+// HostPort returns the host:port of the mock scrape target.
+func (st *scrapeTarget) HostPort(t *testing.T) string {
+	u, err := url.Parse(st.server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u.Host // host:port
 }
 
 // UpdateMetrics updates the metrics served by the scrape target.
