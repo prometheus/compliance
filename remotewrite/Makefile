@@ -16,7 +16,7 @@ RESULT_FILE="$(ROOT_DIR)/results.json"
 
 # Go test arguments and the base execution command.
 BASE_TEST_ARGS = -run $(PROMETHEUS_RW_COMPLIANCE_TEST_RE) -skip $(PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE)
-RUN_TEST = cd ./$(COMPONENT) && DEBUG=$(DEBUG) $(COMPONENT_ENV) go test $(BASE_TEST_ARGS)
+RUN_TEST = cd ./$(COMPONENT) && GOWORK=off DEBUG=$(DEBUG) $(COMPONENT_ENV) go test $(BASE_TEST_ARGS)
 
 # Use target-specific variables to dynamically inject directories and environment variables.
 sender sender-%: PROMETHEUS_COMPLIANCE_RW_SENDERS="prometheus"

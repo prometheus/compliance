@@ -211,7 +211,7 @@ func runTestForEachSender(t *testing.T, name string, testTargets map[string]targ
 					})
 				}, cancelGroup)
 				if err := g.Run(); err != nil {
-					t.Errorf("premature scrape endpoint, receiver or target stop; consider re-runing with DEBUG='1'")
+					t.Errorf("premature scrape endpoint, receiver or target error; consider re-runing with DEBUG='1'; error: %v", err)
 				}
 
 				res := receiver.Result()
