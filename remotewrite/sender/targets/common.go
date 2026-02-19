@@ -29,9 +29,10 @@ import (
 type Target func(context.Context, TargetOptions) error
 
 type TargetOptions struct {
-	ScrapeTargetURL    string
-	ReceiveEndpointURL string
-	RemoteWriteMessage remote.WriteMessageType
+	ScrapeTargetHostPort   string
+	ScrapeTargetJobName    string
+	RemoteWriteEndpointURL string
+	RemoteWriteMessage     remote.WriteMessageType
 }
 
 var downloadMtx sync.Mutex
@@ -246,14 +247,14 @@ func writeTempFile(contents, name string) (filename string, err error) {
 }
 
 // runCommand runs the given command with the given args until context is done.
-func runCommand(ctx context.Context, prog string, args ...string) error {
+func runCommand(ctx context.Context, extraEnvVars []string, prog string, args ...string) error {
 	cwd, err := os.MkdirTemp("", "")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(cwd)
 
-	var output = io.Discard
+	output := io.Discard
 	// Suppress output to avoid cluttering test results.
 	suppressOutput := os.Getenv("DEBUG") == ""
 	if suppressOutput {
@@ -264,6 +265,8 @@ func runCommand(ctx context.Context, prog string, args ...string) error {
 
 	cmd := exec.Command(prog, args...)
 	cmd.Dir = cwd
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, extraEnvVars...)
 	cmd.Stdout = output
 	cmd.Stderr = output
 	if err = cmd.Start(); err != nil {
