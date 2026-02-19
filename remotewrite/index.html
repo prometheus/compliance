@@ -740,6 +740,7 @@ limitations under the License.
 
         // Try auto fetch; if it fails, leave UI ready for manual load.
         // Check for injected preloaded data first.
+        // NOTE: Remember to update Makefile, when updating this flow.
         const preloaded = PRELOADED_RESULT_DATA.trim();
         if (preloaded) {
             // Case 1: Preloaded data found.

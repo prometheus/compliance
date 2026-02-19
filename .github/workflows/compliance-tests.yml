@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   remotewrite-sender:
-    name: Remote Write Sender Compliance Tests
+    name: Remote Write Sender
     runs-on: ubuntu-latest
     container:
       image: quay.io/prometheus/golang-builder:1.25-base
