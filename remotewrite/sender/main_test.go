@@ -77,7 +77,6 @@ func runSenderTest(t *testing.T, targetName string, target targets.Target, scena
 		ReceiveEndpoint: receiver.URL(),
 		Timeout:         5 * time.Second, // Adequate timeout.
 	})
-
 	// Check for expected error (some might be expected).
 	if err != nil {
 		t.Fatalf("Target failed: %v", err)
@@ -123,7 +122,7 @@ func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target tar
 // forEachSender runs the provided test function for each configured sender.
 func forEachSender(t *testing.T, f func(*testing.T, string, targets.Target)) {
 	// Filter targets if environment variable is set.
-	senderNames := os.Getenv("PROMETHEUS_RW2_COMPLIANCE_SENDERS")
+	senderNames := os.Getenv("PROMETHEUS_COMPLIANCE_RW_SENDERS")
 	var targetsToTest map[string]targets.Target
 	if senderNames != "" {
 		targetsToTest = make(map[string]targets.Target)
