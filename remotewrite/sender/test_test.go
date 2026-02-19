@@ -1,4 +1,17 @@
-package targets
+// Copyright The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package sender_test
 
 import (
 	"archive/tar"
@@ -11,29 +24,83 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
+	"testing"
 	"text/template"
 
-	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance/remotewrite/sender"
 )
 
-// Target is a test target for sender compliance tests.
-// Target generally needs to be able to collect (scrape) data from a Prometheus metric endpoint and send t
-// the designated endpoint using Remote Write protocol.
-// TODO(bwplotka): At this point we should rename to 'sender'. Targets can get confused with "a remote write target."
-type Target func(context.Context, TargetOptions) error
+const (
+	prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.9.1/prometheus-3.9.1.{{.OS}}-{{.Arch}}.tar.gz"
+	scrapeConfigTemplate  = `
+global:
+  scrape_interval: 1s
 
-type TargetOptions struct {
-	ScrapeTargetHostPort   string
-	ScrapeTargetJobName    string
-	RemoteWriteEndpointURL string
-	RemoteWriteMessage     remote.WriteMessageType
+remote_write:
+  - url: "{{.RemoteWriteEndpointURL}}"
+    protobuf_message: "{{.RemoteWriteMessage}}"
+    send_exemplars: true
+    queue_config:
+      retry_on_http_429: true
+    metadata_config:
+      send: true
+
+scrape_configs:
+  - job_name: "{{.ScrapeTargetJobName}}"
+    scrape_interval: 1s
+    scrape_protocols:
+      - PrometheusProto
+      - OpenMetricsText1.0.0
+      - PrometheusText0.0.4
+    static_configs:
+    - targets: ["{{.ScrapeTargetHostPort}}"]
+`
+)
+
+var scrapeConfigTmpl = template.Must(template.New("config").Parse(scrapeConfigTemplate))
+
+type prometheus struct{}
+
+func (p prometheus) Name() string { return "prometheus" }
+
+// Run runs a Prometheus process for a test target options, until ctx is done.
+//
+// It auto-downloads Prometheus binary from the official release URL (see prometheusDownloadURL).
+// TODO(bwplotka): Process based runners are prone to leaking processes; add docker runner and/or figure out cleanup. Manually this could be done with 'killall -m "prometheus-3." -kill'.
+func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
+	binary, err := downloadBinary(prometheusDownloadURL, "prometheus")
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := scrapeConfigTmpl.Execute(&buf, opts); err != nil {
+		return fmt.Errorf("failed to execute config template: %w", err)
+	}
+
+	dir, err := os.MkdirTemp("", "test-*")
+	if err != nil {
+		return err
+	}
+	configFile := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configFile, buf.Bytes(), 0o600); err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+
+	return sender.RunCommand(ctx, ".", nil,
+		binary,
+		`--web.listen-address=0.0.0.0:0`,
+		fmt.Sprintf("--storage.tsdb.path=%v", dir),
+		fmt.Sprintf("--config.file=%s", configFile),
+	)
 }
+
+var _ sender.Sender = prometheus{}
 
 var downloadMtx sync.Mutex
 
@@ -232,59 +299,6 @@ func extractTarGz(srcFile, filename, destFile string) error {
 	return fmt.Errorf("did not find binary in .tar.gz: %s", filename)
 }
 
-func writeTempFile(contents, name string) (filename string, err error) {
-	f, err := os.CreateTemp("", name)
-	if err != nil {
-		return "", err
-	}
-
-	_, err = f.Write([]byte(contents))
-	if err != nil {
-		return "", err
-	}
-
-	return f.Name(), f.Close()
-}
-
-// runCommand runs the given command with the given args until context is done.
-func runCommand(ctx context.Context, extraEnvVars []string, prog string, args ...string) error {
-	cwd, err := os.MkdirTemp("", "")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(cwd)
-
-	output := io.Discard
-	// Suppress output to avoid cluttering test results.
-	suppressOutput := os.Getenv("DEBUG") == ""
-	if suppressOutput {
-		output = io.Discard
-	} else {
-		output = os.Stdout
-	}
-
-	cmd := exec.Command(prog, args...)
-	cmd.Dir = cwd
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, extraEnvVars...)
-	cmd.Stdout = output
-	cmd.Stderr = output
-	if err = cmd.Start(); err != nil {
-		return err
-	}
-
-	cmdStopped := make(chan error)
-	go func() {
-		cmdStopped <- cmd.Wait()
-	}()
-
-	select {
-	case <-ctx.Done():
-		if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
-			return fmt.Errorf("failed to send signal: %w", err)
-		}
-		return <-cmdStopped
-	case err := <-cmdStopped:
-		return err
-	}
+func TestCompliance(t *testing.T) {
+	sender.RunTests(t, prometheus{}, sender.ComplianceTests())
 }

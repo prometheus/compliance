@@ -11,14 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestResponseProcessing validates sender response header processing.
@@ -224,7 +222,7 @@ sample_3 3
 			t.Attr("rfcLevel", tt.rfcLevel)
 			t.Attr("description", tt.description)
 
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+			forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 				receiver := NewMockReceiver()
 				defer receiver.Close()
 
@@ -253,7 +251,7 @@ func TestContentTypeNegotiation_Old(t *testing.T) {
 
 	scrapeData := "test_metric 42\n"
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		receiver := NewMockReceiver()
 		defer receiver.Close()
 

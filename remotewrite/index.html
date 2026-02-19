@@ -207,7 +207,7 @@ limitations under the License.
         }
     }
 
-    // findRelatedTests finds tests with the same base name but different RW receivers.
+    // findRelatedTests finds tests with the same base name but different RW receivers/senders.
     function findRelatedTests(currentTest, allTestDetails) {
         const currentBaseTest = removeOneSegment(currentTest.testName, currentTest.rw);
         return allTestDetails.filter(test => {
@@ -399,7 +399,7 @@ limitations under the License.
                 const statusClass = test.status === STATUS.PASS ? 'text-green-700' :
                     test.status === STATUS.FAIL ? 'text-red-700' : 'text-yellow-700';
 
-                // Find related tests across different RW receivers.
+                // Find related tests across different RW receivers/receiver.
                 const relatedTests = findRelatedTests(test, allTestDetails);
 
                 // Generate cross-reference section.
@@ -619,8 +619,8 @@ limitations under the License.
 
         const summary = document.getElementById('summary');
         const testS = rows.length === 1 ? '' : 's';
-        const receiverS = rws.length === 1 ? '' : 's';
-        let summaryText = `${rows.length} test${testS} • ${rws.length} receiver${receiverS}`;
+        const targetsS = rws.length === 1 ? '' : 's';
+        let summaryText = `${rows.length} test${testS} • ${rws.length} targets${targetsS}`;
         if (startTime) {
             const date = new Date(startTime);
             const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC', timeZoneName: 'short' };
