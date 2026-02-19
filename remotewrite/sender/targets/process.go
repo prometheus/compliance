@@ -16,15 +16,16 @@ import (
 // * Scrape the provided endpoint via the provided message type, to a provided remote write endpoint.
 // TODO(bwplotka): Process based runners are prone to leaking processes; add docker runner and/or figure out cleanup.
 func RunProcess(ctx context.Context, opts TargetOptions) error {
-	prog := os.Getenv("PROMETHEUS_COMPLIANCE_RW_PROCESS_CMD")
-	if prog == "" {
+	cmd := os.Getenv("PROMETHEUS_COMPLIANCE_RW_PROCESS_CMD")
+	if cmd == "" {
 		return errors.New("RunProcess: PROMETHEUS_COMPLIANCE_RW_PROCESS_CMD is not set; provide path to the binary to run")
 	}
+
 	extraEnvVars := []string{
 		"PROMETHEUS_COMPLIANCE_RW_TARGET_SCRAPE_JOB_NAME", opts.ScrapeTargetJobName,
 		"PROMETHEUS_COMPLIANCE_RW_TARGET_SCRAPE_HOST_PORT", opts.ScrapeTargetHostPort,
 		"PROMETHEUS_COMPLIANCE_RW_TARGET_REMOTE_WRITE_ENDPOINT", opts.RemoteWriteEndpointURL,
 		"PROMETHEUS_COMPLIANCE_RW_TARGET_REMOTE_WRITE_MESSAGE", string(opts.RemoteWriteMessage),
 	}
-	return runCommand(ctx, extraEnvVars, prog)
+	return runCommand(ctx, extraEnvVars, cmd)
 }

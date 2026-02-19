@@ -51,6 +51,9 @@ func TestMain(m *testing.M) {
 			name = strings.TrimSpace(name)
 			if target, ok := registeredTargets[name]; ok {
 				targetsToTest[name] = target
+			} else {
+				fmt.Println("FAIL: Target from PROMETHEUS_COMPLIANCE_RW_SENDERS", name, "not registered")
+				os.Exit(1)
 			}
 		}
 		if len(targetsToTest) == 0 {
