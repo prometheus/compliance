@@ -22,5 +22,7 @@ jobs:
         with:
           go-version: 1.26.x
 
-      # Skip ST tests on CI as Prometheus does not implement those yet (see PROM-60).
-      - run: cd remotewrite && make sender PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE="TestSample/rw2/prometheus/start_timestamp*"
+      - run: cd remotewrite && make sender
+        env:
+          # Skip ST tests on CI as Prometheus does not implement those yet (see PROM-60).
+          PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE: "TestCompliance/prometheus/samples/rw2/start_timestamp_for_counter*"
