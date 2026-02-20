@@ -167,7 +167,7 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 		}
 
 		t.Attr("version", protoMsgName)
-		t.Run(fmt.Sprintf("%v/%v/%s", tc.Name, protoMsgName, sender.Name()), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%v/%v/%s", sender.Name(), tc.Name, protoMsgName), func(t *testing.T) {
 			t.Parallel()
 
 			if len(tc.TestResponses) == 0 {
