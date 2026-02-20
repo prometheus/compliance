@@ -24,9 +24,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func formatTimeAsOpenMetricsTimestamp(t time.Time) string {
+func ToOpenMetricsTimestampFloat64(t time.Time) float64 {
 	v := float64(timestamp.FromTime(t)) / 1000
-	return labels.FormatOpenMetricsFloat(v)
+	return v
+}
+
+func ToOpenMetricsTimestampString(t time.Time) string {
+	return labels.FormatOpenMetricsFloat(
+		ToOpenMetricsTimestampFloat64(t),
+	)
 }
 
 func samplesTests() []Test {
@@ -51,9 +57,9 @@ test_histogram_created %v
 # TYPE test_gauge_with_ts gauge
 test_gauge_with_ts 2 %v
 `,
-				timestamp.FromTime(st),
-				timestamp.FromTime(st),
-				formatTimeAsOpenMetricsTimestamp(explicitTS),
+				ToOpenMetricsTimestampFloat64(st),
+				ToOpenMetricsTimestampFloat64(st),
+				ToOpenMetricsTimestampString(explicitTS),
 			),
 			Version: remote.WriteV2MessageType,
 			Validate: func(t *testing.T, res ReceiverResult) {
