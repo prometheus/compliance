@@ -18,18 +18,20 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/golang/snappy"
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	writev1 "github.com/prometheus/prometheus/prompb"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
 
 // CapturedRequest represents a captured HTTP request from a sender.
+// DEPRECATED: To kill, use sendertest.
 type CapturedRequest struct {
 	Headers http.Header
 	Body    []byte
@@ -37,6 +39,7 @@ type CapturedRequest struct {
 }
 
 // MockReceiver is an HTTP server that captures remote write requests.
+// DEPRECATED: To kill, use sendertest.
 type MockReceiver struct {
 	server   *httptest.Server
 	mu       sync.Mutex
@@ -45,6 +48,7 @@ type MockReceiver struct {
 }
 
 // MockReceiverResponse configures the response behavior of the mock receiver.
+// DEPRECATED: To kill, use sendertest.
 type MockReceiverResponse struct {
 	StatusCode        int
 	Headers           map[string]string
@@ -55,6 +59,7 @@ type MockReceiverResponse struct {
 }
 
 // NewMockReceiver creates a new mock HTTP receiver for testing senders.
+// DEPRECATED: To kill, use sendertest.
 func NewMockReceiver() *MockReceiver {
 	mr := &MockReceiver{
 		requests: make([]CapturedRequest, 0),
@@ -178,26 +183,8 @@ func (mr *MockReceiver) SetResponse(resp MockReceiverResponse) {
 	mr.response = resp
 }
 
-// WaitForRequests waits for at least n requests to be captured, with configurable timeout.
-// Polls every 100ms. Returns all captured requests.
-func (mr *MockReceiver) WaitForRequests(n int, timeout time.Duration) []CapturedRequest {
-	deadline := time.Now().Add(timeout)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for time.Now().Before(deadline) {
-		requests := mr.GetRequests()
-		if len(requests) >= n {
-			return requests
-		}
-		<-ticker.C
-	}
-
-	// Return whatever we got on timeout
-	return mr.GetRequests()
-}
-
 // MockScrapeTarget is an HTTP server that serves metrics in Prometheus format.
+// DEPRECATED: To kill, use sendertest.
 type MockScrapeTarget struct {
 	server  *httptest.Server
 	mu      sync.Mutex
@@ -308,6 +295,7 @@ func extractExemplarLabels(ex *writev2.Exemplar, symbols []string) map[string]st
 
 // must marks a test as having a "MUST" RFC compliance level.
 // Tests marked with must() will fail on assertion failures.
+// DEPRECATED: To kill, use sendertest.
 func must(t *testing.T) *require.Assertions {
 	t.Helper()
 	t.Attr("rfcLevel", "MUST")
@@ -315,6 +303,7 @@ func must(t *testing.T) *require.Assertions {
 }
 
 // should marks a test as having a "SHOULD" RFC compliance level.
+// DEPRECATED: To kill, use sendertest.
 func should(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "SHOULD")
@@ -324,6 +313,7 @@ func should(t *testing.T, condition bool, msg string) {
 }
 
 // may marks a test as having a "MAY" RFC compliance level.
+// DEPRECATED: To kill, use sendertest.
 func may(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "MAY")
@@ -333,6 +323,7 @@ func may(t *testing.T, condition bool, msg string) {
 }
 
 // recommended marks a test as having an "RECOMMENDED" compliance level.
+// DEPRECATED: To kill, use sendertest.
 func recommended(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "RECOMMENDED")
@@ -341,44 +332,10 @@ func recommended(t *testing.T, condition bool, msg string) {
 	}
 }
 
-// validateSymbolTable validates that the symbol table follows RW 2.0 requirements.
-func validateSymbolTable(t *testing.T, symbols []string) {
-	t.Helper()
-
-	must(t).NotEmpty(symbols, "Symbol table must not be empty")
-	must(t).Equal("", symbols[0], "First symbol (index 0) must be empty string")
-
-	// Check for duplicates (MUST requirement for deduplication).
-	seen := make(map[string]bool)
-	for _, sym := range symbols {
-		if seen[sym] && sym != "" {
-			// Duplicate non-empty strings found - this violates deduplication requirement.
-			must(t).Fail(fmt.Sprintf("Duplicate symbol found in symbol table: %q", sym))
-		}
-		seen[sym] = true
-	}
-}
-
-// validateLabelRefs validates that label references are valid.
-func validateLabelRefs(t *testing.T, refs []uint32, symbols []string) {
-	t.Helper()
-
-	must(t).Equal(0, len(refs)%2, "Label refs length must be even (key-value pairs)")
-
-	for i, ref := range refs {
-		must(t).Less(int(ref), len(symbols),
-			"Label ref at index %d points to invalid symbol index %d (symbol table size: %d)",
-			i, ref, len(symbols))
-	}
-}
-
-// isSorted checks if labels are sorted lexicographically.
-func isSorted(labels map[string]string, symbols []string, refs []uint32) bool {
+// isSorted checks if label names are sorted lexicographically.
+func isSorted(symbols []string, refs []uint32) bool {
 	var prevKey string
 	for i := 0; i < len(refs); i += 2 {
-		if i+1 >= len(refs) {
-			break
-		}
 		keyRef := refs[i]
 		if int(keyRef) >= len(symbols) {
 			return false
@@ -392,6 +349,23 @@ func isSorted(labels map[string]string, symbols []string, refs []uint32) bool {
 	return true
 }
 
+// isSortedRW1 checks if label names are sorted lexicographically.
+func isSortedRW1(labels []writev1.Label) bool {
+	return sort.SliceIsSorted(labels, func(i, j int) bool {
+		return strings.Compare(labels[i].Name, labels[j].Name) < 0
+	})
+}
+
+func TestIsSorted(t *testing.T) {
+	symbols := []string{"", "a", "c", "b", "x", "__name__"}
+	require.True(t, isSorted(symbols, []uint32{5, 1, 1, 1, 3, 1, 2, 1, 4, 1}))
+	require.False(t, isSorted(symbols, []uint32{5, 1, 1, 1, 2, 1, 3, 1, 4, 1}))
+
+	require.True(t, isSortedRW1([]writev1.Label{{Name: "__name__"}, {Name: "a"}, {Name: "b"}, {Name: "c"}}))
+	require.False(t, isSortedRW1([]writev1.Label{{Name: "__name__"}, {Name: "a"}, {Name: "x"}, {Name: "c"}}))
+	require.False(t, isSortedRW1([]writev1.Label{{Name: "a"}, {Name: "b"}, {Name: "c"}, {Name: "__name__"}}))
+}
+
 // containsExemplars checks if the metrics string contains exemplar annotations.
 // Exemplars in OpenMetrics format are indicated by "# {" after a metric value.
 func containsExemplars(metrics string) bool {
@@ -399,6 +373,7 @@ func containsExemplars(metrics string) bool {
 }
 
 // TestCase represents a single test case for compliance testing.
+// DEPRECATED: To kill, use sendertest.
 type TestCase struct {
 	Name        string
 	Description string
@@ -408,6 +383,7 @@ type TestCase struct {
 }
 
 // runTestCases is a helper that eliminates the common test table runner pattern.
+// DEPRECATED: To kill, use sendertest.
 func runTestCases(t *testing.T, tests []TestCase) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
@@ -426,10 +402,10 @@ func runTestCases(t *testing.T, tests []TestCase) {
 }
 
 // findTimeseriesByMetricName finds a timeseries by metric name from a captured request.
-func findTimeseriesByMetricName(req *CapturedRequest, metricName string) (*writev2.TimeSeries, map[string]string) {
-	for i := range req.Request.Timeseries {
-		ts := &req.Request.Timeseries[i]
-		labels := extractLabels(ts, req.Request.Symbols)
+func findTimeseriesByMetricName(req *writev2.Request, metricName string) (*writev2.TimeSeries, map[string]string) {
+	for i := range req.Timeseries {
+		ts := &req.Timeseries[i]
+		labels := extractLabels(ts, req.Symbols)
 		if labels["__name__"] == metricName {
 			return ts, labels
 		}
@@ -438,21 +414,36 @@ func findTimeseriesByMetricName(req *CapturedRequest, metricName string) (*write
 }
 
 // requireTimeseriesByMetricName finds a timeseries by metric name and fails the test if not found.
-func requireTimeseriesByMetricName(t *testing.T, req *CapturedRequest, metricName string) (*writev2.TimeSeries, map[string]string) {
+func requireTimeseriesByMetricName(t *testing.T, req *writev2.Request, metricName string) (*writev2.TimeSeries, map[string]string) {
 	t.Helper()
 	ts, labels := findTimeseriesByMetricName(req, metricName)
-	must(t).NotNil(ts, "Timeseries with metric name %q must be present", metricName)
+	require.NotNil(t, ts, "Timeseries with metric name %q must be present", metricName)
 	return ts, labels
+}
+
+// requireTimeseriesRW1ByMetricName finds a timeseries by metric name and fails the test if not found.
+func requireTimeseriesRW1ByMetricName(t *testing.T, req *writev1.WriteRequest, metricName string) *writev1.TimeSeries {
+	t.Helper()
+
+	for i := range req.Timeseries {
+		for _, l := range req.Timeseries[i].Labels {
+			if l.Name == "__name__" && l.Value == metricName {
+				return &req.Timeseries[i]
+			}
+		}
+	}
+	t.Fatalf("Timeseries with metric name %q must be present", metricName)
+	return nil
 }
 
 // findHistogramData attempts to find histogram data in both classic and native formats.
 // Returns (classicFound, nativeTS) where:
 //   - classicFound: true if classic histogram metrics (_count, _sum, _bucket) are found
 //   - nativeTS: pointer to timeseries containing native histogram, or nil if not found
-func findHistogramData(req *CapturedRequest, baseName string) (classicFound bool, nativeTS *writev2.TimeSeries) {
-	for i := range req.Request.Timeseries {
-		ts := &req.Request.Timeseries[i]
-		labels := extractLabels(ts, req.Request.Symbols)
+func findHistogramData(req *writev2.Request, baseName string) (classicFound bool, nativeTS *writev2.TimeSeries) {
+	for i := range req.Timeseries {
+		ts := &req.Timeseries[i]
+		labels := extractLabels(ts, req.Symbols)
 		metricName := labels["__name__"]
 
 		// Check for classic histogram components.
@@ -470,7 +461,7 @@ func findHistogramData(req *CapturedRequest, baseName string) (classicFound bool
 
 // extractHistogramCount extracts count from either classic or native histogram format.
 // Returns (count, found) where found indicates if count was successfully extracted.
-func extractHistogramCount(req *CapturedRequest, baseName string) (float64, bool) {
+func extractHistogramCount(req *writev2.Request, baseName string) (float64, bool) {
 	// Try classic format first.
 	ts, _ := findTimeseriesByMetricName(req, baseName+"_count")
 	if ts != nil && len(ts.Samples) > 0 {
@@ -494,7 +485,7 @@ func extractHistogramCount(req *CapturedRequest, baseName string) (float64, bool
 }
 
 // extractHistogramSum extracts sum from either classic or native histogram format.
-func extractHistogramSum(req *CapturedRequest, baseName string) (float64, bool) {
+func extractHistogramSum(req *writev2.Request, baseName string) (float64, bool) {
 	// Try classic format first.
 	ts, _ := findTimeseriesByMetricName(req, baseName+"_sum")
 	if ts != nil && len(ts.Samples) > 0 {

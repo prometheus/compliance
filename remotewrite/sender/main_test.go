@@ -14,8 +14,7 @@
 package main
 
 import (
-	"log"
-	"net/http"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -24,24 +23,42 @@ import (
 	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
-var (
-	// testTimeout is the default timeout for tests.
-	testTimeout = 2 * time.Minute
+const senderEnvVar = "PROMETHEUS_COMPLIANCE_RW_SENDERS"
 
-	// registeredTargets holds targets that can automatically download binaries.
+var (
+	// registeredTargets holds pre-defined targets to choose from.
+	//
+	// Custom targets could be considered for adding here, however the process target likely offers enough flexibility.
 	registeredTargets = map[string]targets.Target{
-		"prometheus": targets.RunPrometheus,
+		"prometheus": targets.RunPrometheus, // Default if no senderEnvVar is specified.
+		"process":    targets.RunProcess,
+	}
+	// targetsToTest is a global variable controlling senders to test.
+	// It is adjusted in TestMain via senderEnvVar variable.
+	targetsToTest = map[string]targets.Target{
+		"prometheus": registeredTargets["prometheus"],
 	}
 )
 
-// TestMain sets up the test environment.
+// TestMain sets up the test environment by filtering registeredTargets (senders to tests) using
+// PROMETHEUS_COMPLIANCE_RW_SENDERS envvar.
 func TestMain(m *testing.M) {
-	log.Printf("Using automatic target downloading and configuration")
-
-	// Set test timeout from environment if specified.
-	if timeoutStr := os.Getenv("PROMETHEUS_RW2_COMPLIANCE_TEST_TIMEOUT"); timeoutStr != "" {
-		if d, err := time.ParseDuration(timeoutStr); err == nil {
-			testTimeout = d
+	senderNames := os.Getenv(senderEnvVar)
+	if senderNames != "" {
+		targetsToTest = make(map[string]targets.Target)
+		nameList := strings.Split(senderNames, ",")
+		for _, name := range nameList {
+			name = strings.TrimSpace(name)
+			if target, ok := registeredTargets[name]; ok {
+				targetsToTest[name] = target
+			} else {
+				fmt.Println("FAIL: Target from PROMETHEUS_COMPLIANCE_RW_SENDERS", name, "not registered")
+				os.Exit(1)
+			}
+		}
+		if len(targetsToTest) == 0 {
+			fmt.Println("FAIL: No targets found matching PROMETHEUS_COMPLIANCE_RW_SENDERS=", senderNames)
+			os.Exit(1)
 		}
 	}
 
@@ -49,6 +66,7 @@ func TestMain(m *testing.M) {
 }
 
 // SenderTestScenario defines a test scenario to run against senders.
+// DEPRECATED: To kill, use sendertest.
 type SenderTestScenario struct {
 	ScrapeData           string
 	ReceiverResponse     MockReceiverResponse
@@ -58,94 +76,23 @@ type SenderTestScenario struct {
 }
 
 // runSenderTest runs a test scenario using an automatic target.
+// DEPRECATED: To kill, use sendertest.
 func runSenderTest(t *testing.T, targetName string, target targets.Target, scenario SenderTestScenario) {
 	t.Helper()
-
-	receiver := NewMockReceiver()
-	defer receiver.Close()
-
-	scrapeTarget := NewMockScrapeTarget(scenario.ScrapeData)
-	defer scrapeTarget.Close()
-
-	if scenario.ReceiverResponse.StatusCode == 0 {
-		scenario.ReceiverResponse.StatusCode = http.StatusNoContent
-	}
-	receiver.SetResponse(scenario.ReceiverResponse)
-
-	err := target(targets.TargetOptions{
-		ScrapeTarget:    scrapeTarget.URL(),
-		ReceiveEndpoint: receiver.URL(),
-		Timeout:         5 * time.Second, // Adequate timeout.
-	})
-	// Check for expected error (some might be expected).
-	if err != nil {
-		t.Fatalf("Target failed: %v", err)
-	}
-
-	requests := receiver.GetRequests()
-	if len(requests) < scenario.ExpectedRequestCount {
-		t.Fatalf("Expected at least %d request(s), got %d", scenario.ExpectedRequestCount, len(requests))
-	}
-
-	if scenario.Validator != nil && len(requests) > 0 {
-		lastReq := &requests[len(requests)-1]
-		scenario.Validator(t, lastReq)
-	}
+	t.Fatal("TODO: Remove")
 }
 
 // runAutoTargetWithCustomReceiver runs an auto-target with a custom receiver (for special test cases).
 // Use this when you need custom receiver behavior (e.g., TimestampTrackingReceiver, FallbackTrackingReceiver).
+// DEPRECATED: To kill, use sendertest.
 func runAutoTargetWithCustomReceiver(t *testing.T, targetName string, target targets.Target, receiverURL string, scrapeTarget *MockScrapeTarget, waitTime time.Duration) error {
 	t.Helper()
 
-	if waitTime == 0 {
-		waitTime = 15 * time.Second
-	}
-
-	t.Logf("Running %s with custom receiver at %s", targetName, receiverURL)
-
-	err := target(targets.TargetOptions{
-		ScrapeTarget:    scrapeTarget.URL(),
-		ReceiveEndpoint: receiverURL,
-		Timeout:         waitTime,
-	})
-
-	if err != nil {
-		t.Logf("Target finished with error (may be expected): %v", err)
-	} else {
-		t.Logf("Target completed successfully")
-	}
-
-	return err
+	t.Fatal("TODO: Remove")
+	return nil
 }
 
 // forEachSender runs the provided test function for each configured sender.
 func forEachSender(t *testing.T, f func(*testing.T, string, targets.Target)) {
-	// Filter targets if environment variable is set.
-	senderNames := os.Getenv("PROMETHEUS_COMPLIANCE_RW_SENDERS")
-	var targetsToTest map[string]targets.Target
-	if senderNames != "" {
-		targetsToTest = make(map[string]targets.Target)
-		nameList := strings.Split(senderNames, ",")
-		for _, name := range nameList {
-			name = strings.TrimSpace(name)
-			if target, ok := registeredTargets[name]; ok {
-				targetsToTest[name] = target
-			}
-		}
-		if len(targetsToTest) == 0 {
-			t.Skipf("No auto targets found matching %q", senderNames)
-			return
-		}
-	} else {
-		targetsToTest = registeredTargets
-	}
-
-	// Run test for each target.
-	for name, target := range targetsToTest {
-		t.Run(name, func(t *testing.T) {
-			t.Attr("rw", name)
-			f(t, name, target)
-		})
-	}
+	t.Fatal("TODO: Remove")
 }
