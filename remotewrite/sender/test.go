@@ -1,4 +1,17 @@
-package sendertest
+// Copyright The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package sender
 
 import (
 	"context"
@@ -17,12 +30,17 @@ import (
 	"github.com/golang/snappy"
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/exp/api/remote"
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 	"github.com/stretchr/testify/require"
 
 	writev1 "github.com/prometheus/prometheus/prompb"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
+
+// ComplianceTests returns official compliance sender tests.
+func ComplianceTests() (ret []Test) {
+	ret = append(ret, samplesTests()...)
+	return ret
+}
 
 type RFCLevel string
 
@@ -87,17 +105,16 @@ type ReceiverResponse struct {
 
 type ValidateFunc func(t *testing.T, res ReceiverResult)
 
-// Case defines a test scenario to run against a single sender for a single test.
-type Case struct {
+// Test defines a test scenario to run against a single sender.
+type Test struct {
 	// Name is a unique name for a test case.
-	// If non-empty, this adds "/<name>/" sub-test.
-	// Can be left empty if tests has only one test case.
+	// This adds "/<name>/" sub-test.
 	Name string
 	// Description is a description for a test case.
 	// TODO(bwplotka): Fix index.html to actually render it.
 	Description string
 	// RFCLevel is the requirement level for a test to pass.
-	// This includes all the errors in the '__setup__' stage, including Validate
+	// This includes all the errors in the '__setup' stage, including Validate
 	// ValidateCases can have different semantics.
 	RFCLevel RFCLevel
 	// RemoteWrite version to configure the target with. This indicates version of Remote Write protocol,
@@ -117,14 +134,6 @@ type Case struct {
 	ValidateCases []ValidateCase
 }
 
-func Repeat(r ReceiverResponse, n int) []ReceiverResponse {
-	ret := make([]ReceiverResponse, n)
-	for i := range n {
-		ret[i] = r
-	}
-	return ret
-}
-
 type ValidateCase struct {
 	// Name is  unique name for a test case.
 	// This adds "/<name>/" sub-test.
@@ -139,56 +148,39 @@ type ValidateCase struct {
 	Validate ValidateFunc
 }
 
-// Run runs a test scenario(s) for each configured target.
-func Run(t *testing.T, testTargets map[string]targets.Target, tcs ...Case) {
+// RunTests runs a test scenario(s) for each configured sender target.
+func RunTests(t *testing.T, sender Sender, tcs []Test) {
 	t.Helper()
 
-	require.NotEmpty(t, testTargets)
+	require.NotNil(t, sender)
 	require.NotEmpty(t, tcs)
 
 	for _, tc := range tcs {
-		runTestForEachSender(t, tc.Name, testTargets, tc)
-	}
-}
-
-func runTestForEachSender(t *testing.T, name string, testTargets map[string]targets.Target, tc Case) {
-	t.Helper()
-
-	protoMsgName := ""
-	switch tc.Version {
-	case remote.WriteV1MessageType:
-		protoMsgName = "rw1"
-	case remote.WriteV2MessageType:
-		protoMsgName = "rw2"
-	default:
-		t.Fatalf("unsupported remote write message type: %v", tc.Version)
-	}
-
-	allLevels := []RFCLevel{tc.RFCLevel}
-	for _, vc := range tc.ValidateCases {
-		allLevels = append(allLevels, vc.RFCLevel)
-	}
-
-	for targetName, runTarget := range testTargets {
-		subCaseName := fmt.Sprintf("%v/%v", protoMsgName, targetName)
-		if name != "" {
-			subCaseName = fmt.Sprintf("%v/%v", name, subCaseName)
+		protoMsgName := ""
+		switch tc.Version {
+		case remote.WriteV1MessageType:
+			protoMsgName = "rw1"
+		case remote.WriteV2MessageType:
+			protoMsgName = "rw2"
+		default:
+			t.Fatalf("unsupported remote write message type: %v", tc.Version)
 		}
+
 		t.Attr("version", protoMsgName)
-		t.Run(subCaseName, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%v/%v/%s", sender.Name(), tc.Name, protoMsgName), func(t *testing.T) {
 			t.Parallel()
 
 			if len(tc.TestResponses) == 0 {
 				tc.TestResponses = []ReceiverResponse{{}} // By default assume a single successful response.
 			}
-			receiver := NewSyncReceiver(tc.Version, tc.TestResponses)
+			receiver := newSyncReceiver(tc.Version, tc.TestResponses)
 			scrapeTarget := newScrapeTarget(tc.ScrapeData)
 
 			// Setup subcase exists to cleanly visualise errors that happens before certain validation cases.
 			// TODO(bwplotka): This is odd for tests with 0 cases and a single validation.
 			// Consider reshaping a bit or not allowing 0 cases tests.
 			// Notably for non-0 cases you have extra MUST calculated etc.
-			setupOk := safeRun(t, "_setup", targetName, tc.Description, tc.RFCLevel, func(t *testing.T) {
+			setupOk := safeRun(t, "_setup", sender.Name(), tc.Description, tc.RFCLevel, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
 				t.Cleanup(cancel)
 
@@ -203,7 +195,7 @@ func runTestForEachSender(t *testing.T, name string, testTargets map[string]targ
 					return nil
 				}, cancelGroup)
 				g.Add(func() error {
-					return runTarget(ctx, targets.TargetOptions{
+					return sender.Run(ctx, Options{
 						ScrapeTargetJobName:    "test",
 						ScrapeTargetHostPort:   scrapeTarget.HostPort(t),
 						RemoteWriteEndpointURL: receiver.URL(),
@@ -228,11 +220,10 @@ func runTestForEachSender(t *testing.T, name string, testTargets map[string]targ
 			// Run sub-cases even if setup failed so the overview is clear.
 			res := receiver.Result()
 			for _, vc := range tc.ValidateCases {
-				safeRun(t, vc.Name, targetName, vc.Description, vc.RFCLevel, func(t *testing.T) {
+				safeRun(t, vc.Name, sender.Name(), vc.Description, vc.RFCLevel, func(t *testing.T) {
 					if !setupOk {
 						t.Fatal("setup failed")
 					}
-
 					vc.Validate(t, res)
 				})
 			}
@@ -258,7 +249,7 @@ func safeRun(t *testing.T, name, target, desc string, rfc RFCLevel, f func(t *te
 	})
 }
 
-type Receiver struct {
+type receiver struct {
 	mu      sync.Mutex
 	closeCh chan struct{}
 	closed  bool
@@ -272,12 +263,12 @@ type Receiver struct {
 	debug bool
 }
 
-// NewSyncReceiver returns a new mock HTTP receiver for sender testing. This receiver
+// newSyncReceiver returns a new mock HTTP receiver for sender testing. This receiver
 // captures requests and respond with the given responses sequentially until they finish or context is done.
 //
 // NOTE: This kind of receiver will only work for non-sharded, single sender.
-func NewSyncReceiver(msg remote.WriteMessageType, responses []ReceiverResponse) *Receiver {
-	r := &Receiver{
+func newSyncReceiver(msg remote.WriteMessageType, responses []ReceiverResponse) *receiver {
+	r := &receiver{
 		closeCh:   make(chan struct{}, 1),
 		requests:  make([]ReceiverRequest, 0, len(responses)),
 		responses: responses,
@@ -295,7 +286,7 @@ func NewSyncReceiver(msg remote.WriteMessageType, responses []ReceiverResponse) 
 // It returns nil error when received the len(responses) requests.
 //
 // NOTE: This kind of receiver will only work for non-sharded, single sender.
-func (r *Receiver) Run(ctx context.Context) error {
+func (r *receiver) Run(ctx context.Context) error {
 	var err error
 	select {
 	case <-ctx.Done():
@@ -313,7 +304,7 @@ func (r *Receiver) Run(ctx context.Context) error {
 }
 
 // TODO(bwplotka): Pass proper logging that uses t.Log.
-func (r *Receiver) debugLogf(msg string, args ...any) {
+func (r *receiver) debugLogf(msg string, args ...any) {
 	if !r.debug {
 		return
 	}
@@ -321,7 +312,7 @@ func (r *Receiver) debugLogf(msg string, args ...any) {
 }
 
 // handleSyncRequest handles incoming, sequential, remote write requests.
-func (r *Receiver) handleSyncRequest(w http.ResponseWriter, req *http.Request) {
+func (r *receiver) handleSyncRequest(w http.ResponseWriter, req *http.Request) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -446,12 +437,12 @@ func (r *Receiver) handleSyncRequest(w http.ResponseWriter, req *http.Request) {
 }
 
 // URL returns the URL of the mock receiver.
-func (r *Receiver) URL() string {
+func (r *receiver) URL() string {
 	return r.server.URL
 }
 
 // Result returns the data gathered by the receiver.
-func (r *Receiver) Result() ReceiverResult {
+func (r *receiver) Result() ReceiverResult {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return ReceiverResult{
