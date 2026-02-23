@@ -11,13 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
 	"testing"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestSymbolTable validates symbol table requirements for Remote Write 2.0.
@@ -120,7 +118,7 @@ http_requests_total{method="GET",status="404",handler="/api/v1"} 10
 http_requests_total{method="GET",status="200",handler="/api/v2"} 75
 `
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: scrapeData,
 			Validator: func(t *testing.T, req *CapturedRequest) {

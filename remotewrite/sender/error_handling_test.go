@@ -11,15 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestErrorHandling validates sender error handling in various failure scenarios.
@@ -175,7 +173,7 @@ func TestErrorHandling_Old(t *testing.T) {
 			t.Attr("rfcLevel", tt.rfcLevel)
 			t.Attr("description", tt.description)
 
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+			forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 				server := tt.setup()
 				var serverURL string
 				if server != nil {
@@ -223,7 +221,7 @@ func TestNetworkErrors_Old(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+			forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 

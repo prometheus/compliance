@@ -11,15 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestBatchingBehavior validates sender batching and queueing behavior.
@@ -191,7 +189,7 @@ metric_4 4
 metric_5 5
 `
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: scrapeData,
 			WaitTime:   8 * time.Second,
