@@ -19,6 +19,22 @@ import (
 	"testing"
 )
 
+/*
+TODO later
+{
+					Name:        "job_instance_labels_present",
+					Description: "Sender SHOULD include job and instance labels in samples",
+					RFCLevel:    ShouldLevel,
+					Validate: func(t *testing.T, res ReceiverResult) {
+						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_float")
+						require.Len(t, results, 1, "Should receive exactly one timeseries for test_float")
+						labels := results[0].Labels
+						require.NotEmpty(t, labels["job"], "Sample should include 'job' label")
+						require.NotEmpty(t, labels["instance"], "Sample should include 'instance' label")
+					},
+				},
+*/
+
 // TestLabelValidation validates label encoding and formatting.
 func TestLabelValidation_Old(t *testing.T) {
 	t.Skip("TODO: Revise and move to a new framework")
