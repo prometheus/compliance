@@ -398,6 +398,27 @@ type timeseriesResult struct {
 	Labels     map[string]string
 }
 
+func flattenTimeseriesResult(t testing.TB, results []timeseriesResult) (ret timeseriesResult) {
+	require.NotEmpty(t, results)
+
+	var lbls map[string]string
+	for _, r := range results {
+		if lbls == nil {
+			lbls = r.Labels
+		} else {
+			require.Equal(t, lbls, r.Labels, "found two different series with the same name; expected same series")
+		}
+		if ret.TimeSeries == nil {
+			ret.TimeSeries = r.TimeSeries
+		} else {
+			ret.TimeSeries.Samples = append(ret.TimeSeries.Samples, r.TimeSeries.Samples...)
+			ret.TimeSeries.Histograms = append(ret.TimeSeries.Histograms, r.TimeSeries.Histograms...)
+			ret.TimeSeries.Exemplars = append(ret.TimeSeries.Exemplars, r.TimeSeries.Exemplars...)
+		}
+	}
+	return ret
+}
+
 // findTimeseriesByMetricName finds a timeseries by metric name from a captured request.
 func findTimeseriesByMetricName(req *writev2.Request, metricName string) []timeseriesResult {
 	var results []timeseriesResult

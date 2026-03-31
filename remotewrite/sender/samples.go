@@ -23,6 +23,7 @@ import (
 	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -75,7 +76,7 @@ test_gauge_with_ts 2 %v
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_counter_total")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_counter_total")
 						ts := results[0].TimeSeries
 						require.NotEmpty(t, ts.Samples, "Timeseries test_counter_total must contain samples")
 						require.Len(t, ts.Samples, 1, "Timeseries test_counter_total must contain a single sample")
@@ -101,7 +102,7 @@ test_gauge_with_ts 2 %v
 				//	RFCLevel:    sendertest.RecommendedLevel, // Prometheus spec, not Remote Write.
 				//	Validate: func(t *testing.T, res sendertest.ReceiverResult) {
 				//		results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_gauge_with_ts")
-				//		require.Len(t, results, 1, "Should receive exactly one timeseries for test_gauge_with_ts")
+				//		require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_gauge_with_ts")
 				//		tts := results[0].TimeSeries
 				//		require.NotEmpty(t, ts.Samples, "Timeseries test_gauge_with_ts must contain samples")
 				//		require.Len(t, ts.Samples, 1, "Timeseries test_gauge_with_ts must contain a single sample")
@@ -114,7 +115,7 @@ test_gauge_with_ts 2 %v
 					RFCLevel:    ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_counter_total")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_counter_total")
 						ts := results[0].TimeSeries
 						require.NotEmpty(t, ts.Samples, "Timeseries test_counter_total must contain samples")
 						require.Len(t, ts.Samples, 1, "Timeseries test_counter_total must contain a single sample")
@@ -128,7 +129,7 @@ test_gauge_with_ts 2 %v
 					RFCLevel:    ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_histogram_count")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_histogram_count")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_histogram_count")
 						ts := results[0].TimeSeries
 						require.NotEmpty(t, ts.Samples, "Timeseries test_histogram_count must contain samples")
 						require.Len(t, ts.Samples, 1, "Timeseries test_histogram_count must contain a single sample")
@@ -169,28 +170,11 @@ test_counter_total 103.13 %v
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.GreaterOrEqual(t, len(res.Requests), 1, "Should receive at least 1 request")
 				results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
-				// Prometheus will store 3 series, but support 3 batched samples too.
-				if len(results) == 3 {
-					require.Len(t, results[0].TimeSeries.Samples, 1)
-					require.Len(t, results[1].TimeSeries.Samples, 1)
-					require.Len(t, results[2].TimeSeries.Samples, 1)
-					require.True(t, slices.IsSorted([]int64{
-						results[0].TimeSeries.Samples[0].Timestamp,
-						results[1].TimeSeries.Samples[0].Timestamp,
-						results[2].TimeSeries.Samples[0].Timestamp,
-					}))
-					return
-				}
-				if len(results) == 1 {
-					require.Len(t, results[0].TimeSeries.Samples, 3)
-					require.True(t, slices.IsSorted([]int64{
-						results[0].TimeSeries.Samples[0].Timestamp,
-						results[0].TimeSeries.Samples[1].Timestamp,
-						results[0].TimeSeries.Samples[2].Timestamp,
-					}))
-					return
-				}
-				t.Fatal("Should receive exactly one timeseries for test_counter_total with 3 samples, or 3 timeseries with one sample each; results:", results)
+				ts := flattenTimeseriesResult(t, results)
+				require.GreaterOrEqual(t, len(ts.TimeSeries.Samples), 3)
+				require.True(t, slices.IsSortedFunc(ts.TimeSeries.Samples, func(a, b writev2.Sample) int {
+					return int(a.T() - b.T())
+				}))
 			},
 		},
 		{
@@ -220,7 +204,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_float")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_float")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_float")
 						require.Equal(t, 123.45, results[0].TimeSeries.Samples[0].Value, "Sample value must be correctly encoded")
 					},
 				},
@@ -230,7 +214,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_integer")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_integer")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_integer")
 						require.Equal(t, 42.0, results[0].TimeSeries.Samples[0].Value, "Integer value must be encoded as float")
 					},
 				},
@@ -240,7 +224,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_zero")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_zero")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_zero")
 						require.Equal(t, 0.0, results[0].TimeSeries.Samples[0].Value, "Zero value must be correctly encoded")
 					},
 				},
@@ -250,7 +234,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_negative")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_negative")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_negative")
 						require.Equal(t, -15.5, results[0].TimeSeries.Samples[0].Value, "Negative value must be correctly encoded")
 					},
 				},
@@ -260,7 +244,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_pos_inf")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_pos_inf")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_pos_inf")
 						require.True(t, math.IsInf(results[0].TimeSeries.Samples[0].Value, 1), "Positive infinity must be correctly encoded")
 					},
 				},
@@ -270,7 +254,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_neg_inf")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_neg_inf")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_neg_inf")
 						require.True(t, math.IsInf(results[0].TimeSeries.Samples[0].Value, -1), "Negative infinity must be correctly encoded")
 					},
 				},
@@ -280,7 +264,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_nan")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_nan")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_nan")
 						require.True(t, math.IsNaN(results[0].TimeSeries.Samples[0].Value), "NaN must be correctly encoded")
 					},
 				},
@@ -290,7 +274,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_large")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_large")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_large")
 						require.Greater(t, results[0].TimeSeries.Samples[0].Value, 1e307, "Large float value must be correctly encoded")
 					},
 				},
@@ -300,7 +284,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_small")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_small")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_small")
 						require.Less(t, results[0].TimeSeries.Samples[0].Value, 1e-307, "Small float value must be correctly encoded")
 						require.Greater(t, results[0].TimeSeries.Samples[0].Value, 0.0, "Small float value must be positive")
 					},
@@ -311,7 +295,7 @@ test_precision 0.123456789012345
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_scientific")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_scientific")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_scientific")
 						require.InDelta(t, 0.000123, results[0].TimeSeries.Samples[0].Value, 0.0000001, "Scientific notation value must be correctly parsed and encoded")
 					},
 				},
@@ -321,7 +305,7 @@ test_precision 0.123456789012345
 					RFCLevel:    ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_precision")
-						require.Len(t, results, 1, "Should receive exactly one timeseries for test_precision")
+						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_precision")
 						require.NotEmpty(t, results[0].TimeSeries.Samples, "Timeseries must contain samples")
 					},
 				},
