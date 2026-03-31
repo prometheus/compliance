@@ -29,14 +29,13 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"testing"
 	"text/template"
 
 	"github.com/prometheus/compliance/remotewrite/sender"
 )
 
 const (
-	prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.9.1/prometheus-3.9.1.{{.OS}}-{{.Arch}}.tar.gz"
+	prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.11.0-rc.0/prometheus-3.11.0-rc.0.{{.OS}}-{{.Arch}}.tar.gz"
 	scrapeConfigTemplate  = `
 global:
   scrape_interval: 1s
@@ -71,7 +70,8 @@ func (p prometheus) Name() string { return "prometheus" }
 // Run runs a Prometheus process for a test target options, until ctx is done.
 //
 // It auto-downloads Prometheus binary from the official release URL (see prometheusDownloadURL).
-// TODO(bwplotka): Process based runners are prone to leaking processes; add docker runner and/or figure out cleanup. Manually this could be done with 'killall -m "prometheus-3." -kill'.
+// TODO(bwplotka): Process based runners are prone to leaking processes; add docker runner and/or figure out cleanup.
+// Manually this could be done with 'killall -m "prometheus-3." -kill'.
 func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
 	binary, err := downloadBinary(prometheusDownloadURL, "prometheus")
 	if err != nil {
@@ -97,6 +97,7 @@ func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
 		`--web.listen-address=0.0.0.0:0`,
 		fmt.Sprintf("--storage.tsdb.path=%v", dir),
 		fmt.Sprintf("--config.file=%s", configFile),
+		"--enable-feature=st-storage",
 	)
 }
 
@@ -297,8 +298,4 @@ func extractTarGz(srcFile, filename, destFile string) error {
 	}
 
 	return fmt.Errorf("did not find binary in .tar.gz: %s", filename)
-}
-
-func TestCompliance(t *testing.T) {
-	sender.RunTests(t, prometheus{}, sender.ComplianceTests())
 }

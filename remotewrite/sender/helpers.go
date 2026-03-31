@@ -393,24 +393,51 @@ func runTestCases(t *testing.T, tests []TestCase) {
 	}
 }
 
+type timeseriesResult struct {
+	TimeSeries *writev2.TimeSeries
+	Labels     map[string]string
+}
+
+func flattenTimeseriesResult(t testing.TB, results []timeseriesResult) (ret timeseriesResult) {
+	require.NotEmpty(t, results)
+
+	var lbls map[string]string
+	for _, r := range results {
+		if lbls == nil {
+			lbls = r.Labels
+		} else {
+			require.Equal(t, lbls, r.Labels, "found two different series with the same name; expected same series")
+		}
+		if ret.TimeSeries == nil {
+			ret.TimeSeries = r.TimeSeries
+		} else {
+			ret.TimeSeries.Samples = append(ret.TimeSeries.Samples, r.TimeSeries.Samples...)
+			ret.TimeSeries.Histograms = append(ret.TimeSeries.Histograms, r.TimeSeries.Histograms...)
+			ret.TimeSeries.Exemplars = append(ret.TimeSeries.Exemplars, r.TimeSeries.Exemplars...)
+		}
+	}
+	return ret
+}
+
 // findTimeseriesByMetricName finds a timeseries by metric name from a captured request.
-func findTimeseriesByMetricName(req *writev2.Request, metricName string) (*writev2.TimeSeries, map[string]string) {
+func findTimeseriesByMetricName(req *writev2.Request, metricName string) []timeseriesResult {
+	var results []timeseriesResult
 	for i := range req.Timeseries {
 		ts := &req.Timeseries[i]
 		labels := extractLabels(ts, req.Symbols)
 		if labels["__name__"] == metricName {
-			return ts, labels
+			results = append(results, timeseriesResult{TimeSeries: ts, Labels: labels})
 		}
 	}
-	return nil, nil
+	return results
 }
 
 // requireTimeseriesByMetricName finds a timeseries by metric name and fails the test if not found.
-func requireTimeseriesByMetricName(t *testing.T, req *writev2.Request, metricName string) (*writev2.TimeSeries, map[string]string) {
+func requireTimeseriesByMetricName(t *testing.T, req *writev2.Request, metricName string) []timeseriesResult {
 	t.Helper()
-	ts, labels := findTimeseriesByMetricName(req, metricName)
-	require.NotNil(t, ts, "Timeseries with metric name %q must be present", metricName)
-	return ts, labels
+	results := findTimeseriesByMetricName(req, metricName)
+	require.NotEmpty(t, results, "Timeseries with metric name %q must be present", metricName)
+	return results
 }
 
 // requireTimeseriesRW1ByMetricName finds a timeseries by metric name and fails the test if not found.
@@ -455,15 +482,15 @@ func findHistogramData(req *writev2.Request, baseName string) (classicFound bool
 // Returns (count, found) where found indicates if count was successfully extracted.
 func extractHistogramCount(req *writev2.Request, baseName string) (float64, bool) {
 	// Try classic format first.
-	ts, _ := findTimeseriesByMetricName(req, baseName+"_count")
-	if ts != nil && len(ts.Samples) > 0 {
-		return ts.Samples[0].Value, true
+	results := findTimeseriesByMetricName(req, baseName+"_count")
+	if len(results) > 0 && len(results[0].TimeSeries.Samples) > 0 {
+		return results[0].TimeSeries.Samples[0].Value, true
 	}
 
 	// Try native format.
-	ts, _ = findTimeseriesByMetricName(req, baseName)
-	if ts != nil && len(ts.Histograms) > 0 {
-		hist := ts.Histograms[0]
+	results = findTimeseriesByMetricName(req, baseName)
+	if len(results) > 0 && len(results[0].TimeSeries.Histograms) > 0 {
+		hist := results[0].TimeSeries.Histograms[0]
 		if hist.Count != nil {
 			if countInt, ok := hist.Count.(*writev2.Histogram_CountInt); ok {
 				return float64(countInt.CountInt), true
@@ -479,15 +506,15 @@ func extractHistogramCount(req *writev2.Request, baseName string) (float64, bool
 // extractHistogramSum extracts sum from either classic or native histogram format.
 func extractHistogramSum(req *writev2.Request, baseName string) (float64, bool) {
 	// Try classic format first.
-	ts, _ := findTimeseriesByMetricName(req, baseName+"_sum")
-	if ts != nil && len(ts.Samples) > 0 {
-		return ts.Samples[0].Value, true
+	results := findTimeseriesByMetricName(req, baseName+"_sum")
+	if len(results) > 0 && len(results[0].TimeSeries.Samples) > 0 {
+		return results[0].TimeSeries.Samples[0].Value, true
 	}
 
 	// Try native format.
-	ts, _ = findTimeseriesByMetricName(req, baseName)
-	if ts != nil && len(ts.Histograms) > 0 {
-		return ts.Histograms[0].Sum, true
+	results = findTimeseriesByMetricName(req, baseName)
+	if len(results) > 0 && len(results[0].TimeSeries.Histograms) > 0 {
+		return results[0].TimeSeries.Histograms[0].Sum, true
 	}
 
 	return 0, false
