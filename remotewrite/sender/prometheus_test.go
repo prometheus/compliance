@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.11.0-rc.0/prometheus-3.11.0-rc.0.{{.OS}}-{{.Arch}}.tar.gz"
+	prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.13.2/prometheus-3.13.2.{{.OS}}-{{.Arch}}.tar.gz"
 	scrapeConfigTemplate  = `
 global:
   scrape_interval: 1s

@@ -39,6 +39,17 @@ import (
 // ComplianceTests returns official compliance sender tests.
 func ComplianceTests() (ret []Test) {
 	ret = append(ret, samplesTests()...)
+	ret = append(ret, histogramsTests(false)...)
+	return ret
+}
+
+// TransactionalComplianceTests returns a more strict compliance sender tests for a mode of
+// Remote Write 2 that is as transactional as possible, requiring composite samples (e.g.: NHCB)
+//
+// See: https://prometheus.io/blog/#2026-02-14-modernizing-prometheus-composite-samples
+func TransactionalComplianceTests() (ret []Test) {
+	ret = append(ret, samplesTests()...)
+	ret = append(ret, histogramsTests(true)...)
 	return ret
 }
 
@@ -121,6 +132,9 @@ type Test struct {
 	// that the target must use.
 	// This adds another "/rw<number>/" sub-test.
 	Version remote.WriteMessageType
+	// ScrapeContentType specifies the content type of the scrape data.
+	// If empty, defaults to OpenMetrics text.
+	ScrapeContentType string
 	// ScrapeData provides input scrape data to use against the tested target.
 	ScrapeData string
 	// TestResponses controls the receiver response to respond with to a sender, sequentially.
@@ -174,7 +188,7 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 				tc.TestResponses = []ReceiverResponse{{}} // By default assume a single successful response.
 			}
 			receiver := newSyncReceiver(tc.Version, tc.TestResponses)
-			scrapeTarget := newScrapeTarget(tc.ScrapeData)
+			scrapeTarget := newScrapeTarget(tc.ScrapeData, tc.ScrapeContentType)
 
 			// Setup subcase exists to cleanly visualise errors that happens before certain validation cases.
 			// TODO(bwplotka): This is odd for tests with 0 cases and a single validation.
@@ -452,14 +466,16 @@ func (r *receiver) Result() ReceiverResult {
 
 // scrapeTarget is an HTTP server that serves metrics in Prometheus format.
 type scrapeTarget struct {
-	server  *httptest.Server
-	mu      sync.Mutex
-	metrics string
+	server      *httptest.Server
+	mu          sync.Mutex
+	metrics     string
+	contentType string
 }
 
-func newScrapeTarget(metrics string) *scrapeTarget {
+func newScrapeTarget(metrics string, contentType string) *scrapeTarget {
 	st := &scrapeTarget{
-		metrics: metrics,
+		metrics:     metrics,
+		contentType: contentType,
 	}
 	st.server = httptest.NewServer(http.HandlerFunc(st.handleScrape))
 	return st
@@ -472,7 +488,10 @@ func (st *scrapeTarget) Run(ctx context.Context) {
 	return
 }
 
-const om1ContentType = "application/openmetrics-text; version=1.0.0; charset=utf-8"
+const (
+	OM1ContentType = "application/openmetrics-text; version=1.0.0; charset=utf-8"
+	ProtoContentType = "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited"
+)
 
 // handleScrape serves metrics in OpenMetrics 1 exposition format.
 func (st *scrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request) {
@@ -480,11 +499,15 @@ func (st *scrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request) {
 	defer st.mu.Unlock()
 
 	metrics := st.metrics
-	if !strings.HasSuffix(metrics, "# EOF\n") {
-		// Annoying, add it if missing.
-		metrics = metrics + "# EOF\n"
+	contentType := st.contentType
+	if contentType == "" {
+		contentType = om1ContentType
+		if !strings.HasSuffix(metrics, "# EOF\n") {
+			// Annoying, add it if missing.
+			metrics = metrics + "# EOF\n"
+		}
 	}
-	w.Header().Set("Content-Type", om1ContentType)
+	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(metrics))
 	return

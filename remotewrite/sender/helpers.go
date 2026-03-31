@@ -23,8 +23,13 @@ import (
 	"sync"
 	"testing"
 
+	"bytes"
+	"encoding/binary"
+
 	"github.com/golang/snappy"
+	"github.com/gogo/protobuf/proto"
 	writev1 "github.com/prometheus/prometheus/prompb"
+	dto "github.com/prometheus/prometheus/prompb/io/prometheus/client"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -518,4 +523,30 @@ func extractHistogramSum(req *writev2.Request, baseName string) (float64, bool) 
 	}
 
 	return 0, false
+}
+
+// metricFamiliesToProtobuf converts text representations of MetricFamily to binary protobuf.
+// This is used for switching scrape format to protobuf.
+func metricFamiliesToProtobuf(testMetricFamilies []string) string {
+	varintBuf := make([]byte, binary.MaxVarintLen32)
+	buf := &bytes.Buffer{}
+
+	for _, tmf := range testMetricFamilies {
+		pb := &dto.MetricFamily{}
+		// From text to proto message.
+		if err := proto.UnmarshalText(tmf, pb); err != nil {
+			panic(fmt.Sprintf("failed to unmarshal text proto: %v", err))
+		}
+		// From proto message to binary protobuf.
+		protoBuf, err := proto.Marshal(pb)
+		if err != nil {
+			panic(fmt.Sprintf("failed to marshal proto: %v", err))
+		}
+
+		// Write first length, then binary protobuf.
+		varintLength := binary.PutUvarint(varintBuf, uint64(len(protoBuf)))
+		buf.Write(varintBuf[:varintLength])
+		buf.Write(protoBuf)
+	}
+	return buf.String()
 }
