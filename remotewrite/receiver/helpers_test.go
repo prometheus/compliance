@@ -54,17 +54,17 @@ func mapToMetric(labels map[string]string) model.Metric {
 }
 
 type HistogramWithLabels struct {
-	Labels           map[string]string
-	Histogram        writev2.Histogram
-	Offset           time.Duration
-	CreatedTimestamp *time.Time
+	Labels         map[string]string
+	Histogram      writev2.Histogram
+	Offset         time.Duration
+	StartTimestamp *time.Time
 }
 
 type SampleWithLabels struct {
-	Labels           map[string]string
-	Value            float64
-	Offset           time.Duration
-	CreatedTimestamp *time.Time
+	Labels         map[string]string
+	Value          float64
+	Offset         time.Duration
+	StartTimestamp *time.Time
 }
 
 // getHeaderValue extracts and parses the X-Prometheus-Remote-Write header value for a given key.
@@ -304,8 +304,8 @@ func generateRequest(opts RequestOpts) *http.Request {
 			Exemplars: sampleExemplars,
 		}
 
-		if s.CreatedTimestamp != nil {
-			ts.CreatedTimestamp = s.CreatedTimestamp.UnixMilli()
+		if s.StartTimestamp != nil {
+			ts.Samples[0].StartTimestamp = s.StartTimestamp.UnixMilli()
 		}
 
 		if metricName := s.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
@@ -375,8 +375,8 @@ func generateRequest(opts RequestOpts) *http.Request {
 			Exemplars:  histogramExemplars,
 		}
 
-		if hw.CreatedTimestamp != nil {
-			ts.CreatedTimestamp = hw.CreatedTimestamp.UnixMilli()
+		if hw.StartTimestamp != nil {
+			ts.Histograms[0].StartTimestamp = hw.StartTimestamp.UnixMilli()
 		}
 
 		if metricName := hw.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
