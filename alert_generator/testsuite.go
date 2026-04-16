@@ -410,7 +410,7 @@ func (ts *TestSuite) Wait() {
 	ts.wg.Wait()
 }
 
-// Error() returns any error occured during execution of test and does
+// Error() returns any error occurred during execution of test and does
 // not tell if the tests passed or failed.
 func (ts *TestSuite) Error() error {
 	merr := NewMulti()
