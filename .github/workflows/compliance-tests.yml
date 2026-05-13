@@ -3,6 +3,9 @@ name: Compliance Tests
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   remotewrite-compliance:
     runs-on: ubuntu-latest
