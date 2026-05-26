@@ -349,7 +349,7 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, tt
 			if sameDiffTimes > 3 {
 				// Likely nothing will change, abort.
 				tLogf(tt, "got %v; diff %v\n", got, lastDiff)
-				tt.Error(fmt.Errorf("resulted Matrix is different than expected: %v\n", diff))
+				tt.Errorf("resulted Matrix is different than expected: %v", diff)
 				return nil
 			}
 			sameDiffTimes++
