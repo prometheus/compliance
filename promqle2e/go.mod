@@ -1,6 +1,6 @@
 module github.com/prometheus/compliance/promqle2e
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/efficientgo/core v1.0.0-rc.3

@@ -1,6 +1,6 @@
 module github.com/prometheus/compliance/promql
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/cheggaaa/pb/v3 v3.1.7

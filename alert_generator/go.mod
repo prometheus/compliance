@@ -1,6 +1,6 @@
 module github.com/prometheus/compliance/alert_generator
 
-go 1.22.0
+go 1.25.0
 
 require (
 	github.com/go-kit/log v0.2.1
