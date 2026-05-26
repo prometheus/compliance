@@ -60,7 +60,7 @@ disk_io_bytes_total 1000000
 				var ret strings.Builder
 				ret.WriteString("# Large scrape to test batch size handling\n")
 				for i := range 12000 {
-					ret.WriteString(fmt.Sprintf("metric{label=\"%d\"} 1\n", i))
+					fmt.Fprintf(&ret, "metric{label=\"%d\"} 1\n", i)
 				}
 				return ret.String()
 			}(),

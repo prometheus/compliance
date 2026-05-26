@@ -162,12 +162,12 @@ request_duration_seconds_count 100
 					labels := extractLabels(&ts, req.Request.Symbols)
 					metricName := labels["__name__"]
 
-					if metricName == "process_cpu_seconds_total" {
+					switch metricName {
+					case "process_cpu_seconds_total":
 						metricTypes["counter"] = true
-					} else if metricName == "process_memory_bytes" {
+					case "process_memory_bytes":
 						metricTypes["gauge"] = true
-					} else if metricName == "request_duration_seconds_count" ||
-						metricName == "request_duration_seconds" {
+					case "request_duration_seconds_count", "request_duration_seconds":
 						metricTypes["histogram"] = true
 					}
 				}
