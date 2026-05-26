@@ -1,6 +1,6 @@
 module github.com/prometheus/compliance/promql
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/cheggaaa/pb/v3 v3.1.7
@@ -24,6 +24,7 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 )
