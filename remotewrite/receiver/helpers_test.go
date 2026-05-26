@@ -605,11 +605,6 @@ func traceExemplar(traceId string) map[string]string {
 	return map[string]string{"trace_id": traceId}
 }
 
-// httpAPILabels returns HTTP API labels with the specified method.
-func httpAPILabels(method string) map[string]string {
-	return map[string]string{"__name__": "http_requests_total", "job": "api", "method": method}
-}
-
 // runComplianceTest runs a test case with both MUST and SHOULD RFC compliance levels.
 // This function eliminates code duplication between the two variants by automatically
 // generating both strict (SHOULD) and basic (MUST) compliance tests for successful cases.

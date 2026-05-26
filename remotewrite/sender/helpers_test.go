@@ -341,37 +341,6 @@ func recommended(t *testing.T, condition bool, msg string) {
 	}
 }
 
-// validateSymbolTable validates that the symbol table follows RW 2.0 requirements.
-func validateSymbolTable(t *testing.T, symbols []string) {
-	t.Helper()
-
-	must(t).NotEmpty(symbols, "Symbol table must not be empty")
-	must(t).Equal("", symbols[0], "First symbol (index 0) must be empty string")
-
-	// Check for duplicates (MUST requirement for deduplication).
-	seen := make(map[string]bool)
-	for _, sym := range symbols {
-		if seen[sym] && sym != "" {
-			// Duplicate non-empty strings found - this violates deduplication requirement.
-			must(t).Fail(fmt.Sprintf("Duplicate symbol found in symbol table: %q", sym))
-		}
-		seen[sym] = true
-	}
-}
-
-// validateLabelRefs validates that label references are valid.
-func validateLabelRefs(t *testing.T, refs []uint32, symbols []string) {
-	t.Helper()
-
-	must(t).Equal(0, len(refs)%2, "Label refs length must be even (key-value pairs)")
-
-	for i, ref := range refs {
-		must(t).Less(int(ref), len(symbols),
-			"Label ref at index %d points to invalid symbol index %d (symbol table size: %d)",
-			i, ref, len(symbols))
-	}
-}
-
 // isSorted checks if labels are sorted lexicographically.
 func isSorted(labels map[string]string, symbols []string, refs []uint32) bool {
 	var prevKey string
