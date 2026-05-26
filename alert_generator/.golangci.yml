@@ -1,9 +1,16 @@
----
-run:
-  timeout: 5m
-
-linters-settings:
-  errcheck:
-    exclude-functions:
-      # Never check for logger errors.
-      - (github.com/go-kit/log.Logger).Log
+version: "2"
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        - (github.com/go-kit/log.Logger).Log
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+formatters:
+  exclusions:
+    generated: lax
