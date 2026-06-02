@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/golang/snappy v1.0.0
-	github.com/prometheus/common v0.67.5
+	github.com/prometheus/common v0.68.0
 	github.com/prometheus/prometheus v0.306.0
 	github.com/prometheus/sigv4 v0.4.1
 	github.com/stretchr/testify v1.11.1
