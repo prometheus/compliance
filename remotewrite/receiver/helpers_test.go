@@ -304,8 +304,8 @@ func generateRequest(opts RequestOpts) *http.Request {
 			Exemplars: sampleExemplars,
 		}
 
-		if s.CreatedTimestamp != nil {
-			ts.CreatedTimestamp = s.CreatedTimestamp.UnixMilli()
+		if s.CreatedTimestamp != nil && len(ts.Samples) > 0 {
+			ts.Samples[0].StartTimestamp = s.CreatedTimestamp.UnixMilli()
 		}
 
 		if metricName := s.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
@@ -375,8 +375,8 @@ func generateRequest(opts RequestOpts) *http.Request {
 			Exemplars:  histogramExemplars,
 		}
 
-		if hw.CreatedTimestamp != nil {
-			ts.CreatedTimestamp = hw.CreatedTimestamp.UnixMilli()
+		if hw.CreatedTimestamp != nil && len(ts.Histograms) > 0 {
+			ts.Histograms[0].StartTimestamp = hw.CreatedTimestamp.UnixMilli()
 		}
 
 		if metricName := hw.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {

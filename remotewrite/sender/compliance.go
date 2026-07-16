@@ -194,12 +194,25 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 					scrapeTarget.Run(ctx)
 					return nil
 				}, cancelGroup)
+				featuresStr := os.Getenv("PROMETHEUS_RW2_COMPLIANCE_PROMETHEUS_FEATURES")
+				if featuresStr == "" {
+					featuresStr = os.Getenv("PROMETHEUS_RW2_COMPLIANCE_FEATURES")
+				}
+				var features []string
+				if featuresStr != "" {
+					for _, f := range strings.Split(featuresStr, ",") {
+						if trimmed := strings.TrimSpace(f); trimmed != "" {
+							features = append(features, trimmed)
+						}
+					}
+				}
 				g.Add(func() error {
 					return sender.Run(ctx, Options{
 						ScrapeTargetJobName:    "test",
 						ScrapeTargetHostPort:   scrapeTarget.HostPort(t),
 						RemoteWriteEndpointURL: receiver.URL(),
 						RemoteWriteMessage:     tc.Version,
+						Features:               features,
 					})
 				}, cancelGroup)
 				if err := g.Run(); err != nil {

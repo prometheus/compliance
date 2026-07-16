@@ -92,13 +92,29 @@ func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
 	}
 	defer os.RemoveAll(dir)
 
-	return sender.RunCommand(ctx, ".", nil,
-		binary,
+	args := []string{
 		`--web.listen-address=0.0.0.0:0`,
 		fmt.Sprintf("--storage.tsdb.path=%v", dir),
 		fmt.Sprintf("--config.file=%s", configFile),
-		"--enable-feature=st-storage",
-	)
+	}
+	features := opts.Features
+	if len(features) == 0 && os.Getenv("PROMETHEUS_RW2_COMPLIANCE_PROMETHEUS_FEATURES") != "" {
+		for _, f := range strings.Split(os.Getenv("PROMETHEUS_RW2_COMPLIANCE_PROMETHEUS_FEATURES"), ",") {
+			if trimmed := strings.TrimSpace(f); trimmed != "" {
+				features = append(features, trimmed)
+			}
+		}
+	}
+	if len(features) == 0 {
+		features = []string{"st-storage"}
+	}
+	for _, f := range features {
+		if f != "" {
+			args = append(args, fmt.Sprintf("--enable-feature=%s", f))
+		}
+	}
+
+	return sender.RunCommand(ctx, ".", nil, binary, args...)
 }
 
 var _ sender.Sender = prometheus{}

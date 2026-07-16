@@ -41,6 +41,7 @@ type Options struct {
 	ScrapeTargetJobName    string
 	RemoteWriteEndpointURL string
 	RemoteWriteMessage     remote.WriteMessageType
+	Features               []string
 }
 
 // RunCommand runs the given command with the given args until context is done.
