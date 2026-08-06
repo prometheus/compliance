@@ -199,7 +199,7 @@ test_cases:
   - query: 'label_replace(demo_num_cpus, "job", "value-$1", "src", "(.*")'
     should_fail: true
     # label_replace fails when the destination label name is not a valid Prometheus label name.
-  - query: 'label_replace(demo_num_cpus, "~invalid", "", "src", "(.*)")'
+  - query: 'label_replace(demo_num_cpus, "\xff", "", "src", "(.*)")'
     should_fail: true
     # label_replace fails when there would be duplicated identical output label sets.
   - query: 'label_replace(demo_num_cpus, "instance", "", "", "")'
@@ -207,7 +207,7 @@ test_cases:
   - query: 'label_join(demo_num_cpus, "new_label", "-", "instance", "job")'
   - query: 'label_join(demo_num_cpus, "job", "-", "instance", "job")'
   - query: 'label_join(demo_num_cpus, "job", "-", "instance")'
-  - query: 'label_join(demo_num_cpus, "~invalid", "-", "instance")'
+  - query: 'label_join(demo_num_cpus, "\xff", "-", "instance")'
     should_fail: true
   - query: '{{.dateFunc}}()'
     variant_args: ['dateFunc']
