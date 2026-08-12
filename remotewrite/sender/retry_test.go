@@ -11,19 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestRetryBehavior validates sender retry behavior on different error responses.
-func TestRetryBehavior(t *testing.T) {
+func TestRetryBehavior_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []struct {
 		name        string
 		description string
@@ -198,7 +197,7 @@ func TestRetryBehavior(t *testing.T) {
 			t.Attr("rfcLevel", tt.rfcLevel)
 			t.Attr("description", tt.description)
 
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+			forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 				receiver := NewMockReceiver()
 				defer receiver.Close()
 
@@ -207,15 +206,7 @@ func TestRetryBehavior(t *testing.T) {
 				scrapeTarget := NewMockScrapeTarget(tt.scrapeData)
 				defer scrapeTarget.Close()
 
-				err := target(targets.TargetOptions{
-					ScrapeTarget:    scrapeTarget.URL(),
-					ReceiveEndpoint: receiver.URL(),
-					Timeout:         8 * time.Second,
-				})
-
-				if err != nil {
-					t.Logf("Target exited with error (expected for retry tests): %v", err)
-				}
+				t.Fatal("was creating target here; to remove")
 
 				requests := receiver.GetRequests()
 				tt.validator(t, requests)

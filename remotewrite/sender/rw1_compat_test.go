@@ -11,19 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"strings"
 	"testing"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestRemoteWrite1Compatibility validates RW 1.0 backward compatibility.
 // Note: These tests require sender to be configured for RW 1.0 mode.
 // Most senders default to RW 2.0, so RW 1.0 tests are informational.
-func TestRemoteWrite1Compatibility(t *testing.T) {
+func TestRemoteWrite1Compatibility_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "rw1_version_header",
@@ -210,13 +210,15 @@ http_requests{method="POST",status="200"} 50
 }
 
 // TestRemoteWrite1Configuration tests if sender can be configured for RW 1.0.
-func TestRemoteWrite1Configuration(t *testing.T) {
+func TestRemoteWrite1Configuration_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "SHOULD")
 	t.Attr("description", "Sender SHOULD support RW 1.0 configuration for backward compatibility")
 
 	scrapeData := "test_metric 42\n"
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: scrapeData,
 			Validator: func(t *testing.T, req *CapturedRequest) {

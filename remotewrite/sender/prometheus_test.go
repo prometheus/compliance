@@ -1,33 +1,107 @@
-package targets
+// Copyright The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package sender_test
 
 import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"text/template"
-	"time"
+
+	"github.com/prometheus/compliance/remotewrite/sender"
 )
 
-type Target func(TargetOptions) error
+const (
+	prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.11.0-rc.0/prometheus-3.11.0-rc.0.{{.OS}}-{{.Arch}}.tar.gz"
+	scrapeConfigTemplate  = `
+global:
+  scrape_interval: 1s
 
-type TargetOptions struct {
-	ScrapeTarget    string
-	ReceiveEndpoint string
-	Timeout         time.Duration
+remote_write:
+  - url: "{{.RemoteWriteEndpointURL}}"
+    protobuf_message: "{{.RemoteWriteMessage}}"
+    send_exemplars: true
+    queue_config:
+      retry_on_http_429: true
+    metadata_config:
+      send: true
+
+scrape_configs:
+  - job_name: "{{.ScrapeTargetJobName}}"
+    scrape_interval: 1s
+    scrape_protocols:
+      - PrometheusProto
+      - OpenMetricsText1.0.0
+      - PrometheusText0.0.4
+    static_configs:
+    - targets: ["{{.ScrapeTargetHostPort}}"]
+`
+)
+
+var scrapeConfigTmpl = template.Must(template.New("config").Parse(scrapeConfigTemplate))
+
+type prometheus struct{}
+
+func (p prometheus) Name() string { return "prometheus" }
+
+// Run runs a Prometheus process for a test target options, until ctx is done.
+//
+// It auto-downloads Prometheus binary from the official release URL (see prometheusDownloadURL).
+// TODO(bwplotka): Process based runners are prone to leaking processes; add docker runner and/or figure out cleanup.
+// Manually this could be done with 'killall -m "prometheus-3." -kill'.
+func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
+	binary, err := downloadBinary(prometheusDownloadURL, "prometheus")
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := scrapeConfigTmpl.Execute(&buf, opts); err != nil {
+		return fmt.Errorf("failed to execute config template: %w", err)
+	}
+
+	dir, err := os.MkdirTemp("", "test-*")
+	if err != nil {
+		return err
+	}
+	configFile := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configFile, buf.Bytes(), 0o600); err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+
+	return sender.RunCommand(ctx, ".", nil,
+		binary,
+		`--web.listen-address=0.0.0.0:0`,
+		fmt.Sprintf("--storage.tsdb.path=%v", dir),
+		fmt.Sprintf("--config.file=%s", configFile),
+		"--enable-feature=st-storage",
+	)
 }
+
+var _ sender.Sender = prometheus{}
 
 var downloadMtx sync.Mutex
 
@@ -224,59 +298,4 @@ func extractTarGz(srcFile, filename, destFile string) error {
 	}
 
 	return fmt.Errorf("did not find binary in .tar.gz: %s", filename)
-}
-
-func writeTempFile(contents, name string) (filename string, err error) {
-	f, err := os.CreateTemp("", name)
-	if err != nil {
-		return "", err
-	}
-
-	_, err = f.Write([]byte(contents))
-	if err != nil {
-		return "", err
-	}
-
-	return f.Name(), f.Close()
-}
-
-// runCommand runs the given command with the given args.
-func runCommand(prog string, timeout time.Duration, args ...string) error {
-	cwd, err := os.MkdirTemp("", "")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(cwd)
-
-	var output *os.File
-	// Suppress output to avoid cluttering test results.
-	suppressOutput := os.Getenv("DEBUG") == ""
-	if suppressOutput {
-		output, err = os.CreateTemp("", "")
-		if err != nil {
-			return err
-		}
-		defer output.Close()
-		defer os.Remove(output.Name())
-	} else {
-		output = os.Stdout
-	}
-
-	cmd := exec.Command(prog, args...)
-	cmd.Dir = cwd
-	cmd.Stdout = output
-	cmd.Stderr = output
-	err = cmd.Start()
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		time.Sleep(timeout)
-		if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
-			log.Fatalf("failed to send signal: %v", err)
-		}
-	}()
-
-	return cmd.Wait()
 }

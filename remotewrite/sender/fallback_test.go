@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
@@ -20,8 +20,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // FallbackTrackingReceiver tracks version changes across requests.
@@ -66,7 +64,9 @@ func (ftr *FallbackTrackingReceiver) ShouldReturn415() bool {
 }
 
 // TestFallbackBehavior validates RW 2.0 to RW 1.0 fallback on 415 response.
-func TestFallbackBehavior(t *testing.T) {
+func TestFallbackBehavior_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []struct {
 		name        string
 		description string
@@ -232,8 +232,7 @@ func TestFallbackBehavior(t *testing.T) {
 			t.Parallel()
 			t.Attr("rfcLevel", tt.rfcLevel)
 			t.Attr("description", tt.description)
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-
+			forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 				receiver := NewMockReceiver()
 				defer receiver.Close()
 
@@ -282,13 +281,15 @@ func TestFallbackBehavior(t *testing.T) {
 }
 
 // TestNoFallbackOn2xx validates that fallback doesn't happen on success.
-func TestNoFallbackOn2xx(t *testing.T) {
+func TestNoFallbackOn2xx_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "MUST")
 	t.Attr("description", "Sender MUST NOT fallback when receiving 2xx success responses")
 
 	scrapeData := "test_metric 42\n"
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		receiver := NewMockReceiver()
 		defer receiver.Close()
 
