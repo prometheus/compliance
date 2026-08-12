@@ -161,7 +161,7 @@ func TestCounterMetadataWithCreatedTimestamp(t *testing.T) {
 	sample := SampleWithLabels{
 		Labels:           map[string]string{"__name__": "http_requests_total", "job": "api"},
 		Value:            150.0,
-		CreatedTimestamp: &createdTime,
+		StartTimestamp:   &createdTime,
 	}
 	metadata := MetadataWithLabels{
 		Labels: basicMetric("http_requests_total"),

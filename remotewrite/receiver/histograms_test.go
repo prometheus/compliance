@@ -120,7 +120,7 @@ func TestHistogramWithCreatedTimestamp(t *testing.T) {
 	hist := HistogramWithLabels{
 		Labels:           map[string]string{"__name__": "request_duration_seconds", "job": "api"},
 		Histogram:        histogram(1.5, true, true, true, false, false),
-		CreatedTimestamp: &createdTime,
+		StartTimestamp:   &createdTime,
 	}
 
 	runComplianceTest(t, "", "Histogram with created timestamp",

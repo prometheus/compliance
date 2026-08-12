@@ -137,7 +137,7 @@ func (mr *MockReceiver) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(mr.response.StatusCode)
 	if mr.response.Body != "" {
-		w.Write([]byte(mr.response.Body))
+		_, _ = w.Write([]byte(mr.response.Body))
 	}
 }
 
@@ -215,14 +215,14 @@ func (mst *MockScrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request
 		}
 		w.Header().Set("Content-Type", contentType)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(metrics))
+		_, _ = w.Write([]byte(metrics))
 		return
 	}
 
 	// Normal text format for non-exemplar metrics.
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(metrics))
+	_, _ = w.Write([]byte(metrics))
 }
 
 // URL returns the URL of the mock scrape target.
@@ -438,21 +438,6 @@ func requireTimeseriesByMetricName(t *testing.T, req *writev2.Request, metricNam
 	results := findTimeseriesByMetricName(req, metricName)
 	require.NotEmpty(t, results, "Timeseries with metric name %q must be present", metricName)
 	return results
-}
-
-// requireTimeseriesRW1ByMetricName finds a timeseries by metric name and fails the test if not found.
-func requireTimeseriesRW1ByMetricName(t *testing.T, req *writev1.WriteRequest, metricName string) *writev1.TimeSeries {
-	t.Helper()
-
-	for i := range req.Timeseries {
-		for _, l := range req.Timeseries[i].Labels {
-			if l.Name == "__name__" && l.Value == metricName {
-				return &req.Timeseries[i]
-			}
-		}
-	}
-	t.Fatalf("Timeseries with metric name %q must be present", metricName)
-	return nil
 }
 
 // findHistogramData attempts to find histogram data in both classic and native formats.

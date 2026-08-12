@@ -432,7 +432,7 @@ func (r *receiver) handleSyncRequest(w http.ResponseWriter, req *http.Request) {
 
 	w.WriteHeader(resp.StatusCode)
 	if resp.Body != "" {
-		w.Write([]byte(resp.Body))
+		_, _ = w.Write([]byte(resp.Body))
 	}
 }
 
@@ -469,7 +469,6 @@ func newScrapeTarget(metrics string) *scrapeTarget {
 func (st *scrapeTarget) Run(ctx context.Context) {
 	<-ctx.Done()
 	st.server.Close()
-	return
 }
 
 const om1ContentType = "application/openmetrics-text; version=1.0.0; charset=utf-8"
@@ -486,8 +485,7 @@ func (st *scrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", om1ContentType)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(metrics))
-	return
+	_, _ = w.Write([]byte(metrics))
 }
 
 // HostPort returns the host:port of the mock scrape target.

@@ -97,7 +97,7 @@ func TestCounterWithCreatedTimestamp(t *testing.T) {
 	sample := SampleWithLabels{
 		Labels:           map[string]string{"__name__": "http_requests_total", "job": "api"},
 		Value:            100.0,
-		CreatedTimestamp: &createdTime,
+		StartTimestamp:   &createdTime,
 	}
 
 	runComplianceTest(t, "", "Counter with created timestamp",
