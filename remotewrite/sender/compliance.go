@@ -39,6 +39,21 @@ import (
 // ComplianceTests returns official compliance sender tests.
 func ComplianceTests() (ret []Test) {
 	ret = append(ret, samplesTests()...)
+	ret = append(ret, batchingTests()...)
+	ret = append(ret, backoffTests()...)
+	ret = append(ret, combinedTests()...)
+	ret = append(ret, edgeCasesTests()...)
+	ret = append(ret, errorHandlingTests()...)
+	ret = append(ret, retryTests()...)
+	ret = append(ret, exemplarsTests()...)
+	ret = append(ret, histogramsTests()...)
+	ret = append(ret, labelsTests()...)
+	ret = append(ret, metadataTests()...)
+	ret = append(ret, protocolTests()...)
+	ret = append(ret, fallbackTests()...)
+	ret = append(ret, symbolsTests()...)
+	ret = append(ret, responseTests()...)
+	ret = append(ret, rw1CompatTests()...)
 	return ret
 }
 

@@ -14,138 +14,35 @@
 package sender
 
 import (
-	"fmt"
 	"testing"
+
+	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/stretchr/testify/require"
 )
 
-// TestSymbolTable validates symbol table requirements for Remote Write 2.0.
-func TestSymbolTable_Old(t *testing.T) {
-	t.Skip("TODO: Revise and move to a new framework")
-
-	tests := []TestCase{
+func symbolsTests() []Test {
+	return []Test{
 		{
-			Name:        "empty_string_at_index_zero",
-			Description: "Symbol table MUST have empty string at index 0",
-			RFCLevel:    "MUST",
+			Name:        "symbols_table_valid",
+			Description: "Symbol table MUST have empty string at index 0 and valid refs",
+			RFCLevel:    MustLevel,
+			Version:     remote.WriteV2MessageType,
 			ScrapeData:  "test_metric 42\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				symbols := req.Request.Symbols
-				must(t).NotEmpty(symbols, "Symbol table must not be empty")
-				must(t).Equal("", symbols[0],
-					"Symbol at index 0 must be empty string, got: %q", symbols[0])
-			},
-		},
-		{
-			Name:        "string_deduplication",
-			Description: "Symbol table should deduplicate repeated strings for efficiency",
-			RFCLevel:    "RECOMMENDED",
-			ScrapeData: `# Multiple metrics with same label keys/values
-test_metric{foo="bar",baz="qux"} 1
-test_metric{foo="bar",baz="qux"} 2
-another_metric{foo="bar"} 3
-`,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				symbols := req.Request.Symbols
-				must(t).NotEmpty(symbols, "Symbol table must not be empty")
+			Validate: func(t *testing.T, res ReceiverResult) {
+				for _, req := range res.Requests {
+					if req.RW2 != nil {
+						require.NotEmpty(t, req.RW2.Symbols, "Symbol table must not be empty")
+						require.Equal(t, "", req.RW2.Symbols[0], "Symbol at index 0 must be empty string")
 
-				// Check for duplicate non-empty strings.
-				seen := make(map[string]int)
-				for i, sym := range symbols {
-					if sym == "" {
-						continue // Empty string can appear multiple times (though should only be at index 0).
+						for _, ts := range req.RW2.Timeseries {
+							require.Equal(t, 0, len(ts.LabelsRefs)%2, "Labels refs must be even length")
+							for _, ref := range ts.LabelsRefs {
+								require.Less(t, int(ref), len(req.RW2.Symbols), "Label ref out of bounds")
+							}
+						}
 					}
-					if prevIdx, exists := seen[sym]; exists {
-						recommended(t, false, fmt.Sprintf("Duplicate string %q found at indices %d and %d (deduplication is a performance recommended)",
-							sym, prevIdx, i))
-					}
-					seen[sym] = i
-				}
-			},
-		},
-		{
-			Name:        "labels_refs_valid_indices",
-			Description: "All label refs MUST point to valid symbol table indices",
-			RFCLevel:    "MUST",
-			ScrapeData:  "test_metric{label=\"value\"} 42\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				symbols := req.Request.Symbols
-				timeseries := req.Request.Timeseries
-
-				must(t).NotEmpty(timeseries, "Request must contain at least one timeseries")
-
-				for tsIdx, ts := range timeseries {
-					for refIdx, ref := range ts.LabelsRefs {
-						must(t).Less(int(ref), len(symbols),
-							"Timeseries[%d].LabelsRefs[%d] = %d points outside symbol table (size: %d)",
-							tsIdx, refIdx, ref, len(symbols))
-					}
-				}
-			},
-		},
-		{
-			Name:        "labels_refs_even_length",
-			Description: "Label refs array length MUST be even (key-value pairs)",
-			RFCLevel:    "MUST",
-			ScrapeData:  "test_metric{label=\"value\"} 42\n",
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				timeseries := req.Request.Timeseries
-				must(t).NotEmpty(timeseries, "Request must contain at least one timeseries")
-
-				for tsIdx, ts := range timeseries {
-					refsLen := len(ts.LabelsRefs)
-					must(t).Equal(0, refsLen%2,
-						"Timeseries[%d].LabelsRefs has odd length %d (must be even for key-value pairs)",
-						tsIdx, refsLen)
 				}
 			},
 		},
 	}
-
-	runTestCases(t, tests)
-}
-
-// TestSymbolTableEfficiency validates that symbol tables are efficiently constructed.
-func TestSymbolTableEfficiency_Old(t *testing.T) {
-	t.Skip("TODO: Revise and move to a new framework")
-
-	t.Attr("rfcLevel", "RECOMMENDED")
-	t.Attr("description", "Symbol table should be efficiently constructed with good compression")
-
-	scrapeData := `# Multiple series with shared labels
-http_requests_total{method="GET",status="200",handler="/api/v1"} 100
-http_requests_total{method="POST",status="200",handler="/api/v1"} 50
-http_requests_total{method="GET",status="404",handler="/api/v1"} 10
-http_requests_total{method="GET",status="200",handler="/api/v2"} 75
-`
-
-	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
-		runSenderTest(t, targetName, target, SenderTestScenario{
-			ScrapeData: scrapeData,
-			Validator: func(t *testing.T, req *CapturedRequest) {
-				symbols := req.Request.Symbols
-
-				// With deduplication, common strings like "http_requests_total", "method",
-				// "status", "handler", "200", "GET", "/api/v1" should appear only once.
-				// Without deduplication, the symbol table would be much larger.
-
-				// Count unique non-empty symbols.
-				uniqueCount := 0
-				for _, sym := range symbols {
-					if sym != "" {
-						uniqueCount++
-					}
-				}
-
-				// For the above scrape data, we expect around 11-15 unique symbols:
-				// metric name (1), label keys (3), label values (7-8)
-				// If the symbol table is much larger, deduplication may not be working.
-				recommended(t, uniqueCount <= 30, fmt.Sprintf(
-					"Symbol table should be efficiently deduplicated (found %d unique symbols)",
-					uniqueCount))
-
-				t.Logf("Symbol table contains %d unique symbols (total %d entries)",
-					uniqueCount, len(symbols))
-			},
-		})
-	})
 }

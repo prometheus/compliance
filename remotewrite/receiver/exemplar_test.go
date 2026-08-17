@@ -114,8 +114,8 @@ func TestExemplarWithCreatedTimestamp(t *testing.T) {
 	createdTime := now.Add(-2 * time.Hour)
 
 	sample := SampleWithLabels{
-		Labels:           map[string]string{"__name__": "http_requests_total", "job": "api"},
-		Value:            250.0,
+		Labels:         map[string]string{"__name__": "http_requests_total", "job": "api"},
+		Value:          250.0,
 		StartTimestamp: &createdTime,
 	}
 	exemplar := ExemplarWithLabels{
