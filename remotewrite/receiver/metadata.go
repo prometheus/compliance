@@ -11,19 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package receiver
 
 import (
-	"testing"
 	"time"
 
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
 
-// TestMetadata tests requests with metadata attached.
-func TestMetadata(t *testing.T) {
-	must(t)
-	testCases := []struct {
+// metadataTests returns compliance tests covering metadata attached to samples/histograms.
+func metadataTests() (ret []Test) {
+	cases := []struct {
 		name        string
 		labels      map[string]string
 		metricType  writev2.Metadata_MetricType
@@ -63,8 +61,6 @@ func TestMetadata(t *testing.T) {
 			name:        "metadata_no_help_no_unit",
 			labels:      basicMetric("simple_counter"),
 			metricType:  writev2.Metadata_METRIC_TYPE_COUNTER,
-			help:        "",
-			unit:        "",
 			success:     true,
 			description: "Metadata without help or unit strings",
 		},
@@ -82,7 +78,6 @@ func TestMetadata(t *testing.T) {
 			labels:      basicMetric("unknown_metric"),
 			metricType:  writev2.Metadata_METRIC_TYPE_UNSPECIFIED,
 			help:        "Unknown metric type",
-			unit:        "",
 			success:     true,
 			description: "Metadata with unspecified metric type",
 		},
@@ -91,7 +86,6 @@ func TestMetadata(t *testing.T) {
 			labels:      basicMetric("build_info"),
 			metricType:  writev2.Metadata_METRIC_TYPE_INFO,
 			help:        "Build information",
-			unit:        "",
 			success:     true,
 			description: "Info type metadata",
 		},
@@ -100,7 +94,6 @@ func TestMetadata(t *testing.T) {
 			labels:      basicMetric("node_state"),
 			metricType:  writev2.Metadata_METRIC_TYPE_STATESET,
 			help:        "Node state information",
-			unit:        "",
 			success:     true,
 			description: "StateSet type metadata",
 		},
@@ -124,123 +117,87 @@ func TestMetadata(t *testing.T) {
 		},
 	}
 
-	for _, tc := range testCases {
-		metadata := MetadataWithLabels{Labels: tc.labels, Type: tc.metricType, Help: tc.help, Unit: tc.unit}
-
+	for _, tc := range cases {
 		opts := RequestOpts{
-			Metadata: []MetadataWithLabels{metadata},
+			Metadata: []MetadataWithLabels{{Labels: tc.labels, Type: tc.metricType, Help: tc.help, Unit: tc.unit}},
 		}
-
-		expectedParams := requestParams{}
-
-		// Add matching metric data based on type
+		expect := ExpectedResponse{}
 		if tc.metricType == writev2.Metadata_METRIC_TYPE_HISTOGRAM {
-			// Add histogram for histogram metadata
-			hist := HistogramWithLabels{Labels: tc.labels, Histogram: histogram(1.0, true, true, true, false, false)}
-			opts.Histograms = []HistogramWithLabels{hist}
-			expectedParams.histograms = 1
+			opts.Histograms = []HistogramWithLabels{{Labels: tc.labels, Histogram: Histogram(1.0, true, true, true, false, false)}}
+			expect.Histograms = 1
 		} else {
-			// Add sample for counter/gauge metadata
-			sample := SampleWithLabels{Labels: tc.labels, Value: 1.0}
-			opts.Samples = []SampleWithLabels{sample}
-			expectedParams.samples = 1
+			opts.Samples = []SampleWithLabels{{Labels: tc.labels, Value: 1.0}}
+			expect.Samples = 1
 		}
 
-		runComplianceTest(t, tc.name, tc.description, opts, expectedParams, tc.success)
+		ret = append(ret, Test{
+			Name:          "Metadata/" + tc.name,
+			Description:   tc.description,
+			Opts:          opts,
+			Expect:        expect,
+			ExpectSuccess: tc.success,
+		})
 	}
-}
-
-// TestMetadataWithSamples tests requests with metadata and samples attached.
-func TestCounterMetadataWithCreatedTimestamp(t *testing.T) {
-	should(t)
-	t.Attr("description", "Test counter with metadata and created timestamp")
 
 	now := time.Now()
 	createdTime := now.Add(-1 * time.Hour)
-
-	sample := SampleWithLabels{
-		Labels:           map[string]string{"__name__": "http_requests_total", "job": "api"},
-		Value:            150.0,
-		StartTimestamp:   &createdTime,
-	}
-	metadata := MetadataWithLabels{
-		Labels: basicMetric("http_requests_total"),
-		Type:   writev2.Metadata_METRIC_TYPE_COUNTER,
-		Help:   "Total HTTP requests",
-		Unit:   "requests",
-	}
-
-	runComplianceTest(t, "", "Counter with metadata and created timestamp",
-		RequestOpts{
-			Samples:  []SampleWithLabels{sample},
-			Metadata: []MetadataWithLabels{metadata},
+	ret = append(ret, Test{
+		Name:        "CounterMetadataWithCreatedTimestamp",
+		Description: "Test counter with metadata and created timestamp",
+		Opts: RequestOpts{
+			Samples: []SampleWithLabels{{
+				Labels:         map[string]string{"__name__": "http_requests_total", "job": "api"},
+				Value:          150.0,
+				StartTimestamp: &createdTime,
+			}},
+			Metadata: []MetadataWithLabels{{
+				Labels: basicMetric("http_requests_total"),
+				Type:   writev2.Metadata_METRIC_TYPE_COUNTER,
+				Help:   "Total HTTP requests",
+				Unit:   "requests",
+			}},
 		},
-		requestParams{
-			samples: 1,
+		Expect:        ExpectedResponse{Samples: 1},
+		ExpectSuccess: true,
+		Raw:           true,
+		RFCLevel:      ShouldLevel,
+	})
+
+	ret = append(ret, Test{
+		Name:        "MetadataWithSamples",
+		Description: "Test metadata sent together with samples",
+		Opts: RequestOpts{
+			Samples: []SampleWithLabels{{Labels: map[string]string{"__name__": "http_requests_total", "job": "test"}, Value: 42.0}},
+			Metadata: []MetadataWithLabels{{
+				Labels: basicMetric("http_requests_total"),
+				Type:   writev2.Metadata_METRIC_TYPE_COUNTER,
+				Help:   "Total HTTP requests",
+				Unit:   "requests",
+			}},
 		},
-		true)
-}
+		Expect:        ExpectedResponse{Samples: 1},
+		ExpectSuccess: true,
+	})
 
-func TestMetadataWithSamples(t *testing.T) {
-	sample := SampleWithLabels{Labels: map[string]string{"__name__": "http_requests_total", "job": "test"}, Value: 42.0}
-	metadata := MetadataWithLabels{
-		Labels: basicMetric("http_requests_total"),
-		Type:   writev2.Metadata_METRIC_TYPE_COUNTER,
-		Help:   "Total HTTP requests",
-		Unit:   "requests",
-	}
-
-	runComplianceTest(t, "", "Test metadata sent together with samples",
-		RequestOpts{
-			Samples:  []SampleWithLabels{sample},
-			Metadata: []MetadataWithLabels{metadata},
+	ret = append(ret, Test{
+		Name:        "MultipleMetadata",
+		Description: "Test sending multiple metadata entries with matching samples",
+		Opts: RequestOpts{
+			Samples: []SampleWithLabels{
+				{Labels: basicMetric("cpu_usage"), Value: 85.5},
+				{Labels: basicMetric("memory_usage"), Value: 4096000000},
+				{Labels: map[string]string{"__name__": "disk_usage", "device": "sda1"}, Value: 75.2},
+			},
+			Metadata: []MetadataWithLabels{
+				{Labels: basicMetric("cpu_usage"), Type: writev2.Metadata_METRIC_TYPE_GAUGE, Help: "CPU usage percentage", Unit: "percent"},
+				{Labels: basicMetric("memory_usage"), Type: writev2.Metadata_METRIC_TYPE_GAUGE, Help: "Memory usage in bytes", Unit: "bytes"},
+				{Labels: map[string]string{"__name__": "disk_usage", "device": "sda1"}, Type: writev2.Metadata_METRIC_TYPE_GAUGE, Help: "Disk usage percentage", Unit: "percent"},
+			},
 		},
-		requestParams{
-			samples: 1,
-		},
-		true)
-}
+		Expect:        ExpectedResponse{Samples: 3},
+		ExpectSuccess: true,
+	})
 
-// TestMultipleMetadata tests requests with multiple metadata entries attached.
-func TestMultipleMetadata(t *testing.T) {
-	// Create matching samples for each metadata
-	sample1 := SampleWithLabels{Labels: basicMetric("cpu_usage"), Value: 85.5}
-	metadata1 := MetadataWithLabels{
-		Labels: basicMetric("cpu_usage"),
-		Type:   writev2.Metadata_METRIC_TYPE_GAUGE,
-		Help:   "CPU usage percentage",
-		Unit:   "percent",
-	}
-
-	sample2 := SampleWithLabels{Labels: basicMetric("memory_usage"), Value: 4096000000}
-	metadata2 := MetadataWithLabels{
-		Labels: basicMetric("memory_usage"),
-		Type:   writev2.Metadata_METRIC_TYPE_GAUGE,
-		Help:   "Memory usage in bytes",
-		Unit:   "bytes",
-	}
-
-	sample3 := SampleWithLabels{Labels: map[string]string{"__name__": "disk_usage", "device": "sda1"}, Value: 75.2}
-	metadata3 := MetadataWithLabels{
-		Labels: map[string]string{"__name__": "disk_usage", "device": "sda1"},
-		Type:   writev2.Metadata_METRIC_TYPE_GAUGE,
-		Help:   "Disk usage percentage",
-		Unit:   "percent",
-	}
-
-	runComplianceTest(t, "", "Test sending multiple metadata entries with matching samples",
-		RequestOpts{
-			Samples:  []SampleWithLabels{sample1, sample2, sample3},
-			Metadata: []MetadataWithLabels{metadata1, metadata2, metadata3},
-		},
-		requestParams{
-			samples: 3,
-		},
-		true)
-}
-
-// TestMetadataWithComplexLabels tests requests with metadata and complex label sets attached.
-func TestMetadataWithComplexLabels(t *testing.T) {
 	histogramLabels := map[string]string{
 		"__name__": "http_request_duration_seconds",
 		"job":      "api-server",
@@ -249,34 +206,23 @@ func TestMetadataWithComplexLabels(t *testing.T) {
 		"status":   "200",
 		"endpoint": "/api/v1/users",
 	}
-
-	// Create matching histogram for the metadata.
-	histogram := HistogramWithLabels{
-		Labels:    histogramLabels,
-		Histogram: histogram(0.250, true, true, true, false, false),
-	}
-	metadata := MetadataWithLabels{
-		Labels: histogramLabels,
-		Type:   writev2.Metadata_METRIC_TYPE_HISTOGRAM,
-		Help:   "HTTP request duration in seconds",
-		Unit:   "seconds",
-	}
-
-	runComplianceTest(t, "", "Test metadata with complex label sets and matching histogram",
-		RequestOpts{
-			Histograms: []HistogramWithLabels{histogram},
-			Metadata:   []MetadataWithLabels{metadata},
+	ret = append(ret, Test{
+		Name:        "MetadataWithComplexLabels",
+		Description: "Test metadata with complex label sets and matching histogram",
+		Opts: RequestOpts{
+			Histograms: []HistogramWithLabels{{Labels: histogramLabels, Histogram: Histogram(0.250, true, true, true, false, false)}},
+			Metadata: []MetadataWithLabels{{
+				Labels: histogramLabels,
+				Type:   writev2.Metadata_METRIC_TYPE_HISTOGRAM,
+				Help:   "HTTP request duration in seconds",
+				Unit:   "seconds",
+			}},
 		},
-		requestParams{
-			histograms: 1,
-		},
-		true)
-}
+		Expect:        ExpectedResponse{Histograms: 1},
+		ExpectSuccess: true,
+	})
 
-// TestMetadataValidation tests requests with bad metadata.
-func TestMetadataValidation(t *testing.T) {
-	should(t)
-	testCases := []struct {
+	validationCases := []struct {
 		name          string
 		labels        map[string]string
 		metricType    writev2.Metadata_MetricType
@@ -307,26 +253,21 @@ func TestMetadataValidation(t *testing.T) {
 			description: "Metadata with valid metric name should be accepted",
 		},
 	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Attr("description", tc.description)
-			metadata := MetadataWithLabels{Labels: tc.labels, Type: tc.metricType, Help: "Test help", Unit: "unit"}
-
-			opts := RequestOpts{
-				Metadata:      []MetadataWithLabels{metadata},
+	for _, tc := range validationCases {
+		ret = append(ret, Test{
+			Name:        "MetadataValidation/" + tc.name,
+			Description: tc.description,
+			Opts: RequestOpts{
+				Metadata:      []MetadataWithLabels{{Labels: tc.labels, Type: tc.metricType, Help: "Test help", Unit: "unit"}},
+				Samples:       []SampleWithLabels{{Labels: tc.labels, Value: 1.0}},
 				UnsafeRequest: tc.unsafeRequest,
-			}
-
-			sample := SampleWithLabels{Labels: tc.labels, Value: 1.0}
-			opts.Samples = []SampleWithLabels{sample}
-
-			expectedParams := requestParams{
-				success: tc.success,
-				samples: 1,
-			}
-
-			runRequest(t, generateRequest(opts), expectedParams)
+			},
+			Expect:        ExpectedResponse{Samples: 1},
+			ExpectSuccess: tc.success,
+			Raw:           true,
+			RFCLevel:      ShouldLevel,
 		})
 	}
+
+	return ret
 }
