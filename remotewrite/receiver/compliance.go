@@ -45,6 +45,12 @@ func readyTimeout() time.Duration {
 // ComplianceTests returns the official Remote Write receiver compliance tests.
 func ComplianceTests() (ret []Test) {
 	ret = append(ret, metricTests()...)
+	ret = append(ret, histogramTests()...)
+	ret = append(ret, exemplarTests()...)
+	ret = append(ret, metadataTests()...)
+	ret = append(ret, combinedTests()...)
+	ret = append(ret, requestValidationTests()...)
+	ret = append(ret, rw1CompatTests()...)
 	return ret
 }
 
@@ -74,20 +80,35 @@ type ExpectedResponse struct {
 
 // Test defines a single Remote Write receiver compliance test case.
 //
-// Each Test produces a MUST sub-test that asserts basic (non-strict) compliance,
-// plus, when ExpectSuccess is true, an additional SHOULD sub-test that asserts the
-// receiver responds with exactly http.StatusNoContent.
+// By default, a Test produces a MUST sub-test that asserts basic (non-strict)
+// compliance, plus, when ExpectSuccess is true, an additional SHOULD sub-test
+// that asserts the receiver responds with exactly http.StatusNoContent. Set Raw
+// to opt out of this dual-variant generation and run the case exactly once,
+// e.g. for negative-path cases that only make sense as a single assertion.
 type Test struct {
 	// Name is a unique name for the test case; adds a "/<name>/" sub-test.
 	Name string
 	// Description describes what the test case is verifying.
 	Description string
-	// Opts is the request to send to the receiver under test.
+	// Opts is the request to send to the receiver under test, used to build the
+	// request via generateRequest unless BuildRequest is set.
 	Opts RequestOpts
+	// BuildRequest, if set, overrides Opts entirely and is called to build the
+	// request to send. Use this for requests that can't be expressed through
+	// RequestOpts, e.g. RW1-format requests or requests with deliberately
+	// corrupted bodies/headers.
+	BuildRequest func() *http.Request
 	// Expect describes the expected outcome.
 	Expect ExpectedResponse
 	// ExpectSuccess indicates whether the request as a whole is expected to succeed (2xx).
 	ExpectSuccess bool
+	// Raw, when true, runs the case as a single sub-test instead of the default
+	// MUST/SHOULD dual-variant generation.
+	Raw bool
+	// RFCLevel annotates the single sub-test produced when Raw is true. Left
+	// unset (no rfcLevel attribute) if empty, matching cases that were never
+	// individually leveled pre-conversion.
+	RFCLevel RFCLevel
 }
 
 // RunTests starts target and runs each compliance test case against it.
@@ -134,11 +155,26 @@ func RunTests(t *testing.T, target Receiver, tcs []Test) {
 	}
 }
 
-// runComplianceTest runs tc against the already-running receiver at baseURL, producing
-// both a SHOULD (strict, 204-only) sub-test for expected-success cases and a MUST
-// (basic compliance) sub-test for all cases, mirroring the pre-conversion behaviour.
+// runComplianceTest runs tc against the already-running receiver at baseURL.
+//
+// By default it produces both a SHOULD (strict, 204-only) sub-test for
+// expected-success cases and a MUST (basic compliance) sub-test for all cases,
+// mirroring the pre-conversion behaviour. When tc.Raw is set, it instead runs
+// exactly one sub-test, optionally leveled via tc.RFCLevel.
 func runComplianceTest(t *testing.T, client *http.Client, baseURL, targetName string, tc Test) {
 	t.Helper()
+
+	if tc.Raw {
+		t.Run(fmt.Sprintf("%s/%s", targetName, tc.Name), func(t *testing.T) {
+			if tc.RFCLevel != "" {
+				tc.RFCLevel.annotate(t)
+			}
+			t.Attr("description", tc.Description)
+
+			doAndValidate(t, client, baseURL, tc, tc.Expect, tc.ExpectSuccess)
+		})
+		return
+	}
 
 	if tc.ExpectSuccess {
 		t.Run(fmt.Sprintf("%s/%s returns 204", targetName, tc.Name), func(t *testing.T) {
@@ -147,7 +183,7 @@ func runComplianceTest(t *testing.T, client *http.Client, baseURL, targetName st
 
 			expect := tc.Expect
 			expect.ExactStatusCode = http.StatusNoContent
-			doAndValidate(t, client, baseURL, tc.Opts, expect, true)
+			doAndValidate(t, client, baseURL, tc, expect, true)
 		})
 	}
 
@@ -155,14 +191,19 @@ func runComplianceTest(t *testing.T, client *http.Client, baseURL, targetName st
 		MustLevel.annotate(t)
 		t.Attr("description", tc.Description)
 
-		doAndValidate(t, client, baseURL, tc.Opts, tc.Expect, tc.ExpectSuccess)
+		doAndValidate(t, client, baseURL, tc, tc.Expect, tc.ExpectSuccess)
 	})
 }
 
-func doAndValidate(t *testing.T, client *http.Client, baseURL string, opts RequestOpts, expect ExpectedResponse, expectSuccess bool) {
+func doAndValidate(t *testing.T, client *http.Client, baseURL string, tc Test, expect ExpectedResponse, expectSuccess bool) {
 	t.Helper()
 
-	req := generateRequest(opts)
+	var req *http.Request
+	if tc.BuildRequest != nil {
+		req = tc.BuildRequest()
+	} else {
+		req = generateRequest(tc.Opts)
+	}
 	req.URL = mustParseURL(t, baseURL)
 
 	resp, err := client.Do(req)

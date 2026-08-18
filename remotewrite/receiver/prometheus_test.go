@@ -33,7 +33,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/prometheus/compliance/remotewrite/receiver/next"
+	"github.com/prometheus/compliance/remotewrite/receiver"
 )
 
 const prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.11.0-rc.0/prometheus-3.11.0-rc.0.{{.OS}}-{{.Arch}}.tar.gz"

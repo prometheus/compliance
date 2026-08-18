@@ -15,12 +15,6 @@
 // test suite, so that it can be imported and run against a target Receiver
 // implementation (e.g. an in-process or subprocess Prometheus build), mirroring
 // the pattern used by the sibling package "sender".
-//
-// NOTE: this package currently lives at remotewrite/receiver/next as a staging
-// location so it doesn't collide with the existing remotewrite/receiver
-// (package main) suite while under review (see #<PR>). Once the conversion of
-// the remaining test files is complete and reviewed, this should move up to
-// remotewrite/receiver, replacing the old package main suite.
 package receiver
 
 import (

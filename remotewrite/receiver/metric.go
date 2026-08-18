@@ -31,14 +31,6 @@ var specialFloatValues = map[string]float64{
 	"-Inf":     math.Inf(-1),
 }
 
-func basicMetric(name string) map[string]string {
-	return map[string]string{"__name__": name}
-}
-
-func testJobInstanceLabels() map[string]string {
-	return map[string]string{"__name__": "up", "job": "testjob", "instance": "localhost:9090"}
-}
-
 // metricTests returns compliance tests covering single and multiple metric
 // samples with a variety of float values (including NaN/Inf) and label shapes.
 func metricTests() (ret []Test) {
@@ -148,12 +140,14 @@ func counterWithCreatedTimestampTest() Test {
 		Description: "Test counter with created timestamp set in the past",
 		Opts: RequestOpts{
 			Samples: []SampleWithLabels{{
-				Labels:           map[string]string{"__name__": "http_requests_total", "job": "api"},
-				Value:            100.0,
-				CreatedTimestamp: &createdTime,
+				Labels:         map[string]string{"__name__": "http_requests_total", "job": "api"},
+				Value:          100.0,
+				StartTimestamp: &createdTime,
 			}},
 		},
 		Expect:        ExpectedResponse{Samples: 1},
 		ExpectSuccess: true,
+		Raw:           true,
+		RFCLevel:      ShouldLevel,
 	}
 }

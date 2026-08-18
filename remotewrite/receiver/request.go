@@ -26,18 +26,18 @@ import (
 
 // SampleWithLabels describes a single float sample to send, along with its labels.
 type SampleWithLabels struct {
-	Labels           map[string]string
-	Value            float64
-	Offset           time.Duration
-	CreatedTimestamp *time.Time
+	Labels         map[string]string
+	Value          float64
+	Offset         time.Duration
+	StartTimestamp *time.Time
 }
 
 // HistogramWithLabels describes a single native histogram to send, along with its labels.
 type HistogramWithLabels struct {
-	Labels           map[string]string
-	Histogram        writev2.Histogram
-	Offset           time.Duration
-	CreatedTimestamp *time.Time
+	Labels         map[string]string
+	Histogram      writev2.Histogram
+	Offset         time.Duration
+	StartTimestamp *time.Time
 }
 
 // ExemplarWithLabels describes a single exemplar to send, along with its metric and exemplar labels.
@@ -85,8 +85,14 @@ func mapToMetric(labels map[string]string) model.Metric {
 	return metric
 }
 
+// requestTicker paces successive generateRequest calls so that requests hitting
+// the same series (e.g. table-driven cases reusing one metric name) don't collide
+// on the same millisecond timestamp, which some receivers treat as a duplicate.
+var requestTicker = time.NewTicker(10 * time.Millisecond)
+
 // generateRequest generates a snappy-compressed Remote Write v2 HTTP request from opts.
 func generateRequest(opts RequestOpts) *http.Request {
+	<-requestTicker.C
 	now := time.Now()
 
 	if !opts.UnsafeRequest {
@@ -190,17 +196,16 @@ func generateRequest(opts RequestOpts) *http.Request {
 			}
 		}
 
+		sample := writev2.Sample{Timestamp: now.Add(s.Offset).UnixMilli(), Value: s.Value}
+		if s.StartTimestamp != nil {
+			sample.StartTimestamp = s.StartTimestamp.UnixMilli()
+		}
+
 		ts := writev2.TimeSeries{
 			LabelsRefs: labelRefs,
-			Samples: []writev2.Sample{
-				{Timestamp: now.Add(s.Offset).UnixMilli(), Value: s.Value},
-			},
-			Exemplars: sampleExemplars,
+			Samples:    []writev2.Sample{sample},
+			Exemplars:  sampleExemplars,
 		}
-		// NOTE: CreatedTimestamp (start-timestamp) is not wired into the request yet:
-		// the pinned github.com/prometheus/prometheus version predates writev2.TimeSeries
-		// start-timestamp support. A dependency bump (already tracked via dependabot) is
-		// a prerequisite for CounterWithCreatedTimestamp-style tests to be meaningful.
 		if metricName := s.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
 			if metadata, found := metadataByName[metricName]; found {
 				ts.Metadata = metadata
@@ -223,6 +228,9 @@ func generateRequest(opts RequestOpts) *http.Request {
 
 		hist := hw.Histogram
 		hist.Timestamp = now.Add(hw.Offset).UnixMilli()
+		if hw.StartTimestamp != nil {
+			hist.StartTimestamp = hw.StartTimestamp.UnixMilli()
+		}
 
 		var histogramExemplars []writev2.Exemplar
 		seriesKey := mapToMetric(hw.Labels).String()
