@@ -11,14 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"testing"
 )
 
 // TestHistogramEncoding validates native histogram encoding.
-func TestHistogramEncoding(t *testing.T) {
+func TestHistogramEncoding_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "native_histogram_structure",
@@ -35,7 +37,7 @@ test_histogram_bucket{le="+Inf"} 10
 				// Note: This is a classic histogram, not native histogram.
 				// Native histograms use exponential buckets notation.
 				// For classic histograms, senders typically send as multiple timeseries.
-				classicFound, nativeTS := findHistogramData(req, "test_histogram")
+				classicFound, nativeTS := findHistogramData(req.Request, "test_histogram")
 				must(t).True(classicFound || nativeTS != nil,
 					"Histogram data must be present (either as count/sum/bucket or native format)")
 			},
@@ -50,7 +52,7 @@ test_histogram_sum 250.5
 test_histogram_bucket{le="+Inf"} 100
 `,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				count, found := extractHistogramCount(req, "test_histogram")
+				count, found := extractHistogramCount(req.Request, "test_histogram")
 				may(t, found, "Histogram count should be present in some form")
 				if found {
 					must(t).Equal(100.0, count, "Histogram count value must be correct")
@@ -67,7 +69,7 @@ test_histogram_sum 250.5
 test_histogram_bucket{le="+Inf"} 100
 `,
 			Validator: func(t *testing.T, req *CapturedRequest) {
-				sum, found := extractHistogramSum(req, "test_histogram")
+				sum, found := extractHistogramSum(req.Request, "test_histogram")
 				may(t, found, "Histogram sum should be present in some form")
 				if found {
 					must(t).Equal(250.5, sum, "Histogram sum value must be correct")

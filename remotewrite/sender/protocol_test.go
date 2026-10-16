@@ -11,18 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
 	"strings"
 	"testing"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestProtocolCompliance validates HTTP protocol requirements for Remote Write 2.0 senders.
-func TestProtocolCompliance(t *testing.T) {
+func TestProtocolCompliance_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "content_type_protobuf",
@@ -130,11 +130,13 @@ func TestProtocolCompliance(t *testing.T) {
 }
 
 // TestHTTPMethod validates that senders use POST method for remote write.
-func TestHTTPMethod(t *testing.T) {
+func TestHTTPMethod_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "MUST")
 	t.Attr("description", "Sender MUST use POST method for remote write requests")
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: "test_metric 42\n",
 			Validator: func(t *testing.T, req *CapturedRequest) {

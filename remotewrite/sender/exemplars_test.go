@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
@@ -19,7 +19,9 @@ import (
 )
 
 // TestExemplarEncoding validates exemplar encoding in Remote Write 2.0.
-func TestExemplarEncoding(t *testing.T) {
+func TestExemplarEncoding_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "exemplar_with_trace_id",

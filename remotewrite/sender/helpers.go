@@ -11,25 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/golang/snappy"
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
+	writev1 "github.com/prometheus/prometheus/prompb"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
 
 // CapturedRequest represents a captured HTTP request from a sender.
+// DEPRECATED: To kill, use sendertest.
 type CapturedRequest struct {
 	Headers http.Header
 	Body    []byte
@@ -37,6 +38,7 @@ type CapturedRequest struct {
 }
 
 // MockReceiver is an HTTP server that captures remote write requests.
+// DEPRECATED: To kill, use sendertest.
 type MockReceiver struct {
 	server   *httptest.Server
 	mu       sync.Mutex
@@ -45,6 +47,7 @@ type MockReceiver struct {
 }
 
 // MockReceiverResponse configures the response behavior of the mock receiver.
+// DEPRECATED: To kill, use sendertest.
 type MockReceiverResponse struct {
 	StatusCode        int
 	Headers           map[string]string
@@ -55,6 +58,7 @@ type MockReceiverResponse struct {
 }
 
 // NewMockReceiver creates a new mock HTTP receiver for testing senders.
+// DEPRECATED: To kill, use sendertest.
 func NewMockReceiver() *MockReceiver {
 	mr := &MockReceiver{
 		requests: make([]CapturedRequest, 0),
@@ -133,7 +137,7 @@ func (mr *MockReceiver) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(mr.response.StatusCode)
 	if mr.response.Body != "" {
-		w.Write([]byte(mr.response.Body))
+		_, _ = w.Write([]byte(mr.response.Body))
 	}
 }
 
@@ -178,26 +182,8 @@ func (mr *MockReceiver) SetResponse(resp MockReceiverResponse) {
 	mr.response = resp
 }
 
-// WaitForRequests waits for at least n requests to be captured, with configurable timeout.
-// Polls every 100ms. Returns all captured requests.
-func (mr *MockReceiver) WaitForRequests(n int, timeout time.Duration) []CapturedRequest {
-	deadline := time.Now().Add(timeout)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for time.Now().Before(deadline) {
-		requests := mr.GetRequests()
-		if len(requests) >= n {
-			return requests
-		}
-		<-ticker.C
-	}
-
-	// Return whatever we got on timeout
-	return mr.GetRequests()
-}
-
 // MockScrapeTarget is an HTTP server that serves metrics in Prometheus format.
+// DEPRECATED: To kill, use sendertest.
 type MockScrapeTarget struct {
 	server  *httptest.Server
 	mu      sync.Mutex
@@ -229,14 +215,14 @@ func (mst *MockScrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request
 		}
 		w.Header().Set("Content-Type", contentType)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(metrics))
+		_, _ = w.Write([]byte(metrics))
 		return
 	}
 
 	// Normal text format for non-exemplar metrics.
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(metrics))
+	_, _ = w.Write([]byte(metrics))
 }
 
 // URL returns the URL of the mock scrape target.
@@ -308,6 +294,7 @@ func extractExemplarLabels(ex *writev2.Exemplar, symbols []string) map[string]st
 
 // must marks a test as having a "MUST" RFC compliance level.
 // Tests marked with must() will fail on assertion failures.
+// DEPRECATED: To kill, use sendertest.
 func must(t *testing.T) *require.Assertions {
 	t.Helper()
 	t.Attr("rfcLevel", "MUST")
@@ -315,6 +302,7 @@ func must(t *testing.T) *require.Assertions {
 }
 
 // should marks a test as having a "SHOULD" RFC compliance level.
+// DEPRECATED: To kill, use sendertest.
 func should(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "SHOULD")
@@ -324,6 +312,7 @@ func should(t *testing.T, condition bool, msg string) {
 }
 
 // may marks a test as having a "MAY" RFC compliance level.
+// DEPRECATED: To kill, use sendertest.
 func may(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "MAY")
@@ -333,6 +322,7 @@ func may(t *testing.T, condition bool, msg string) {
 }
 
 // recommended marks a test as having an "RECOMMENDED" compliance level.
+// DEPRECATED: To kill, use sendertest.
 func recommended(t *testing.T, condition bool, msg string) {
 	t.Helper()
 	t.Attr("rfcLevel", "RECOMMENDED")
@@ -341,13 +331,10 @@ func recommended(t *testing.T, condition bool, msg string) {
 	}
 }
 
-// isSorted checks if labels are sorted lexicographically.
-func isSorted(labels map[string]string, symbols []string, refs []uint32) bool {
+// isSorted checks if label names are sorted lexicographically.
+func isSorted(symbols []string, refs []uint32) bool {
 	var prevKey string
 	for i := 0; i < len(refs); i += 2 {
-		if i+1 >= len(refs) {
-			break
-		}
 		keyRef := refs[i]
 		if int(keyRef) >= len(symbols) {
 			return false
@@ -361,6 +348,23 @@ func isSorted(labels map[string]string, symbols []string, refs []uint32) bool {
 	return true
 }
 
+// isSortedRW1 checks if label names are sorted lexicographically.
+func isSortedRW1(labels []writev1.Label) bool {
+	return sort.SliceIsSorted(labels, func(i, j int) bool {
+		return strings.Compare(labels[i].Name, labels[j].Name) < 0
+	})
+}
+
+func TestIsSorted(t *testing.T) {
+	symbols := []string{"", "a", "c", "b", "x", "__name__"}
+	require.True(t, isSorted(symbols, []uint32{5, 1, 1, 1, 3, 1, 2, 1, 4, 1}))
+	require.False(t, isSorted(symbols, []uint32{5, 1, 1, 1, 2, 1, 3, 1, 4, 1}))
+
+	require.True(t, isSortedRW1([]writev1.Label{{Name: "__name__"}, {Name: "a"}, {Name: "b"}, {Name: "c"}}))
+	require.False(t, isSortedRW1([]writev1.Label{{Name: "__name__"}, {Name: "a"}, {Name: "x"}, {Name: "c"}}))
+	require.False(t, isSortedRW1([]writev1.Label{{Name: "a"}, {Name: "b"}, {Name: "c"}, {Name: "__name__"}}))
+}
+
 // containsExemplars checks if the metrics string contains exemplar annotations.
 // Exemplars in OpenMetrics format are indicated by "# {" after a metric value.
 func containsExemplars(metrics string) bool {
@@ -368,6 +372,7 @@ func containsExemplars(metrics string) bool {
 }
 
 // TestCase represents a single test case for compliance testing.
+// DEPRECATED: To kill, use sendertest.
 type TestCase struct {
 	Name        string
 	Description string
@@ -377,51 +382,72 @@ type TestCase struct {
 }
 
 // runTestCases is a helper that eliminates the common test table runner pattern.
+// DEPRECATED: To kill, use sendertest.
 func runTestCases(t *testing.T, tests []TestCase) {
 	for _, tt := range tests {
 		t.Run(tt.Name, func(t *testing.T) {
 			t.Parallel()
 			t.Attr("rfcLevel", tt.RFCLevel)
 			t.Attr("description", tt.Description)
-
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
-				runSenderTest(t, targetName, target, SenderTestScenario{
-					ScrapeData: tt.ScrapeData,
-					Validator:  tt.Validator,
-				})
-			})
 		})
 	}
 }
 
-// findTimeseriesByMetricName finds a timeseries by metric name from a captured request.
-func findTimeseriesByMetricName(req *CapturedRequest, metricName string) (*writev2.TimeSeries, map[string]string) {
-	for i := range req.Request.Timeseries {
-		ts := &req.Request.Timeseries[i]
-		labels := extractLabels(ts, req.Request.Symbols)
-		if labels["__name__"] == metricName {
-			return ts, labels
+type timeseriesResult struct {
+	TimeSeries *writev2.TimeSeries
+	Labels     map[string]string
+}
+
+func flattenTimeseriesResult(t testing.TB, results []timeseriesResult) (ret timeseriesResult) {
+	require.NotEmpty(t, results)
+
+	var lbls map[string]string
+	for _, r := range results {
+		if lbls == nil {
+			lbls = r.Labels
+		} else {
+			require.Equal(t, lbls, r.Labels, "found two different series with the same name; expected same series")
+		}
+		if ret.TimeSeries == nil {
+			ret.TimeSeries = r.TimeSeries
+		} else {
+			ret.TimeSeries.Samples = append(ret.TimeSeries.Samples, r.TimeSeries.Samples...)
+			ret.TimeSeries.Histograms = append(ret.TimeSeries.Histograms, r.TimeSeries.Histograms...)
+			ret.TimeSeries.Exemplars = append(ret.TimeSeries.Exemplars, r.TimeSeries.Exemplars...)
 		}
 	}
-	return nil, nil
+	return ret
+}
+
+// findTimeseriesByMetricName finds a timeseries by metric name from a captured request.
+func findTimeseriesByMetricName(req *writev2.Request, metricName string) []timeseriesResult {
+	var results []timeseriesResult
+	for i := range req.Timeseries {
+		ts := &req.Timeseries[i]
+		labels := extractLabels(ts, req.Symbols)
+		if labels["__name__"] == metricName {
+			results = append(results, timeseriesResult{TimeSeries: ts, Labels: labels})
+		}
+	}
+	return results
 }
 
 // requireTimeseriesByMetricName finds a timeseries by metric name and fails the test if not found.
-func requireTimeseriesByMetricName(t *testing.T, req *CapturedRequest, metricName string) (*writev2.TimeSeries, map[string]string) {
+func requireTimeseriesByMetricName(t *testing.T, req *writev2.Request, metricName string) []timeseriesResult {
 	t.Helper()
-	ts, labels := findTimeseriesByMetricName(req, metricName)
-	must(t).NotNil(ts, "Timeseries with metric name %q must be present", metricName)
-	return ts, labels
+	results := findTimeseriesByMetricName(req, metricName)
+	require.NotEmpty(t, results, "Timeseries with metric name %q must be present", metricName)
+	return results
 }
 
 // findHistogramData attempts to find histogram data in both classic and native formats.
 // Returns (classicFound, nativeTS) where:
 //   - classicFound: true if classic histogram metrics (_count, _sum, _bucket) are found
 //   - nativeTS: pointer to timeseries containing native histogram, or nil if not found
-func findHistogramData(req *CapturedRequest, baseName string) (classicFound bool, nativeTS *writev2.TimeSeries) {
-	for i := range req.Request.Timeseries {
-		ts := &req.Request.Timeseries[i]
-		labels := extractLabels(ts, req.Request.Symbols)
+func findHistogramData(req *writev2.Request, baseName string) (classicFound bool, nativeTS *writev2.TimeSeries) {
+	for i := range req.Timeseries {
+		ts := &req.Timeseries[i]
+		labels := extractLabels(ts, req.Symbols)
 		metricName := labels["__name__"]
 
 		// Check for classic histogram components.
@@ -439,17 +465,17 @@ func findHistogramData(req *CapturedRequest, baseName string) (classicFound bool
 
 // extractHistogramCount extracts count from either classic or native histogram format.
 // Returns (count, found) where found indicates if count was successfully extracted.
-func extractHistogramCount(req *CapturedRequest, baseName string) (float64, bool) {
+func extractHistogramCount(req *writev2.Request, baseName string) (float64, bool) {
 	// Try classic format first.
-	ts, _ := findTimeseriesByMetricName(req, baseName+"_count")
-	if ts != nil && len(ts.Samples) > 0 {
-		return ts.Samples[0].Value, true
+	results := findTimeseriesByMetricName(req, baseName+"_count")
+	if len(results) > 0 && len(results[0].TimeSeries.Samples) > 0 {
+		return results[0].TimeSeries.Samples[0].Value, true
 	}
 
 	// Try native format.
-	ts, _ = findTimeseriesByMetricName(req, baseName)
-	if ts != nil && len(ts.Histograms) > 0 {
-		hist := ts.Histograms[0]
+	results = findTimeseriesByMetricName(req, baseName)
+	if len(results) > 0 && len(results[0].TimeSeries.Histograms) > 0 {
+		hist := results[0].TimeSeries.Histograms[0]
 		if hist.Count != nil {
 			if countInt, ok := hist.Count.(*writev2.Histogram_CountInt); ok {
 				return float64(countInt.CountInt), true
@@ -463,17 +489,17 @@ func extractHistogramCount(req *CapturedRequest, baseName string) (float64, bool
 }
 
 // extractHistogramSum extracts sum from either classic or native histogram format.
-func extractHistogramSum(req *CapturedRequest, baseName string) (float64, bool) {
+func extractHistogramSum(req *writev2.Request, baseName string) (float64, bool) {
 	// Try classic format first.
-	ts, _ := findTimeseriesByMetricName(req, baseName+"_sum")
-	if ts != nil && len(ts.Samples) > 0 {
-		return ts.Samples[0].Value, true
+	results := findTimeseriesByMetricName(req, baseName+"_sum")
+	if len(results) > 0 && len(results[0].TimeSeries.Samples) > 0 {
+		return results[0].TimeSeries.Samples[0].Value, true
 	}
 
 	// Try native format.
-	ts, _ = findTimeseriesByMetricName(req, baseName)
-	if ts != nil && len(ts.Histograms) > 0 {
-		return ts.Histograms[0].Sum, true
+	results = findTimeseriesByMetricName(req, baseName)
+	if len(results) > 0 && len(results[0].TimeSeries.Histograms) > 0 {
+		return results[0].TimeSeries.Histograms[0].Sum, true
 	}
 
 	return 0, false

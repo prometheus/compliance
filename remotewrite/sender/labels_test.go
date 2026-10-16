@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
@@ -19,8 +19,26 @@ import (
 	"testing"
 )
 
+/*
+TODO later
+{
+					Name:        "job_instance_labels_present",
+					Description: "Sender SHOULD include job and instance labels in samples",
+					RFCLevel:    ShouldLevel,
+					Validate: func(t *testing.T, res ReceiverResult) {
+						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_float")
+						require.Len(t, results, 1, "Should receive exactly one timeseries for test_float")
+						labels := results[0].Labels
+						require.NotEmpty(t, labels["job"], "Sample should include 'job' label")
+						require.NotEmpty(t, labels["instance"], "Sample should include 'instance' label")
+					},
+				},
+*/
+
 // TestLabelValidation validates label encoding and formatting.
-func TestLabelValidation(t *testing.T) {
+func TestLabelValidation_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "label_lexicographic_ordering",
@@ -32,7 +50,7 @@ func TestLabelValidation(t *testing.T) {
 				for _, ts := range req.Request.Timeseries {
 					labels := extractLabels(&ts, req.Request.Symbols)
 					if labels["__name__"] == "test_metric" {
-						must(t).True(isSorted(labels, req.Request.Symbols, ts.LabelsRefs),
+						must(t).True(isSorted(req.Request.Symbols, ts.LabelsRefs),
 							"Labels must be sorted in lexicographic order")
 						break
 					}

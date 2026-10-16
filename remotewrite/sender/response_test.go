@@ -11,19 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestResponseProcessing validates sender response header processing.
-func TestResponseProcessing(t *testing.T) {
+func TestResponseProcessing_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []struct {
 		name        string
 		description string
@@ -223,7 +222,7 @@ sample_3 3
 			t.Attr("rfcLevel", tt.rfcLevel)
 			t.Attr("description", tt.description)
 
-			forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+			forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 				receiver := NewMockReceiver()
 				defer receiver.Close()
 
@@ -234,15 +233,7 @@ sample_3 3
 
 				t.Logf("Running %s with scrape target %s and receiver %s", targetName, scrapeTarget.URL(), receiver.URL())
 
-				err := target(targets.TargetOptions{
-					ScrapeTarget:    scrapeTarget.URL(),
-					ReceiveEndpoint: receiver.URL(),
-					Timeout:         8 * time.Second,
-				})
-
-				if err != nil {
-					t.Logf("Target exited with error (may be expected): %v", err)
-				}
+				t.Fatal("was creating target here; to remove")
 
 				requests := receiver.GetRequests()
 				tt.validator(t, requests)
@@ -252,13 +243,15 @@ sample_3 3
 }
 
 // TestContentTypeNegotiation validates content-type handling.
-func TestContentTypeNegotiation(t *testing.T) {
+func TestContentTypeNegotiation_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "SHOULD")
 	t.Attr("description", "Sender SHOULD handle content-type negotiation")
 
 	scrapeData := "test_metric 42\n"
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		receiver := NewMockReceiver()
 		defer receiver.Close()
 
@@ -272,15 +265,7 @@ func TestContentTypeNegotiation(t *testing.T) {
 		scrapeTarget := NewMockScrapeTarget(scrapeData)
 		defer scrapeTarget.Close()
 
-		err := target(targets.TargetOptions{
-			ScrapeTarget:    scrapeTarget.URL(),
-			ReceiveEndpoint: receiver.URL(),
-			Timeout:         10 * time.Second,
-		})
-
-		if err != nil {
-			t.Fatalf("Target failed: %v", err)
-		}
+		t.Fatal("was creating target here; to remove")
 
 		requests := receiver.GetRequests()
 		should(t, len(requests) >= 1, "Should send at least one request")

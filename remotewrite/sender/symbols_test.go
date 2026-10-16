@@ -11,17 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package sender
 
 import (
 	"fmt"
 	"testing"
-
-	"github.com/prometheus/compliance/remotewrite/sender/targets"
 )
 
 // TestSymbolTable validates symbol table requirements for Remote Write 2.0.
-func TestSymbolTable(t *testing.T) {
+func TestSymbolTable_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	tests := []TestCase{
 		{
 			Name:        "empty_string_at_index_zero",
@@ -105,7 +105,9 @@ another_metric{foo="bar"} 3
 }
 
 // TestSymbolTableEfficiency validates that symbol tables are efficiently constructed.
-func TestSymbolTableEfficiency(t *testing.T) {
+func TestSymbolTableEfficiency_Old(t *testing.T) {
+	t.Skip("TODO: Revise and move to a new framework")
+
 	t.Attr("rfcLevel", "RECOMMENDED")
 	t.Attr("description", "Symbol table should be efficiently constructed with good compression")
 
@@ -116,7 +118,7 @@ http_requests_total{method="GET",status="404",handler="/api/v1"} 10
 http_requests_total{method="GET",status="200",handler="/api/v2"} 75
 `
 
-	forEachSender(t, func(t *testing.T, targetName string, target targets.Target) {
+	forEachSender(t, func(t *testing.T, targetName string, target Sender) {
 		runSenderTest(t, targetName, target, SenderTestScenario{
 			ScrapeData: scrapeData,
 			Validator: func(t *testing.T, req *CapturedRequest) {
