@@ -14,6 +14,7 @@
 package sender
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"slices"
@@ -159,7 +160,7 @@ test_counter_total 103.13 %v
 				ts := flattenTimeseriesResult(t, results)
 				require.GreaterOrEqual(t, len(ts.TimeSeries.Samples), 3)
 				require.True(t, slices.IsSortedFunc(ts.TimeSeries.Samples, func(a, b writev2.Sample) int {
-					return int(a.T() - b.T())
+					return cmp.Compare(a.T(), b.T())
 				}))
 			},
 		},
