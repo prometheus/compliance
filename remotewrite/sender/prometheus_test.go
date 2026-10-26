@@ -86,11 +86,12 @@ func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
 	if err != nil {
 		return err
 	}
+	defer os.RemoveAll(dir)
+
 	configFile := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(configFile, buf.Bytes(), 0o600); err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
 
 	return sender.RunCommand(ctx, ".", nil,
 		binary,
