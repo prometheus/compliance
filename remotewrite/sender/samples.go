@@ -95,20 +95,6 @@ test_gauge_with_ts 2 %v
 						}
 					},
 				},
-				// TODO(bwplotka): Make it work, somehow OM parser kills test_gauge_with_ts metric with no log.
-				//{
-				//	Name:        "explicit_timestamp",
-				//	Description: "Sample with the explicit timestamp work",
-				//	RFCLevel:    sendertest.RecommendedLevel, // Prometheus spec, not Remote Write.
-				//	Validate: func(t *testing.T, res sendertest.ReceiverResult) {
-				//		results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_gauge_with_ts")
-				//		require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_gauge_with_ts")
-				//		tts := results[0].TimeSeries
-				//		require.NotEmpty(t, ts.Samples, "Timeseries test_gauge_with_ts must contain samples")
-				//		require.Len(t, ts.Samples, 1, "Timeseries test_gauge_with_ts must contain a single sample")
-				//		require.Equal(t, timestamp.FromTime(explicitTS), ts.Samples[0].Timestamp)
-				//	},
-				//},
 				{
 					Name:        "start_timestamp for counters",
 					Description: "Sample SHOULD have start timestamp for a counter",
