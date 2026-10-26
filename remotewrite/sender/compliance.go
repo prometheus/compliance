@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -241,7 +242,7 @@ func safeRun(t *testing.T, name, target, desc string, rfc RFCLevel, f func(t *te
 			// Only capture panics on non-debug. When debugging, it's useful to know the exact trace.
 			defer func() {
 				if val := recover(); val != nil {
-					t.Fatal("test panicked:", val)
+					t.Fatalf("test panicked: %v\n%s", val, debug.Stack())
 				}
 			}()
 		}
