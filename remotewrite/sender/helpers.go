@@ -73,16 +73,6 @@ func isSortedRW1(labels []writev1.Label) bool {
 	})
 }
 
-func TestIsSorted(t *testing.T) {
-	symbols := []string{"", "a", "c", "b", "x", "__name__"}
-	require.True(t, isSorted(symbols, []uint32{5, 1, 1, 1, 3, 1, 2, 1, 4, 1}))
-	require.False(t, isSorted(symbols, []uint32{5, 1, 1, 1, 2, 1, 3, 1, 4, 1}))
-
-	require.True(t, isSortedRW1([]writev1.Label{{Name: "__name__"}, {Name: "a"}, {Name: "b"}, {Name: "c"}}))
-	require.False(t, isSortedRW1([]writev1.Label{{Name: "__name__"}, {Name: "a"}, {Name: "x"}, {Name: "c"}}))
-	require.False(t, isSortedRW1([]writev1.Label{{Name: "a"}, {Name: "b"}, {Name: "c"}, {Name: "__name__"}}))
-}
-
 type timeseriesResult struct {
 	TimeSeries *writev2.TimeSeries
 	Labels     map[string]string
