@@ -66,8 +66,8 @@ test_gauge_with_ts 2 %v
 			),
 			Version: remote.WriteV2MessageType,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				require.GreaterOrEqual(t, len(res.Requests), 1, "Should receive at least 6 timeseries")
-				require.Greater(t, len(res.Requests[0].RW2.Timeseries), 6, "Request must contain at least 6 timeseries")
+				require.GreaterOrEqual(t, len(res.Requests), 1, "Should receive at least 1 request")
+				require.GreaterOrEqual(t, len(res.Requests[0].RW2.Timeseries), 6, "Request must contain at least 6 timeseries")
 			},
 			ValidateCases: []ValidateCase{
 				{
