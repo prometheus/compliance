@@ -294,6 +294,7 @@ test_precision 0.123456789012345
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_precision")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_precision")
 						require.NotEmpty(t, results[0].TimeSeries.Samples, "Timeseries must contain samples")
+						require.Equal(t, 0.123456789012345, results[0].TimeSeries.Samples[0].Value, "Float precision must be preserved")
 					},
 				},
 			},
