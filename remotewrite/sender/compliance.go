@@ -166,9 +166,9 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 			t.Fatalf("unsupported remote write message type: %v", tc.Version)
 		}
 
-		t.Attr("version", protoMsgName)
 		t.Run(fmt.Sprintf("%v/%v/%s", sender.Name(), tc.Name, protoMsgName), func(t *testing.T) {
 			t.Parallel()
+			t.Attr("version", protoMsgName)
 
 			if len(tc.TestResponses) == 0 {
 				tc.TestResponses = []ReceiverResponse{{}} // By default assume a single successful response.
