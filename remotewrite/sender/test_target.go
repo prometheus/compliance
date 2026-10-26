@@ -64,8 +64,7 @@ func RunCommand(ctx context.Context, dir string, extraEnvVars []string, prog str
 		return err
 	}
 
-	cmdStopped := make(chan error)
-	defer close(cmdStopped)
+	cmdStopped := make(chan error, 1)
 	go func() {
 		cmdStopped <- cmd.Wait()
 	}()
