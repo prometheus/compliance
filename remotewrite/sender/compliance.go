@@ -446,6 +446,7 @@ func (r *receiver) Result() ReceiverResult {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return ReceiverResult{
+		Version:  r.msg,
 		Requests: append([]ReceiverRequest{}, r.requests...),
 	}
 }
