@@ -47,13 +47,9 @@ type Options struct {
 //
 // This is useful when starting process-based sender targets.
 func RunCommand(ctx context.Context, dir string, extraEnvVars []string, prog string, args ...string) error {
-	output := io.Discard
-	// Suppress output to avoid cluttering test results.
-	suppressOutput := os.Getenv("DEBUG") == ""
-	if suppressOutput {
+	var output io.Writer = os.Stdout
+	if os.Getenv("DEBUG") == "" {
 		output = io.Discard
-	} else {
-		output = os.Stdout
 	}
 
 	cmd := exec.Command(prog, args...)
