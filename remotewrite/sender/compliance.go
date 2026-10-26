@@ -340,6 +340,12 @@ func (r *receiver) handleSyncRequest(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		r.requests = append(r.requests, got)
 		r.debugLogf("sendertest.Receiver: got %#v request; got/expected %v/%v", got, len(r.requests), len(r.responses))
+		if len(r.requests) >= len(r.responses) {
+			// Achieved the goal.
+			r.closeCh <- struct{}{}
+			r.closed = true
+			r.debugLogf("sendertest.Receiver: got all expected %v requests; closing...", len(r.requests))
+		}
 	}()
 
 	got.Body, err = io.ReadAll(req.Body)
@@ -379,13 +385,6 @@ func (r *receiver) handleSyncRequest(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		got.RW2 = &rw2
-	}
-
-	if len(r.requests)+1 >= len(r.responses) {
-		// Achieved the goal.
-		r.closeCh <- struct{}{}
-		r.closed = true
-		r.debugLogf("sendertest.Receiver: got all expected %v requests; closing...", len(r.requests)+1)
 	}
 
 	// Fetch the response to send, based on the test case.
