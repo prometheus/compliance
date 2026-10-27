@@ -15,3 +15,6 @@
 # vendor/
 
 /promql-compliance-tester
+bin/
+results.json
+index.preloaded.html
