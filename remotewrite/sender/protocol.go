@@ -65,6 +65,7 @@ func protocolTests(mode Mode) []Test {
 					require.NotEmpty(t, req.Body, "Request body must not be empty")
 					require.False(t, bytes.HasPrefix(req.Body, snappyFramedHeader), "Sender MUST use Snappy block format, not framed format")
 					require.NotNil(t, req.RW2, "Request body MUST decode into io.prometheus.write.v2.Request")
+					require.NotEmpty(t, req.RW2.Timeseries, "Decoded io.prometheus.write.v2.Request MUST contain timeseries")
 				}
 			},
 		},
