@@ -22,4 +22,6 @@ import (
 // TestCompliance runs all tests in this compliance suite against prometheus{}
 func TestCompliance(t *testing.T) {
 	sender.RunTests(t, prometheus{}, sender.ComplianceTests())
+	sender.RunTests(t, prometheus{}, sender.StatelessComplianceTests())
+	sender.RunTests(t, prometheus{}, sender.StatelessSTComplianceTests())
 }

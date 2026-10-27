@@ -33,8 +33,11 @@ func labelsTests() []Test {
 			Name:        "labels",
 			Description: "Senders MUST send complete, valid, and lexicographically sorted label sets",
 			RFCLevel:    MustLevel,
-			ScrapeData: `test_ordering{zzz="3",aaa="1",bbb="2"} 42
+			ScrapeData: `# TYPE test_ordering gauge
+test_ordering{zzz="3",aaa="1",bbb="2"} 42
+# TYPE valid_metric:subsystem_total gauge
 valid_metric:subsystem_total{valid_label="value",another_1="val2",empty=""} 10
+# TYPE unicode_metric gauge
 unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux"} 7
 `,
 			Version: remote.WriteV2MessageType,

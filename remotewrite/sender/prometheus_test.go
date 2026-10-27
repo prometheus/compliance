@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -35,7 +36,9 @@ import (
 )
 
 const (
-	prometheusDownloadURL = "https://github.com/prometheus/prometheus/releases/download/v3.11.0-rc.0/prometheus-3.11.0-rc.0.{{.OS}}-{{.Arch}}.tar.gz"
+	// TODO(bwplotka): Switch back to prometheusDownloadURL once a Prometheus release includes https://github.com/prometheus/prometheus/pull/20098.
+	prometheusDownloadURL = ""
+	prometheusGitRef      = "6f22682586f217ba0e1172f8111a61db47179798" // https://github.com/prometheus/prometheus/pull/20098
 	scrapeConfigTemplate  = `
 global:
   scrape_interval: 1s
@@ -43,6 +46,9 @@ global:
 remote_write:
   - url: "{{.RemoteWriteEndpointURL}}"
     protobuf_message: "{{.RemoteWriteMessage}}"
+{{- if .RemoteWriteMode}}
+    mode: "{{.RemoteWriteMode}}"
+{{- end}}
     send_exemplars: true
     send_native_histograms: true
     queue_config:
@@ -54,6 +60,9 @@ scrape_configs:
   - job_name: "{{.ScrapeTargetJobName}}"
     scrape_interval: 1s
     scrape_native_histograms: true
+{{- if .RemoteWriteMode}}
+    convert_classic_histograms_to_nhcb: true
+{{- end}}
     scrape_protocols:
       - PrometheusProto
       - OpenMetricsText1.0.0
@@ -71,11 +80,11 @@ func (p prometheus) Name() string { return "prometheus" }
 
 // Run runs a Prometheus process for a test target options, until ctx is done.
 //
-// It auto-downloads Prometheus binary from the official release URL (see prometheusDownloadURL).
+// It auto-downloads or builds the Prometheus binary (see prometheusDownloadURL and prometheusGitRef).
 // TODO(bwplotka): Process based runners are prone to leaking processes; add docker runner and/or figure out cleanup.
 // Manually this could be done with 'killall -m "prometheus-3." -kill'.
 func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
-	binary, err := downloadBinary(prometheusDownloadURL, "prometheus")
+	binary, err := getPrometheusBinary()
 	if err != nil {
 		return err
 	}
@@ -107,6 +116,62 @@ func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
 var _ sender.Sender = prometheus{}
 
 var downloadMtx sync.Mutex
+
+func getPrometheusBinary() (string, error) {
+	if prometheusDownloadURL != "" {
+		return downloadBinary(prometheusDownloadURL, "prometheus")
+	}
+	return buildPrometheusBinary(prometheusGitRef)
+}
+
+func buildPrometheusBinary(gitRef string) (string, error) {
+	downloadMtx.Lock()
+	defer downloadMtx.Unlock()
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	binDir := filepath.Join(cwd, "bin")
+	shortRef := gitRef
+	if len(shortRef) > 12 {
+		shortRef = shortRef[:12]
+	}
+	filename := filepath.Join(binDir, fmt.Sprintf("prometheus-%s", shortRef))
+	if _, err := os.Stat(filename); !os.IsNotExist(err) {
+		return filename, nil
+	}
+
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		return "", err
+	}
+
+	tmpBinDir, err := os.MkdirTemp(binDir, "build-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmpBinDir)
+
+	pkg := fmt.Sprintf("github.com/prometheus/prometheus/cmd/prometheus@%s", gitRef)
+	fmt.Println("Building", pkg)
+	cmd := exec.Command("go", "install", pkg)
+	cmd.Env = append(os.Environ(), "GOBIN="+tmpBinDir, "GOTOOLCHAIN=auto")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("failed to build %s: %w\n%s", pkg, err, string(out))
+	}
+
+	builtBin := filepath.Join(tmpBinDir, "prometheus")
+	if runtime.GOOS == "windows" {
+		builtBin += ".exe"
+	}
+	if err := os.Rename(builtBin, filename); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(filename, 0o744); err != nil {
+		return "", err
+	}
+	return filename, nil
+}
 
 func downloadBinary(urlPattern string, filenameInArchivePattern string) (string, error) {
 	downloadMtx.Lock()

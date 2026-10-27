@@ -26,14 +26,18 @@ func symbolsTests() []Test {
 			Name:        "symbols",
 			Description: "Senders MUST provide a valid, deduplicated symbol table starting with an empty string",
 			RFCLevel:    MustLevel,
-			ScrapeData: `# HELP http_requests_total Total HTTP requests
-# TYPE http_requests_total counter
+			ScrapeData: `# HELP http_requests Total HTTP requests
+# TYPE http_requests counter
 http_requests_total{method="GET",status="200",handler="/api/v1"} 100 # {trace_id="abc123"} 1 1234567890.0
+http_requests_created{method="GET",status="200",handler="/api/v1"} 1000.0
 http_requests_total{method="POST",status="200",handler="/api/v1"} 50
+http_requests_created{method="POST",status="200",handler="/api/v1"} 1000.0
 http_requests_total{method="GET",status="404",handler="/api/v1"} 10
-# HELP http_errors_total Total HTTP errors
-# TYPE http_errors_total counter
+http_requests_created{method="GET",status="404",handler="/api/v1"} 1000.0
+# HELP http_errors Total HTTP errors
+# TYPE http_errors counter
 http_errors_total{method="GET",status="500",handler="/api/v1"} 5
+http_errors_created{method="GET",status="500",handler="/api/v1"} 1000.0
 `,
 			Version: remote.WriteV2MessageType,
 			Validate: func(t *testing.T, res ReceiverResult) {

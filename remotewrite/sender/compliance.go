@@ -39,32 +39,38 @@ import (
 
 // ComplianceTests returns official compliance sender tests.
 func ComplianceTests() (ret []Test) {
-	ret = append(ret, protocolTests()...)
-	ret = append(ret, symbolsTests()...)
-	ret = append(ret, labelsTests()...)
-	ret = append(ret, samplesTests()...)
-	ret = append(ret, histogramsTests(false)...)
-	ret = append(ret, exemplarsTests()...)
-	ret = append(ret, metadataTests()...)
-	ret = append(ret, responseTests()...)
-	ret = append(ret, retryTests()...)
-	return ret
+	return complianceTestsForMode(ModeNone)
 }
 
-// TransactionalComplianceTests returns stricter compliance sender tests for a mode of
-// Remote Write 2 that requires composite samples (such as NHCB).
+// StatelessComplianceTests returns compliance sender tests for the "stateless"
+// Remote-Write 2.0 mode.
 //
-// See: https://prometheus.io/blog/2026/02/14/modernizing-prometheus-composite-samples/
-func TransactionalComplianceTests() (ret []Test) {
-	ret = append(ret, protocolTests()...)
+// See: https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/#stateless
+func StatelessComplianceTests() (ret []Test) {
+	return complianceTestsForMode(ModeStateless)
+}
+
+// StatelessSTComplianceTests returns compliance sender tests for the "stateless-st"
+// Remote-Write 2.0 mode.
+//
+// See: https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/#stateless-st
+func StatelessSTComplianceTests() (ret []Test) {
+	return complianceTestsForMode(ModeStatelessST)
+}
+
+func complianceTestsForMode(mode Mode) (ret []Test) {
+	ret = append(ret, protocolTests(mode)...)
 	ret = append(ret, symbolsTests()...)
 	ret = append(ret, labelsTests()...)
-	ret = append(ret, samplesTests()...)
-	ret = append(ret, histogramsTests(true)...)
-	ret = append(ret, exemplarsTests()...)
-	ret = append(ret, metadataTests()...)
+	ret = append(ret, samplesTests(mode)...)
+	ret = append(ret, histogramsTests(mode)...)
+	ret = append(ret, exemplarsTests(mode)...)
+	ret = append(ret, metadataTests(mode)...)
 	ret = append(ret, responseTests()...)
 	ret = append(ret, retryTests()...)
+	for i := range ret {
+		ret[i].Mode = mode
+	}
 	return ret
 }
 
@@ -102,6 +108,8 @@ type ReceiverRequest struct {
 type ReceiverResult struct {
 	// RemoteWrite version that this test was configured with.
 	Version remote.WriteMessageType
+	// RemoteWrite mode that this test was configured with.
+	Mode Mode
 	// All sender requests received by the test receiver.
 	Requests []ReceiverRequest
 }
@@ -148,6 +156,9 @@ type Test struct {
 	// that the target must use.
 	// This adds another "/rw<number>/" sub-test.
 	Version remote.WriteMessageType
+	// RemoteWrite mode to configure the target with (e.g. ModeStateless, ModeStatelessST).
+	// When set, this appends "-<mode>" to the "/rw2/" sub-test (e.g. "/rw2-stateless/").
+	Mode Mode
 	// ScrapeContentType specifies the Content-Type header served by the scrape target.
 	// If empty, defaults to OpenMetrics 1.0 text format (OM1ContentType).
 	ScrapeContentType string
@@ -194,6 +205,9 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 			protoMsgName = "rw1"
 		case remote.WriteV2MessageType:
 			protoMsgName = "rw2"
+			if tc.Mode != ModeNone {
+				protoMsgName = fmt.Sprintf("rw2-%s", tc.Mode)
+			}
 		default:
 			t.Fatalf("unsupported remote write message type: %v", tc.Version)
 		}
@@ -205,7 +219,7 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 			if len(tc.TestResponses) == 0 {
 				tc.TestResponses = []ReceiverResponse{{}} // By default assume a single successful response.
 			}
-			receiver := newSyncReceiver(tc.Version, tc.TestResponses)
+			receiver := newSyncReceiver(tc.Version, tc.Mode, tc.TestResponses)
 			scrapeTarget := newScrapeTarget(tc.ScrapeData, tc.AdditionalScrapeData, tc.ScrapeContentType)
 
 			// Setup subcase exists to cleanly visualise errors that happens before certain validation cases.
@@ -232,6 +246,7 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 						ScrapeTargetHostPort:   scrapeTarget.HostPort(t),
 						RemoteWriteEndpointURL: receiver.URL(),
 						RemoteWriteMessage:     tc.Version,
+						RemoteWriteMode:        tc.Mode,
 					})
 				}, cancelGroup)
 				if err := g.Run(); err != nil {
@@ -289,6 +304,7 @@ type receiver struct {
 	server *httptest.Server
 
 	msg       remote.WriteMessageType
+	mode      Mode
 	requests  []ReceiverRequest
 	responses []ReceiverResponse
 
@@ -299,12 +315,13 @@ type receiver struct {
 // captures requests and respond with the given responses sequentially until they finish or context is done.
 //
 // NOTE: This kind of receiver will only work for non-sharded, single sender.
-func newSyncReceiver(msg remote.WriteMessageType, responses []ReceiverResponse) *receiver {
+func newSyncReceiver(msg remote.WriteMessageType, mode Mode, responses []ReceiverResponse) *receiver {
 	r := &receiver{
 		closeCh:   make(chan struct{}, 1),
 		requests:  make([]ReceiverRequest, 0, len(responses)),
 		responses: responses,
 		msg:       msg,
+		mode:      mode,
 
 		debug: os.Getenv("DEBUG") != "",
 	}
@@ -478,6 +495,7 @@ func (r *receiver) Result() ReceiverResult {
 	defer r.mu.Unlock()
 	return ReceiverResult{
 		Version:  r.msg,
+		Mode:     r.mode,
 		Requests: append([]ReceiverRequest{}, r.requests...),
 	}
 }

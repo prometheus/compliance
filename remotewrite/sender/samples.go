@@ -40,10 +40,15 @@ func ToOpenMetricsTimestampString(t time.Time) string {
 	)
 }
 
-func samplesTests() []Test {
+func samplesTests(mode Mode) []Test {
 	timeNow := time.Now()
 	st := timeNow.Add(-2 * time.Hour)
-	explicitTS := timeNow
+	explicitTS := timeNow.Add(10 * time.Minute)
+
+	stLevel := ShouldLevel
+	if mode == ModeStatelessST {
+		stLevel = MustLevel
+	}
 
 	return []Test{
 		{
@@ -55,13 +60,20 @@ func samplesTests() []Test {
 test_counter_total 101.13
 test_counter_created %v
 # TYPE test_histogram histogram
-test_histogram_count 100
-test_histogram_sum 250.0
+test_histogram_bucket{le="0.5"} 50
 test_histogram_bucket{le="+Inf"} 100
+test_histogram_sum 250.0
+test_histogram_count 100
 test_histogram_created %v
+# TYPE test_summary summary
+test_summary{quantile="0.5"} 1.5
+test_summary_sum 150.0
+test_summary_count 100
+test_summary_created %v
 # TYPE test_gauge_with_ts gauge
 test_gauge_with_ts 2 %v
 `,
+				ToOpenMetricsTimestampFloat64(st),
 				ToOpenMetricsTimestampFloat64(st),
 				ToOpenMetricsTimestampFloat64(st),
 				ToOpenMetricsTimestampString(explicitTS),
@@ -92,6 +104,9 @@ test_gauge_with_ts 2 %v
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
+							if len(ts.Histograms) > 0 {
+								continue
+							}
 							require.Len(t, ts.Samples, 1, "Timeseries must contain a single sample")
 							require.GreaterOrEqual(t, ts.Samples[0].Timestamp, timestamp.FromTime(timeNow), "Timeseries must contain a fresh timestamp")
 						}
@@ -99,8 +114,8 @@ test_gauge_with_ts 2 %v
 				},
 				{
 					Name:        "start_timestamp for counters",
-					Description: "Sample SHOULD have start timestamp for a counter",
-					RFCLevel:    ShouldLevel,
+					Description: "Sample SHOULD have start timestamp for a counter (MUST in stateless-st mode)",
+					RFCLevel:    stLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_counter_total")
@@ -113,9 +128,16 @@ test_gauge_with_ts 2 %v
 				},
 				{
 					Name:        "start_timestamp for histograms",
-					Description: "Sample SHOULD have start timestamp for a histogram",
-					RFCLevel:    ShouldLevel,
+					Description: "Sample/Histogram SHOULD have start timestamp for a histogram (MUST in stateless-st mode)",
+					RFCLevel:    stLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
+						if mode != ModeNone {
+							hist := findHistogramData(res.Requests[0].RW2, "test_histogram")
+							require.NotNil(t, hist, "Histogram for test_histogram must be present")
+							require.Equal(t, timestamp.FromTime(st), hist.StartTimestamp,
+								"Histogram for test_histogram does not have ST")
+							return
+						}
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_histogram_count")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_histogram_count")
 						ts := results[0].TimeSeries
@@ -123,6 +145,21 @@ test_gauge_with_ts 2 %v
 						require.Len(t, ts.Samples, 1, "Timeseries test_histogram_count must contain a single sample")
 						require.Equal(t, timestamp.FromTime(st), ts.Samples[0].StartTimestamp,
 							"Sample for test_histogram_count does not have ST")
+					},
+				},
+				{
+					Name:        "start_timestamp for summaries",
+					Description: "Summary _sum and _count samples SHOULD have start timestamp (MUST in stateless-st mode)",
+					RFCLevel:    stLevel,
+					Validate: func(t *testing.T, res ReceiverResult) {
+						for _, metricName := range []string{"test_summary_sum", "test_summary_count"} {
+							results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, metricName)
+							require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for %s", metricName)
+							ts := results[0].TimeSeries
+							require.NotEmpty(t, ts.Samples, "Timeseries %s must contain samples", metricName)
+							require.Equal(t, timestamp.FromTime(st), ts.Samples[0].StartTimestamp,
+								"Sample for %s does not have ST", metricName)
+						}
 					},
 				},
 				{
@@ -149,10 +186,12 @@ test_gauge_with_ts 2 %v
 test_counter_total 101.13 %v
 test_counter_total 102.13 %v
 test_counter_total 103.13 %v
+test_counter_created %v
 `,
 				ToOpenMetricsTimestampString(explicitTS),
 				ToOpenMetricsTimestampString(explicitTS.Add(15*time.Second)),
 				ToOpenMetricsTimestampString(explicitTS.Add(30*time.Second)),
+				ToOpenMetricsTimestampFloat64(st),
 			),
 			Version: remote.WriteV2MessageType,
 			Validate: func(t *testing.T, res ReceiverResult) {
@@ -169,16 +208,27 @@ test_counter_total 103.13 %v
 			Name:        "encoding_cases",
 			Description: "Sender MUST correctly encode various value types and special cases",
 			RFCLevel:    MustLevel,
-			ScrapeData: `test_float 123.45
+			ScrapeData: `# TYPE test_float gauge
+test_float 123.45
+# TYPE test_integer gauge
 test_integer 42
+# TYPE test_zero gauge
 test_zero 0
+# TYPE test_negative gauge
 test_negative -15.5
+# TYPE test_pos_inf gauge
 test_pos_inf +Inf
+# TYPE test_neg_inf gauge
 test_neg_inf -Inf
+# TYPE test_nan gauge
 test_nan NaN
+# TYPE test_large gauge
 test_large 1.7976931348623157e+308
+# TYPE test_small gauge
 test_small 2.2250738585072014e-308
+# TYPE test_scientific gauge
 test_scientific 1.23e-4
+# TYPE test_precision gauge
 test_precision 0.123456789012345
 `,
 			Version: remote.WriteV2MessageType,
@@ -305,11 +355,14 @@ test_precision 0.123456789012345
 			Name:        "stale_markers",
 			Description: "Stale markers MUST be signalled by the special NaN value 0x7ff0000000000002 when a series disappears",
 			RFCLevel:    MustLevel,
-			ScrapeData: `disappearing_metric{env="prod"} 42
+			ScrapeData: `# TYPE disappearing_metric gauge
+disappearing_metric{env="prod"} 42
+# TYPE persistent_metric gauge
 persistent_metric{env="prod"} 1
 `,
 			AdditionalScrapeData: []string{
-				`persistent_metric{env="prod"} 2
+				`# TYPE persistent_metric gauge
+persistent_metric{env="prod"} 2
 `,
 			},
 			Version: remote.WriteV2MessageType,

@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func histogramsTests(transactional bool) []Test {
+func histogramsTests(mode Mode) []Test {
 	const (
 		basicHistMetric      = "request_duration_seconds"
 		negBucketsHistMetric = "temperature_delta_celsius"
@@ -37,6 +37,11 @@ func histogramsTests(transactional bool) []Test {
 	nowMs := now.UnixMilli()
 	startTime := now.Add(-time.Minute)
 	startMs := startTime.UnixMilli()
+
+	stLevel := ShouldLevel
+	if mode == ModeStatelessST {
+		stLevel = MustLevel
+	}
 
 	nativeHistogramFamilies := []dto.MetricFamily{
 		{
@@ -62,7 +67,7 @@ func histogramsTests(transactional bool) []Test {
 			Help: "Histogram with negative and positive buckets.",
 			Type: dto.MetricType_HISTOGRAM,
 			Metric: []dto.Metric{{
-				Histogram: &dto.Histogram{
+				Histogram: withCreatedTimestamp(&dto.Histogram{
 					SampleCount:   18,
 					SampleSum:     -3.2,
 					Schema:        1,
@@ -76,7 +81,7 @@ func histogramsTests(transactional bool) []Test {
 						{Offset: 1, Length: 2},
 					},
 					PositiveDelta: []int64{3, 1},
-				},
+				}, startTime),
 			}},
 		},
 		{
@@ -84,7 +89,7 @@ func histogramsTests(transactional bool) []Test {
 			Help: "Histogram with zero bucket observations.",
 			Type: dto.MetricType_HISTOGRAM,
 			Metric: []dto.Metric{{
-				Histogram: &dto.Histogram{
+				Histogram: withCreatedTimestamp(&dto.Histogram{
 					SampleCount:   15,
 					SampleSum:     12.3,
 					Schema:        2,
@@ -94,7 +99,7 @@ func histogramsTests(transactional bool) []Test {
 						{Offset: 0, Length: 2},
 					},
 					PositiveDelta: []int64{6, -2},
-				},
+				}, startTime),
 			}},
 		},
 		{
@@ -102,7 +107,7 @@ func histogramsTests(transactional bool) []Test {
 			Help: "Float native histogram.",
 			Type: dto.MetricType_HISTOGRAM,
 			Metric: []dto.Metric{{
-				Histogram: &dto.Histogram{
+				Histogram: withCreatedTimestamp(&dto.Histogram{
 					SampleCountFloat: 12.5,
 					SampleSum:        34.8,
 					Schema:           0,
@@ -112,7 +117,7 @@ func histogramsTests(transactional bool) []Test {
 						{Offset: 0, Length: 2},
 					},
 					PositiveCount: []float64{5.5, 5.5},
-				},
+				}, startTime),
 			}},
 		},
 		{
@@ -120,7 +125,7 @@ func histogramsTests(transactional bool) []Test {
 			Help: "Empty native histogram.",
 			Type: dto.MetricType_HISTOGRAM,
 			Metric: []dto.Metric{{
-				Histogram: &dto.Histogram{
+				Histogram: withCreatedTimestamp(&dto.Histogram{
 					SampleCount:   0,
 					SampleSum:     0,
 					Schema:        0,
@@ -132,7 +137,7 @@ func histogramsTests(transactional bool) []Test {
 					PositiveSpan: []dto.BucketSpan{
 						{Offset: 0, Length: 0},
 					},
-				},
+				}, startTime),
 			}},
 		},
 		{
@@ -140,7 +145,7 @@ func histogramsTests(transactional bool) []Test {
 			Help: "Histogram with large bucket counts.",
 			Type: dto.MetricType_HISTOGRAM,
 			Metric: []dto.Metric{{
-				Histogram: &dto.Histogram{
+				Histogram: withCreatedTimestamp(&dto.Histogram{
 					SampleCount:   3000000,
 					SampleSum:     1500000.0,
 					Schema:        0,
@@ -150,7 +155,7 @@ func histogramsTests(transactional bool) []Test {
 						{Offset: 0, Length: 2},
 					},
 					PositiveDelta: []int64{1000000, 1000000},
-				},
+				}, startTime),
 			}},
 		},
 	}
@@ -264,13 +269,13 @@ func histogramsTests(transactional bool) []Test {
 				},
 				{
 					Name:        "start_timestamp_before_timestamp",
-					Description: "Tests that native histogram start_timestamp is 0 or before or equal to timestamp.",
-					RFCLevel:    ShouldLevel,
+					Description: "Tests that native histogram start_timestamp is before or equal to timestamp (and non-zero in stateless-st mode).",
+					RFCLevel:    stLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, basicHistMetric)
 						require.NotNil(t, hist)
-						if hist.StartTimestamp != 0 {
+						if mode == ModeStatelessST || hist.StartTimestamp != 0 {
 							require.Equal(t, startMs, hist.StartTimestamp)
 							require.LessOrEqual(t, hist.StartTimestamp, hist.Timestamp, "Histogram start_timestamp should be before or equal to timestamp")
 						}
@@ -327,7 +332,7 @@ func histogramsTests(transactional bool) []Test {
 					Help: "Request duration native histogram.",
 					Type: dto.MetricType_HISTOGRAM,
 					Metric: []dto.Metric{{
-						Histogram: &dto.Histogram{
+						Histogram: withCreatedTimestamp(&dto.Histogram{
 							SampleCount:   10,
 							SampleSum:     20.0,
 							Schema:        0,
@@ -337,7 +342,7 @@ func histogramsTests(transactional bool) []Test {
 								{Offset: 0, Length: 2},
 							},
 							PositiveDelta: []int64{5, -1},
-						},
+						}, startTime),
 					}},
 				},
 			}),
@@ -393,6 +398,7 @@ http_request_duration_seconds_bucket{le="1.0"} 30
 http_request_duration_seconds_bucket{le="+Inf"} 32
 http_request_duration_seconds_sum 14.5
 http_request_duration_seconds_count 32
+http_request_duration_seconds_created 1500.0
 `,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.Len(t, res.Requests, 1)
@@ -402,17 +408,27 @@ http_request_duration_seconds_count 32
 			ValidateCases: []ValidateCase{
 				{
 					Name:        "classic_histogram_series",
-					Description: "Tests that classic histograms are sent as _bucket, _sum, and _count series (or native histogram with custom buckets in transactional mode).",
+					Description: "Tests that classic histograms are sent as _bucket, _sum, and _count series (or as a Histogram message in stateless modes).",
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
-						if transactional {
+						if mode != ModeNone {
 							hist := findHistogramData(req, "http_request_duration_seconds")
-							require.NotNil(t, hist, "Transactional sender must convert classic histogram to NHCB")
+							require.NotNil(t, hist, "Stateless mode sender MUST encode classic histogram as a Histogram message")
 							require.Equal(t, int32(-53), hist.Schema, "NHCB must use schema -53")
 							require.Equal(t, 32.0, extractHistogramCount(hist))
 							require.InDelta(t, 14.5, extractHistogramSum(hist), 0.01)
 							require.Equal(t, []float64{0.1, 0.5, 1.0}, hist.CustomValues)
+							require.Empty(t, findTimeseriesByMetricName(req, "http_request_duration_seconds_bucket"),
+								"Stateless mode MUST NOT send classic _bucket float series")
+							require.Empty(t, findTimeseriesByMetricName(req, "http_request_duration_seconds_sum"),
+								"Stateless mode MUST NOT send classic _sum float series")
+							require.Empty(t, findTimeseriesByMetricName(req, "http_request_duration_seconds_count"),
+								"Stateless mode MUST NOT send classic _count float series")
+							if mode == ModeStatelessST {
+								require.Equal(t, int64(1500000), hist.StartTimestamp,
+									"Stateless-ST mode MUST set start_timestamp on histogram")
+							}
 							return
 						}
 

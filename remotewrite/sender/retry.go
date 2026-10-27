@@ -28,7 +28,8 @@ func retryTests() []Test {
 			Description: "Senders MUST retry requests on HTTP 5xx responses using a backoff algorithm.",
 			RFCLevel:    MustLevel,
 			Version:     remote.WriteV2MessageType,
-			ScrapeData: `retry_5xx_metric 100
+			ScrapeData: `# TYPE retry_5xx_metric gauge
+retry_5xx_metric 100
 `,
 			TestResponses: []ReceiverResponse{
 				{
@@ -86,7 +87,8 @@ func retryTests() []Test {
 			Description: "Senders MUST NOT retry requests on HTTP 4xx responses (other than 429).",
 			RFCLevel:    MustLevel,
 			Version:     remote.WriteV2MessageType,
-			ScrapeData: `no_retry_4xx_metric 50
+			ScrapeData: `# TYPE no_retry_4xx_metric gauge
+no_retry_4xx_metric 50
 `,
 			TestResponses: []ReceiverResponse{
 				{
@@ -128,7 +130,8 @@ func retryTests() []Test {
 			Description: "Senders MAY retry requests on HTTP 429 Too Many Requests responses when configured.",
 			RFCLevel:    MayLevel,
 			Version:     remote.WriteV2MessageType,
-			ScrapeData: `retry_429_metric 75
+			ScrapeData: `# TYPE retry_429_metric gauge
+retry_429_metric 75
 `,
 			TestResponses: []ReceiverResponse{
 				{

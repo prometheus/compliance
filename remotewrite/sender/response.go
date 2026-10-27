@@ -28,7 +28,8 @@ func responseTests() []Test {
 			Description: "Senders MUST accept 2xx responses, ignore response bodies, and not assume 0 written when written headers are omitted.",
 			RFCLevel:    MustLevel,
 			Version:     remote.WriteV2MessageType,
-			ScrapeData: `response_test_metric 10
+			ScrapeData: `# TYPE response_test_metric gauge
+response_test_metric 10
 `,
 			TestResponses: []ReceiverResponse{
 				{
