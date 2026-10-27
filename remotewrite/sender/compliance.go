@@ -44,6 +44,8 @@ func ComplianceTests() (ret []Test) {
 	ret = append(ret, labelsTests()...)
 	ret = append(ret, samplesTests()...)
 	ret = append(ret, histogramsTests(false)...)
+	ret = append(ret, exemplarsTests()...)
+	ret = append(ret, metadataTests()...)
 	return ret
 }
 
@@ -57,6 +59,8 @@ func TransactionalComplianceTests() (ret []Test) {
 	ret = append(ret, labelsTests()...)
 	ret = append(ret, samplesTests()...)
 	ret = append(ret, histogramsTests(true)...)
+	ret = append(ret, exemplarsTests()...)
+	ret = append(ret, metadataTests()...)
 	return ret
 }
 

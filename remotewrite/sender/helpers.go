@@ -29,27 +29,25 @@ import (
 
 // extractLabels extracts labels from a TimeSeries using the symbol table.
 func extractLabels(ts *writev2.TimeSeries, symbols []string) map[string]string {
-	labels := make(map[string]string)
-	refs := ts.LabelsRefs
+	return extractRefsLabels(ts.LabelsRefs, symbols)
+}
 
+// extractExemplarLabels extracts labels from an Exemplar using the symbol table.
+func extractExemplarLabels(ex *writev2.Exemplar, symbols []string) map[string]string {
+	return extractRefsLabels(ex.LabelsRefs, symbols)
+}
+
+func extractRefsLabels(refs []uint32, symbols []string) map[string]string {
+	labels := make(map[string]string, len(refs)/2)
 	// Labels are stored as pairs: [key_ref, value_ref, key_ref, value_ref, ...].
-	for i := 0; i < len(refs); i += 2 {
-		if i+1 >= len(refs) {
-			break
-		}
+	for i := 0; i+1 < len(refs); i += 2 {
 		keyRef := refs[i]
 		valueRef := refs[i+1]
-
-		// Validate symbol indices.
 		if int(keyRef) >= len(symbols) || int(valueRef) >= len(symbols) {
 			continue
 		}
-
-		key := symbols[keyRef]
-		value := symbols[valueRef]
-		labels[key] = value
+		labels[symbols[keyRef]] = symbols[valueRef]
 	}
-
 	return labels
 }
 
@@ -93,7 +91,12 @@ func flattenTimeseriesResult(t testing.TB, results []timeseriesResult) (ret time
 			require.Equal(t, lbls, r.Labels, "found two different series with the same name; expected same series")
 		}
 		if ret.TimeSeries == nil {
-			ret.TimeSeries = r.TimeSeries
+			cp := *r.TimeSeries
+			cp.Samples = append([]writev2.Sample(nil), r.TimeSeries.Samples...)
+			cp.Histograms = append([]writev2.Histogram(nil), r.TimeSeries.Histograms...)
+			cp.Exemplars = append([]writev2.Exemplar(nil), r.TimeSeries.Exemplars...)
+			ret.TimeSeries = &cp
+			ret.Labels = r.Labels
 		} else {
 			ret.TimeSeries.Samples = append(ret.TimeSeries.Samples, r.TimeSeries.Samples...)
 			ret.TimeSeries.Histograms = append(ret.TimeSeries.Histograms, r.TimeSeries.Histograms...)

@@ -100,7 +100,7 @@ func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
 		`--web.listen-address=0.0.0.0:0`,
 		fmt.Sprintf("--storage.tsdb.path=%v", dir),
 		fmt.Sprintf("--config.file=%s", configFile),
-		"--enable-feature=st-storage",
+		"--enable-feature=st-storage,exemplar-storage,metadata-wal-records",
 	)
 }
 
