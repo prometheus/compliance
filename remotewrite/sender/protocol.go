@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
-	"slices"
 	"strings"
 	"testing"
 
@@ -86,8 +85,11 @@ func protocolTests(mode Mode) []Test {
 						require.Equal(t, string(remote.WriteV2MessageType), protoParam, "proto parameter MUST be io.prometheus.write.v2.Request")
 					}
 					if modeParam, ok := params["mode"]; ok {
-						require.True(t, slices.Contains([]string{"none", string(ModeStateless), string(ModeStatelessST)}, modeParam),
-							"mode parameter %q is not a valid RW 2.0 mode", modeParam)
+						expectedMode := "none"
+						if mode != ModeNone {
+							expectedMode = string(mode)
+						}
+						require.Equal(t, expectedMode, modeParam, "mode parameter MUST be %q", expectedMode)
 					}
 				}
 			},
