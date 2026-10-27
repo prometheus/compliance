@@ -46,6 +46,8 @@ func ComplianceTests() (ret []Test) {
 	ret = append(ret, histogramsTests(false)...)
 	ret = append(ret, exemplarsTests()...)
 	ret = append(ret, metadataTests()...)
+	ret = append(ret, responseTests()...)
+	ret = append(ret, retryTests()...)
 	return ret
 }
 
@@ -61,6 +63,8 @@ func TransactionalComplianceTests() (ret []Test) {
 	ret = append(ret, histogramsTests(true)...)
 	ret = append(ret, exemplarsTests()...)
 	ret = append(ret, metadataTests()...)
+	ret = append(ret, responseTests()...)
+	ret = append(ret, retryTests()...)
 	return ret
 }
 
@@ -117,12 +121,13 @@ func (res ReceiverResult) RequestsProtoToString() string {
 
 // ReceiverResponse configures the response behavior of the test receiver.
 type ReceiverResponse struct {
-	StatusCode        int
-	Headers           map[string]string
-	Body              string
-	SamplesWritten    int
-	ExemplarsWritten  int
-	HistogramsWritten int
+	StatusCode         int
+	Headers            map[string]string
+	Body               string
+	SamplesWritten     int
+	ExemplarsWritten   int
+	HistogramsWritten  int
+	OmitWrittenHeaders bool
 }
 
 type ValidateFunc func(t *testing.T, res ReceiverResult)
@@ -148,6 +153,8 @@ type Test struct {
 	ScrapeContentType string
 	// ScrapeData provides input scrape data to use against the tested target.
 	ScrapeData string
+	// AdditionalScrapeData provides scrape payloads served on subsequent scrapes (scrape #2, #3, etc.).
+	AdditionalScrapeData []string
 	// TestResponses controls the receiver response to respond with to a sender, sequentially.
 	// Tests finishes when there is nothing else to respond with, or timeout.
 	// By default, the case responds with a single NoContent (success) response.
@@ -199,7 +206,7 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 				tc.TestResponses = []ReceiverResponse{{}} // By default assume a single successful response.
 			}
 			receiver := newSyncReceiver(tc.Version, tc.TestResponses)
-			scrapeTarget := newScrapeTarget(tc.ScrapeData, tc.ScrapeContentType)
+			scrapeTarget := newScrapeTarget(tc.ScrapeData, tc.AdditionalScrapeData, tc.ScrapeContentType)
 
 			// Setup subcase exists to cleanly visualise errors that happens before certain validation cases.
 			// TODO(bwplotka): This is odd for tests with 0 cases and a single validation.
@@ -423,7 +430,7 @@ func (r *receiver) handleSyncRequest(w http.ResponseWriter, req *http.Request) {
 
 	if r.msg != remote.WriteV1MessageType {
 		// Set X-Prometheus-Remote-Write-*-Written headers if response is successful.
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 && !resp.OmitWrittenHeaders {
 			// If response counts are explicitly configured, use those. Otherwise, automatically count what we actually received.
 			samplesWritten := resp.SamplesWritten
 			exemplarsWritten := resp.ExemplarsWritten
@@ -477,16 +484,19 @@ func (r *receiver) Result() ReceiverResult {
 
 // scrapeTarget is an HTTP server that serves metrics in Prometheus format.
 type scrapeTarget struct {
-	server      *httptest.Server
-	mu          sync.Mutex
-	metrics     string
-	contentType string
+	server            *httptest.Server
+	mu                sync.Mutex
+	metrics           string
+	additionalMetrics []string
+	scrapeCount       int
+	contentType       string
 }
 
-func newScrapeTarget(metrics, contentType string) *scrapeTarget {
+func newScrapeTarget(metrics string, additionalMetrics []string, contentType string) *scrapeTarget {
 	st := &scrapeTarget{
-		metrics:     metrics,
-		contentType: contentType,
+		metrics:           metrics,
+		additionalMetrics: additionalMetrics,
+		contentType:       contentType,
 	}
 	st.server = httptest.NewServer(http.HandlerFunc(st.handleScrape))
 	return st
@@ -509,6 +519,11 @@ func (st *scrapeTarget) handleScrape(w http.ResponseWriter, _ *http.Request) {
 	defer st.mu.Unlock()
 
 	metrics := st.metrics
+	if st.scrapeCount > 0 && len(st.additionalMetrics) > 0 {
+		idx := min(st.scrapeCount-1, len(st.additionalMetrics)-1)
+		metrics = st.additionalMetrics[idx]
+	}
+	st.scrapeCount++
 	contentType := st.contentType
 	if contentType == "" {
 		contentType = OM1ContentType
