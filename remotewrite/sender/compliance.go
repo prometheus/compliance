@@ -39,6 +39,9 @@ import (
 
 // ComplianceTests returns official compliance sender tests.
 func ComplianceTests() (ret []Test) {
+	ret = append(ret, protocolTests()...)
+	ret = append(ret, symbolsTests()...)
+	ret = append(ret, labelsTests()...)
 	ret = append(ret, samplesTests()...)
 	return ret
 }
