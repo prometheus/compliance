@@ -132,10 +132,7 @@ func main() {
 		workCh <- struct{}{}
 
 		go func(i int, tc *comparer.TestCase) {
-			res, err := comp.Compare(tc)
-			if err != nil {
-				log.Fatalf("Error running comparison: %v", err)
-			}
+			res := compareTestCase(comp, tc)
 			results[i] = res
 			if !res.Success() {
 				allSuccess.Store(false)
@@ -154,6 +151,20 @@ func main() {
 	if !allSuccess.Load() {
 		os.Exit(1)
 	}
+}
+
+func compareTestCase(comp *comparer.Comparer, tc *comparer.TestCase) *comparer.Result {
+	res, err := comp.Compare(tc)
+	if err != nil {
+		// Record reference API errors or should_fail mismatches as test failures
+		// instead of aborting the entire suite before writing the output report.
+		log.Printf("Error running comparison: %v", err)
+		return &comparer.Result{
+			TestCase:          tc,
+			UnexpectedFailure: err.Error(),
+		}
+	}
+	return res
 }
 
 func getTime(timeStr string, defaultTime time.Time) time.Time {
