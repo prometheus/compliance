@@ -44,6 +44,7 @@ remote_write:
   - url: "{{.RemoteWriteEndpointURL}}"
     protobuf_message: "{{.RemoteWriteMessage}}"
     send_exemplars: true
+    send_native_histograms: true
     queue_config:
       retry_on_http_429: true
     metadata_config:
@@ -52,6 +53,7 @@ remote_write:
 scrape_configs:
   - job_name: "{{.ScrapeTargetJobName}}"
     scrape_interval: 1s
+    scrape_native_histograms: true
     scrape_protocols:
       - PrometheusProto
       - OpenMetricsText1.0.0
