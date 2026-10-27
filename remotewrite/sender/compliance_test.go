@@ -19,9 +19,20 @@ import (
 	"github.com/prometheus/compliance/remotewrite/sender"
 )
 
-// TestCompliance runs all tests in this compliance suite against prometheus{}
+// TestCompliance runs all baseline compliance tests in this suite against prometheus{}.
 func TestCompliance(t *testing.T) {
+	t.Parallel()
 	sender.RunTests(t, prometheus{}, sender.ComplianceTests())
+}
+
+// TestStatelessCompliance runs all stateless mode compliance tests in this suite against prometheus{}.
+func TestStatelessCompliance(t *testing.T) {
+	t.Parallel()
 	sender.RunTests(t, prometheus{}, sender.StatelessComplianceTests())
+}
+
+// TestStatelessSTCompliance runs all stateless-st mode compliance tests in this suite against prometheus{}.
+func TestStatelessSTCompliance(t *testing.T) {
+	t.Parallel()
 	sender.RunTests(t, prometheus{}, sender.StatelessSTComplianceTests())
 }
