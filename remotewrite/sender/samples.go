@@ -43,7 +43,9 @@ func ToOpenMetricsTimestampString(t time.Time) string {
 func samplesTests(mode Mode) []Test {
 	timeNow := time.Now()
 	st := timeNow.Add(-2 * time.Hour)
-	explicitTS := timeNow.Add(10 * time.Minute)
+	// NOTE: Keep explicitTS in the future so WAL watchers started during parallel subtests do not skip it as
+	// historical, while staying well below Prometheus's 10m maxAheadTime when adding +15s/+30s offsets.
+	explicitTS := timeNow.Add(5 * time.Minute)
 
 	stLevel := ShouldLevel
 	if mode == ModeStatelessST {

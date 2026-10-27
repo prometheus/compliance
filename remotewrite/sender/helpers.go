@@ -172,11 +172,12 @@ func metricFamiliesToProtobuf(families []dto.MetricFamily) string {
 	return buf.String()
 }
 
-// withCreatedTimestamp sets CreatedTimestamp on h to ts and returns h.
+// withCreatedTimestamp sets the created/start timestamp (field 15) on h to ts and returns h.
 func withCreatedTimestamp(h *dto.Histogram, ts time.Time) *dto.Histogram {
-	// Field 15 (wire type 2: length-delimited) in dto.Histogram is created_timestamp (google.protobuf.Timestamp:
-	// field 1 varint seconds, field 2 varint nanos). Unmarshaling into a temporary Histogram avoids importing
-	// the indirect github.com/gogo/protobuf/types package.
+	// Field 15 (wire type 2: length-delimited) in dto.Histogram is created_timestamp/start_timestamp
+	// (google.protobuf.Timestamp: field 1 varint seconds, field 2 varint nanos). Unmarshaling directly into h
+	// merges field 15 without referencing the field by name (renamed from CreatedTimestamp to StartTimestamp)
+	// or importing the indirect github.com/gogo/protobuf/types package.
 	var tsBuf [binary.MaxVarintLen64 * 3]byte
 	n := 0
 	tsBuf[n] = 1 << 3
@@ -196,10 +197,8 @@ func withCreatedTimestamp(h *dto.Histogram, ts time.Time) *dto.Histogram {
 	copy(msgBuf[m:], tsBuf[:n])
 	m += n
 
-	var tmp dto.Histogram
-	if err := tmp.Unmarshal(msgBuf[:m]); err != nil {
+	if err := h.Unmarshal(msgBuf[:m]); err != nil {
 		panic(err)
 	}
-	h.CreatedTimestamp = tmp.CreatedTimestamp
 	return h
 }
