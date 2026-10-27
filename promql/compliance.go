@@ -342,6 +342,7 @@ func (r *scrapeReplayer) Close() {
 
 // generateDemoSnapshots builds deterministic OpenMetrics 1.0 scrape payloads covering
 // [end-70m, end] for the demo_* metrics used by promql-test-queries.yml.
+// TODO(bwplotka): Support Native Histograms long term (e.g. via Prometheus Protobuf or OpenMetrics 2.0 scrape payloads and NH test queries in promql-test-queries.yml).
 func generateDemoSnapshots(end time.Time) []string {
 	var timestamps []time.Time
 	// Coarse 2m steps over [end-70m, end-12m) to populate 1h range lookups and 10m offsets.
