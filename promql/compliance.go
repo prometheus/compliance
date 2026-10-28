@@ -260,7 +260,7 @@ func waitReplayerAndTarget(ctx context.Context, replayer *scrapeReplayer, promAP
 	defer ticker.Stop()
 
 	for {
-		val, _, err := promAPI.Query(ctx, "count(demo_num_cpus)", end)
+		val, _, _, err := promAPI.Query(ctx, "count(demo_num_cpus)", end)
 		if err == nil {
 			if vec, ok := val.(model.Vector); ok && len(vec) == 1 && vec[0].Value == 3 {
 				return nil

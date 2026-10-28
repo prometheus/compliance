@@ -7,7 +7,7 @@ require (
 	github.com/oklog/run v1.2.0
 	github.com/prometheus/client_golang/exp v0.0.0-20261026045710-70c0a469a56a
 	github.com/prometheus/common v0.72.0
-	github.com/prometheus/compliance/common v0.0.0-00010101000000-000000000000
+	github.com/prometheus/compliance/common v0.0.0-20261028123049-5aa00544fbe6
 	github.com/prometheus/prometheus v0.307.4-0.20251119130332-1174b0ce4f1f
 	github.com/prometheus/sigv4 v0.3.0
 	github.com/stretchr/testify v1.12.1

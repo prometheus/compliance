@@ -14,12 +14,18 @@
 package promql_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/prometheus/compliance/promql"
 )
 
-// TestCompliance runs all PromQL compliance tests against prometheus{}.
+// TestCompliance runs all PromQL compliance tests against Prometheus.
 func TestCompliance(t *testing.T) {
-	promql.RunTests(t, prometheus{name: "reference-prometheus"}, prometheus{name: "prometheus"}, promql.ComplianceTests())
+	promql.RunTests(
+		t,
+		promql.NewPrometheus("reference-prometheus", ""),
+		promql.NewPrometheus("prometheus", os.Getenv("PROMETHEUS_COMPLIANCE_PROMQL_BINARY")),
+		promql.ComplianceTests(),
+	)
 }
