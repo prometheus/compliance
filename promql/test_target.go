@@ -15,12 +15,9 @@ package promql
 
 import (
 	"context"
-	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"syscall"
 	"time"
+
+	"github.com/prometheus/compliance/common"
 )
 
 // Target represents a PromQL-compatible backend under test.
@@ -46,40 +43,5 @@ type Options struct {
 //
 // This is useful when starting process-based PromQL targets.
 func RunCommand(ctx context.Context, dir string, extraEnvVars []string, prog string, args ...string) error {
-	var output io.Writer = os.Stdout
-	if os.Getenv("DEBUG") == "" {
-		output = io.Discard
-	}
-
-	cmd := exec.Command(prog, args...)
-	// Required for group process signalling on close.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Dir = dir
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, extraEnvVars...)
-	cmd.Stdout = output
-	cmd.Stderr = output
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	cmdStopped := make(chan error, 1)
-	go func() {
-		cmdStopped <- cmd.Wait()
-	}()
-
-	select {
-	case <-ctx.Done():
-		// Use group process ID to pass signal to all child processes (e.g. under go run).
-		pgid, err := syscall.Getpgid(cmd.Process.Pid)
-		if err != nil {
-			return fmt.Errorf("failed to get pgid: %w", err)
-		}
-		if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
-			return fmt.Errorf("failed to send signal: %w", err)
-		}
-		return <-cmdStopped
-	case err := <-cmdStopped:
-		return err
-	}
+	return common.RunCommand(ctx, dir, extraEnvVars, prog, args...)
 }

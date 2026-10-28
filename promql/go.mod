@@ -7,9 +7,12 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/common v0.66.1
+	github.com/prometheus/compliance/common v0.0.0-00010101000000-000000000000
 	go.uber.org/atomic v1.11.0
 	gopkg.in/yaml.v2 v2.4.0
 )
+
+replace github.com/prometheus/compliance/common => ../common
 
 require (
 	github.com/VividCortex/ewma v1.2.0 // indirect
