@@ -168,7 +168,7 @@ type Test struct {
 	AdditionalScrapeData []string
 	// TestResponses controls the receiver response to respond with to a sender, sequentially.
 	// Tests finishes when there is nothing else to respond with, or timeout.
-	// By default, the case responds with a single NoContent (success) response.
+	// By default, the case responds with one NoContent (success) response per configured scrape payload.
 	TestResponses []ReceiverResponse
 	// Validate allows validating requests that were sent after test.
 	Validate ValidateFunc
@@ -217,7 +217,8 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 			t.Attr("version", protoMsgName)
 
 			if len(tc.TestResponses) == 0 {
-				tc.TestResponses = []ReceiverResponse{{}} // By default assume a single successful response.
+				// Senders may send a separate Remote-Write request per scrape rather than batching multiple scrapes into one request.
+				tc.TestResponses = make([]ReceiverResponse, 1+len(tc.AdditionalScrapeData))
 			}
 			receiver := newSyncReceiver(tc.Version, tc.Mode, tc.TestResponses)
 			scrapeTarget := newScrapeTarget(tc.ScrapeData, tc.AdditionalScrapeData, tc.ScrapeContentType)

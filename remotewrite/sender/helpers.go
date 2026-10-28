@@ -127,6 +127,20 @@ func requireTimeseriesByMetricName(t *testing.T, req *writev2.Request, metricNam
 	return results
 }
 
+// requireTimeseriesByMetricNameAcrossRequests finds a timeseries by metric name across all captured requests and fails the test if not found.
+func requireTimeseriesByMetricNameAcrossRequests(t *testing.T, reqs []ReceiverRequest, metricName string) []timeseriesResult {
+	t.Helper()
+	var results []timeseriesResult
+	for _, req := range reqs {
+		if req.RW2 == nil {
+			continue
+		}
+		results = append(results, findTimeseriesByMetricName(req.RW2, metricName)...)
+	}
+	require.NotEmpty(t, results, "Timeseries with metric name %q must be present", metricName)
+	return results
+}
+
 // findHistogramData finds the first native histogram for a metric name in a request.
 func findHistogramData(req *writev2.Request, metricName string) *writev2.Histogram {
 	results := findTimeseriesByMetricName(req, metricName)
