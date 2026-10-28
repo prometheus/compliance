@@ -25,8 +25,8 @@ import (
 // values contains test float values including special values (NaN, Inf) for metric testing.
 var values = map[string]float64{
 	"1.0":      1.0,
-	"StaleNaN": float64(value.StaleNaN),
-	"NaN":      float64(value.NormalNaN),
+	"StaleNaN": math.Float64frombits(value.StaleNaN),
+	"NaN":      math.Float64frombits(value.NormalNaN),
 	"Inf":      math.Inf(1),
 	"-Inf":     math.Inf(-1),
 }
@@ -194,20 +194,34 @@ func TestChronologicalSamplesInSingleTimeSeries(t *testing.T) {
 
 func TestOutOfOrderSamplesRejected(t *testing.T) {
 	should(t)
-	t.Attr("description", "Test that a sample with a timestamp older than an already ingested sample is rejected with 400 status")
+	t.Attr("description", "Test that a TimeSeries with samples older than the latest committed sample is rejected with 400 status")
 
 	labels := map[string]string{"__name__": "out_of_order_series_total", "job": "batch"}
-	runRequest(t, generateRequest(RequestOpts{
-		Samples: []SampleWithLabels{{Labels: labels, Value: 10.0}},
-	}), requestParams{
-		samples: 1,
-		success: true,
+
+	t.Run("initial_sample", func(t *testing.T) {
+		should(t)
+		t.Attr("description", "Initial sample for series succeeds")
+		runRequest(t, generateRequest(RequestOpts{
+			Samples: []SampleWithLabels{
+				{Labels: labels, Value: 10.0},
+			},
+		}), requestParams{
+			samples: 1,
+			success: true,
+		})
 	})
 
-	runRequest(t, generateRequest(RequestOpts{
-		Samples: []SampleWithLabels{{Labels: labels, Value: 5.0, Offset: -10 * time.Minute}},
-	}), requestParams{
-		success: false,
+	t.Run("older_sample_rejected", func(t *testing.T) {
+		should(t)
+		t.Attr("description", "Subsequent sample with older timestamp for the same series is rejected with 400 status")
+		runRequest(t, generateRequest(RequestOpts{
+			Samples: []SampleWithLabels{
+				{Labels: labels, Value: 5.0, Offset: -10 * time.Minute},
+			},
+		}), requestParams{
+			samples: 1,
+			success: false,
+		})
 	})
 }
 

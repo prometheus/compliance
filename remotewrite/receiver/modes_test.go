@@ -14,6 +14,7 @@
 package main
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -29,24 +30,28 @@ func TestContentTypeModes(t *testing.T) {
 		name        string
 		metricName  string
 		contentType string
+		allow415    bool
 		description string
 	}{
 		{
 			name:        "default_mode",
 			metricName:  "mode_default_requests_total",
 			contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request",
+			allow415:    true,
 			description: "Default Content-Type without explicit mode parameter",
 		},
 		{
 			name:        "explicit_none_mode",
 			metricName:  "mode_none_requests_total",
 			contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request;mode=none",
+			allow415:    true,
 			description: "Explicit mode=none in Content-Type",
 		},
 		{
 			name:        "stateless_mode",
 			metricName:  "mode_stateless_requests_total",
 			contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request;mode=stateless",
+			allow415:    true,
 			description: "Explicit mode=stateless in Content-Type",
 		},
 		{
@@ -94,7 +99,7 @@ func TestContentTypeModes(t *testing.T) {
 			Unit:   "requests",
 		}
 
-		// Note: A receiver that requires stateless or stateless-st mode may reject none mode with 415.
+		// Note: A receiver that requires stateless or stateless-st mode may reject none or stateless mode with 415.
 		runComplianceTest(t, tc.name, tc.description,
 			RequestOpts{
 				Samples:     []SampleWithLabels{sample},
@@ -103,7 +108,7 @@ func TestContentTypeModes(t *testing.T) {
 			},
 			requestParams{
 				samples:     1,
-				allowAny4xx: true,
+				allowAny4xx: tc.allow415,
 			},
 			true)
 	}
@@ -391,7 +396,7 @@ func TestStatelessSTMode(t *testing.T) {
 	t.Run("counter_staleness_marker_without_start_timestamp", func(t *testing.T) {
 		sample := SampleWithLabels{
 			Labels: map[string]string{"__name__": "stateless_st_stale_counter_total", "job": "api"},
-			Value:  float64(value.StaleNaN),
+			Value:  math.Float64frombits(value.StaleNaN),
 		}
 		metadata := MetadataWithLabels{
 			Labels: basicMetric("stateless_st_stale_counter_total"),
@@ -556,6 +561,32 @@ func TestStatelessSTMode(t *testing.T) {
 		}
 
 		runComplianceTest(t, "", "Stateless-ST mode float histogram with start_timestamp and metadata",
+			RequestOpts{
+				Mode:       WriteModeStatelessST,
+				Histograms: []HistogramWithLabels{hist},
+				Metadata:   []MetadataWithLabels{metadata},
+			},
+			requestParams{
+				histograms: 1,
+			},
+			true)
+	})
+
+	t.Run("native_histogram_with_equal_start_and_sample_timestamp", func(t *testing.T) {
+		equalToSampleTime := time.Time{}
+		hist := HistogramWithLabels{
+			Labels:         map[string]string{"__name__": "stateless_st_equal_st_duration_seconds", "service": "checkout"},
+			Histogram:      histogram(1.5, true, false, true, false, false),
+			StartTimestamp: &equalToSampleTime,
+		}
+		metadata := MetadataWithLabels{
+			Labels: basicMetric("stateless_st_equal_st_duration_seconds"),
+			Type:   writev2.Metadata_METRIC_TYPE_HISTOGRAM,
+			Help:   "Histogram where start_timestamp equals timestamp",
+			Unit:   "seconds",
+		}
+
+		runComplianceTest(t, "", "Stateless-ST mode native histogram where start_timestamp equals timestamp",
 			RequestOpts{
 				Mode:       WriteModeStatelessST,
 				Histograms: []HistogramWithLabels{hist},

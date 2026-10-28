@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/snappy"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
@@ -68,7 +69,9 @@ func TestBadContentTypeModes(t *testing.T) {
 	}{
 		{name: "unknown_mode", contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request;mode=unknown"},
 		{name: "empty_mode", contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request;mode="},
+		{name: "empty_quoted_mode", contentType: `application/x-protobuf;proto=io.prometheus.write.v2.Request;mode=""`},
 		{name: "mode_on_rw1", contentType: "application/x-protobuf;proto=prometheus.WriteRequest;mode=stateless"},
+		{name: "mode_without_proto", contentType: "application/x-protobuf;mode=stateless"},
 		{name: "unknown_param", contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request;unknown=param"},
 	}
 	for _, tc := range testCases {
@@ -168,13 +171,13 @@ func TestSnappyFramedFormatRejected(t *testing.T) {
 	t.Attr("description", "Test that Snappy framed format is rejected with 400 status since Snappy block format MUST be used")
 
 	symbols := writev2.NewSymbolTable()
-	labelRefs := symbolizeSortedLabels(&symbols, basicMetric("up"))
+	labelRefs := symbolizeSortedLabels(&symbols, basicMetric("snappy_framed_rejected"))
 	req := &writev2.Request{
 		Symbols: symbols.Symbols(),
 		Timeseries: []writev2.TimeSeries{
 			{
 				LabelsRefs: labelRefs,
-				Samples:    []writev2.Sample{{Timestamp: 1000, Value: 1.0}},
+				Samples:    []writev2.Sample{{Timestamp: time.Now().UnixMilli(), Value: 1.0}},
 			},
 		},
 	}
@@ -187,7 +190,7 @@ func TestSnappyFramedFormatRejected(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, framedWriter.Close())
 
-	request := generateRequest(RequestOpts{Samples: []SampleWithLabels{{Labels: basicMetric("up"), Value: 1.0}}})
+	request := generateRequest(RequestOpts{Samples: []SampleWithLabels{{Labels: basicMetric("snappy_framed_rejected"), Value: 1.0}}})
 	request.Body = io.NopCloser(bytes.NewReader(framedBuf.Bytes()))
 
 	runRequest(t, request, requestParams{
@@ -200,20 +203,20 @@ func TestUncompressedProtobufRejected(t *testing.T) {
 	t.Attr("description", "Test that uncompressed protobuf bytes with Content-Encoding snappy are rejected with 400 status")
 
 	symbols := writev2.NewSymbolTable()
-	labelRefs := symbolizeSortedLabels(&symbols, basicMetric("up"))
+	labelRefs := symbolizeSortedLabels(&symbols, basicMetric("uncompressed_protobuf_rejected"))
 	req := &writev2.Request{
 		Symbols: symbols.Symbols(),
 		Timeseries: []writev2.TimeSeries{
 			{
 				LabelsRefs: labelRefs,
-				Samples:    []writev2.Sample{{Timestamp: 1000, Value: 1.0}},
+				Samples:    []writev2.Sample{{Timestamp: time.Now().UnixMilli(), Value: 1.0}},
 			},
 		},
 	}
 	data, err := req.Marshal()
 	require.NoError(t, err)
 
-	request := generateRequest(RequestOpts{Samples: []SampleWithLabels{{Labels: basicMetric("up"), Value: 1.0}}})
+	request := generateRequest(RequestOpts{Samples: []SampleWithLabels{{Labels: basicMetric("uncompressed_protobuf_rejected"), Value: 1.0}}})
 	request.Body = io.NopCloser(bytes.NewReader(data))
 
 	runRequest(t, request, requestParams{

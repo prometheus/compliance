@@ -259,37 +259,42 @@ func TestExemplarValidation(t *testing.T) {
 
 	nowMilli := time.Now().UnixMilli()
 	refCases := []struct {
-		name           string
-		metricName     string
-		exemplarRefs   []uint32
-		description    string
+		name        string
+		metricName  string
+		buildRefs   func(traceIdx uint32) []uint32
+		description string
 	}{
 		{
-			name:         "odd_exemplar_labels_refs",
-			metricName:   "odd_exemplar_refs_metric",
-			exemplarRefs: []uint32{1},
-			description:  "Exemplar with odd number of elements in labels_refs should be rejected",
+			name:       "odd_exemplar_labels_refs",
+			metricName: "odd_exemplar_refs_metric",
+			buildRefs: func(traceIdx uint32) []uint32 {
+				return []uint32{traceIdx}
+			},
+			description: "Exemplar with odd number of elements in labels_refs should be rejected",
 		},
 		{
-			name:         "out_of_bounds_exemplar_labels_refs",
-			metricName:   "oob_exemplar_refs_metric",
-			exemplarRefs: []uint32{1, 999},
-			description:  "Exemplar with symbol reference outside symbol table bounds should be rejected",
+			name:       "out_of_bounds_exemplar_labels_refs",
+			metricName: "oob_exemplar_refs_metric",
+			buildRefs: func(traceIdx uint32) []uint32 {
+				return []uint32{traceIdx, 999}
+			},
+			description: "Exemplar with symbol reference outside symbol table bounds should be rejected",
 		},
 	}
 
 	for _, rc := range refCases {
 		t.Run(rc.name, func(t *testing.T) {
+			must(t)
 			t.Attr("description", rc.description)
 			symbols := writev2.NewSymbolTable()
 			labelRefs := symbolizeSortedLabels(&symbols, basicMetric(rc.metricName))
-			_ = symbols.Symbolize("trace_id")
+			traceIdx := symbols.Symbolize("trace_id")
 			ts := writev2.TimeSeries{
 				LabelsRefs: labelRefs,
 				Samples:    []writev2.Sample{{Timestamp: nowMilli, Value: 1.0}},
 				Exemplars: []writev2.Exemplar{
 					{
-						LabelsRefs: rc.exemplarRefs,
+						LabelsRefs: rc.buildRefs(traceIdx),
 						Value:      1.0,
 						Timestamp:  nowMilli,
 					},
@@ -318,7 +323,7 @@ func TestExemplarSpecialValues(t *testing.T) {
 		{"negative_value", -123.456},
 		{"large_value", 1e10},
 		{"small_value", 1e-10},
-		{"nan_value", float64(value.NormalNaN)},
+		{"nan_value", math.Float64frombits(value.NormalNaN)},
 		{"inf_value", math.Inf(1)},
 		{"-inf_value", math.Inf(-1)},
 	}

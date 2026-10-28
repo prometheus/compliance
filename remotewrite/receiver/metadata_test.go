@@ -333,18 +333,21 @@ func TestMetadataValidation(t *testing.T) {
 	nowMilli := time.Now().UnixMilli()
 	refCases := []struct {
 		name        string
+		metricName  string
 		helpRef     uint32
 		unitRef     uint32
 		description string
 	}{
 		{
 			name:        "out_of_bounds_help_ref",
+			metricName:  "oob_help_ref_metric",
 			helpRef:     999,
 			unitRef:     0,
 			description: "Metadata with help_ref outside symbol table bounds should be rejected",
 		},
 		{
 			name:        "out_of_bounds_unit_ref",
+			metricName:  "oob_unit_ref_metric",
 			helpRef:     0,
 			unitRef:     999,
 			description: "Metadata with unit_ref outside symbol table bounds should be rejected",
@@ -353,9 +356,10 @@ func TestMetadataValidation(t *testing.T) {
 
 	for _, rc := range refCases {
 		t.Run(rc.name, func(t *testing.T) {
+			must(t)
 			t.Attr("description", rc.description)
 			symbols := writev2.NewSymbolTable()
-			labelRefs := symbolizeSortedLabels(&symbols, basicMetric("oob_metadata_metric"))
+			labelRefs := symbolizeSortedLabels(&symbols, basicMetric(rc.metricName))
 			ts := writev2.TimeSeries{
 				LabelsRefs: labelRefs,
 				Metadata: writev2.Metadata{
@@ -370,6 +374,7 @@ func TestMetadataValidation(t *testing.T) {
 				RawTimeseries: []writev2.TimeSeries{ts},
 				UnsafeRequest: true,
 			}), requestParams{
+				samples: 1,
 				success: false,
 			})
 		})

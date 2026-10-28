@@ -331,7 +331,7 @@ func TestFloatHistograms(t *testing.T) {
 			useCustomBuckets: false,
 			expectSuccess:    false,
 			badCount:         true,
-			description:      "Float histogram with mismatched total count",
+			description:      "Float histogram with negative total count",
 		},
 	}
 

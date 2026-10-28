@@ -403,7 +403,11 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 
 		if hw.StartTimestamp != nil {
-			ts.Histograms[0].StartTimestamp = hw.StartTimestamp.UnixMilli()
+			if hw.StartTimestamp.IsZero() {
+				ts.Histograms[0].StartTimestamp = ts.Histograms[0].Timestamp
+			} else {
+				ts.Histograms[0].StartTimestamp = hw.StartTimestamp.UnixMilli()
+			}
 		}
 
 		if metricName := hw.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
