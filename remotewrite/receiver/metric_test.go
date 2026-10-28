@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/model/value"
+	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
 
 // values contains test float values including special values (NaN, Inf) for metric testing.
@@ -161,6 +162,230 @@ func TestMultipleMetrics(t *testing.T) {
 					},
 					tc.success)
 			}
+		})
+	}
+}
+
+func TestChronologicalSamplesInSingleTimeSeries(t *testing.T) {
+	must(t)
+	t.Attr("description", "Test a single TimeSeries containing multiple samples ordered chronologically")
+
+	symbols := writev2.NewSymbolTable()
+	labelRefs := symbolizeSortedLabels(&symbols, map[string]string{"__name__": "chronological_series_total", "job": "batch"})
+	now := time.Now()
+	ts := writev2.TimeSeries{
+		LabelsRefs: labelRefs,
+		Samples: []writev2.Sample{
+			{Timestamp: now.Add(-4 * time.Millisecond).UnixMilli(), Value: 1.0},
+			{Timestamp: now.Add(-2 * time.Millisecond).UnixMilli(), Value: 2.0},
+			{Timestamp: now.UnixMilli(), Value: 3.0},
+		},
+	}
+
+	runRequest(t, generateRequest(RequestOpts{
+		RawTimeseries: []writev2.TimeSeries{ts},
+		RawSymbols:    symbols.Symbols(),
+		UnsafeRequest: true,
+	}), requestParams{
+		samples: 3,
+		success: true,
+	})
+}
+
+func TestOutOfOrderSamplesRejected(t *testing.T) {
+	should(t)
+	t.Attr("description", "Test that a sample with a timestamp older than an already ingested sample is rejected with 400 status")
+
+	labels := map[string]string{"__name__": "out_of_order_series_total", "job": "batch"}
+	runRequest(t, generateRequest(RequestOpts{
+		Samples: []SampleWithLabels{{Labels: labels, Value: 10.0}},
+	}), requestParams{
+		samples: 1,
+		success: true,
+	})
+
+	runRequest(t, generateRequest(RequestOpts{
+		Samples: []SampleWithLabels{{Labels: labels, Value: 5.0, Offset: -10 * time.Minute}},
+	}), requestParams{
+		success: false,
+	})
+}
+
+func TestSymbolTableAndLabelRefsValidation(t *testing.T) {
+	must(t)
+	t.Attr("description", "Test that invalid symbol table references and malformed series label sets are rejected with 400 status")
+
+	nowMilli := time.Now().UnixMilli()
+	sample := []writev2.Sample{{Timestamp: nowMilli, Value: 1.0}}
+
+	testCases := []struct {
+		name        string
+		description string
+		buildOpts   func() RequestOpts
+	}{
+		{
+			name:        "odd_labels_refs_length",
+			description: "TimeSeries with odd number of elements in labels_refs must be rejected",
+			buildOpts: func() RequestOpts {
+				symbols := writev2.NewSymbolTable()
+				nameIdx := symbols.Symbolize("__name__")
+				valIdx := symbols.Symbolize("odd_refs_metric")
+				return RequestOpts{
+					RawSymbols: symbols.Symbols(),
+					RawTimeseries: []writev2.TimeSeries{
+						{
+							LabelsRefs: []uint32{nameIdx, valIdx, nameIdx},
+							Samples:    sample,
+						},
+					},
+					UnsafeRequest: true,
+				}
+			},
+		},
+		{
+			name:        "out_of_bounds_label_name_ref",
+			description: "TimeSeries with label name ref exceeding symbol table length must be rejected",
+			buildOpts: func() RequestOpts {
+				symbols := writev2.NewSymbolTable()
+				valIdx := symbols.Symbolize("oob_name_metric")
+				return RequestOpts{
+					RawSymbols: symbols.Symbols(),
+					RawTimeseries: []writev2.TimeSeries{
+						{
+							LabelsRefs: []uint32{999, valIdx},
+							Samples:    sample,
+						},
+					},
+					UnsafeRequest: true,
+				}
+			},
+		},
+		{
+			name:        "out_of_bounds_label_value_ref",
+			description: "TimeSeries with label value ref exceeding symbol table length must be rejected",
+			buildOpts: func() RequestOpts {
+				symbols := writev2.NewSymbolTable()
+				nameIdx := symbols.Symbolize("__name__")
+				return RequestOpts{
+					RawSymbols: symbols.Symbols(),
+					RawTimeseries: []writev2.TimeSeries{
+						{
+							LabelsRefs: []uint32{nameIdx, 999},
+							Samples:    sample,
+						},
+					},
+					UnsafeRequest: true,
+				}
+			},
+		},
+		{
+			name:        "empty_symbols_table",
+			description: "Request with empty symbols table and non-empty labels_refs must be rejected",
+			buildOpts: func() RequestOpts {
+				return RequestOpts{
+					RawSymbols: []string{},
+					RawTimeseries: []writev2.TimeSeries{
+						{
+							LabelsRefs: []uint32{0, 0},
+							Samples:    sample,
+						},
+					},
+					UnsafeRequest: true,
+				}
+			},
+		},
+		{
+			name:        "duplicate_label_names",
+			description: "TimeSeries with duplicate label names must be rejected",
+			buildOpts: func() RequestOpts {
+				symbols := writev2.NewSymbolTable()
+				nameIdx := symbols.Symbolize("__name__")
+				metricIdx := symbols.Symbolize("dup_label_metric")
+				jobIdx := symbols.Symbolize("job")
+				val1Idx := symbols.Symbolize("job_a")
+				val2Idx := symbols.Symbolize("job_b")
+				return RequestOpts{
+					RawSymbols: symbols.Symbols(),
+					RawTimeseries: []writev2.TimeSeries{
+						{
+							LabelsRefs: []uint32{nameIdx, metricIdx, jobIdx, val1Idx, jobIdx, val2Idx},
+							Samples:    sample,
+						},
+					},
+					UnsafeRequest: true,
+				}
+			},
+		},
+		{
+			name:        "empty_label_name",
+			description: "TimeSeries with an empty label name must be rejected",
+			buildOpts: func() RequestOpts {
+				symbols := writev2.NewSymbolTable()
+				nameIdx := symbols.Symbolize("__name__")
+				metricIdx := symbols.Symbolize("empty_label_name_metric")
+				valIdx := symbols.Symbolize("some_val")
+				return RequestOpts{
+					RawSymbols: symbols.Symbols(),
+					RawTimeseries: []writev2.TimeSeries{
+						{
+							LabelsRefs: []uint32{0, valIdx, nameIdx, metricIdx},
+							Samples:    sample,
+						},
+					},
+					UnsafeRequest: true,
+				}
+			},
+		},
+		{
+			name:        "invalid_utf8_label_name",
+			description: "TimeSeries with invalid UTF-8 in label name must be rejected",
+			buildOpts: func() RequestOpts {
+				symbols := writev2.NewSymbolTable()
+				nameIdx := symbols.Symbolize("__name__")
+				metricIdx := symbols.Symbolize("invalid_utf8_name_metric")
+				badUTF8Idx := symbols.Symbolize("\xff\xfe")
+				valIdx := symbols.Symbolize("val")
+				return RequestOpts{
+					RawSymbols: symbols.Symbols(),
+					RawTimeseries: []writev2.TimeSeries{
+						{
+							LabelsRefs: []uint32{nameIdx, metricIdx, badUTF8Idx, valIdx},
+							Samples:    sample,
+						},
+					},
+					UnsafeRequest: true,
+				}
+			},
+		},
+		{
+			name:        "invalid_utf8_label_value",
+			description: "TimeSeries with invalid UTF-8 in label value must be rejected",
+			buildOpts: func() RequestOpts {
+				symbols := writev2.NewSymbolTable()
+				nameIdx := symbols.Symbolize("__name__")
+				metricIdx := symbols.Symbolize("invalid_utf8_metric")
+				jobIdx := symbols.Symbolize("job")
+				badUTF8Idx := symbols.Symbolize("\xff\xfe")
+				return RequestOpts{
+					RawSymbols: symbols.Symbols(),
+					RawTimeseries: []writev2.TimeSeries{
+						{
+							LabelsRefs: []uint32{nameIdx, metricIdx, jobIdx, badUTF8Idx},
+							Samples:    sample,
+						},
+					},
+					UnsafeRequest: true,
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Attr("description", tc.description)
+			runRequest(t, generateRequest(tc.buildOpts()), requestParams{
+				success: false,
+			})
 		})
 	}
 }

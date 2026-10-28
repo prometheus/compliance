@@ -88,12 +88,15 @@ See Makefile for detailed invocation.
 Tests that Remote-Write endpoints properly handle incoming requests by sending various Remote-Write v2 requests and validating responses.
 
 Tests cover:
-- Float samples handling
-- Native Histograms handling
+- Float samples handling (including `start_timestamp` and chronological batching)
+- Native Histograms handling (integer and float histograms, custom buckets/NHCB, reset hints, schemas, `start_timestamp`)
 - Exemplars handling
-- Protocol headers and response codes
-- Error conditions and edge cases
-- Content-Type validation
+- Metadata handling
+- Symbol table and label set validation
+- Protocol headers, compression (Snappy block format), and response codes
+- Error conditions, partial writes, and edge cases
+- `Content-Type` and mode negotiation (`none`, `stateless`, `stateless-st`)
+- RFC 7694 `415 Unsupported Media Type` response headers (`Accept`, `Accept-Encoding`)
 - Response headers (`X-Prometheus-Remote-Write-*-Written`)
 
 ### Limitations

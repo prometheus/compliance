@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/model/value"
+	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
 
 func TestExemplars(t *testing.T) {
@@ -252,6 +253,55 @@ func TestExemplarValidation(t *testing.T) {
 				samples:   1,
 				exemplars: 1,
 				success:   tc.success,
+			})
+		})
+	}
+
+	nowMilli := time.Now().UnixMilli()
+	refCases := []struct {
+		name           string
+		metricName     string
+		exemplarRefs   []uint32
+		description    string
+	}{
+		{
+			name:         "odd_exemplar_labels_refs",
+			metricName:   "odd_exemplar_refs_metric",
+			exemplarRefs: []uint32{1},
+			description:  "Exemplar with odd number of elements in labels_refs should be rejected",
+		},
+		{
+			name:         "out_of_bounds_exemplar_labels_refs",
+			metricName:   "oob_exemplar_refs_metric",
+			exemplarRefs: []uint32{1, 999},
+			description:  "Exemplar with symbol reference outside symbol table bounds should be rejected",
+		},
+	}
+
+	for _, rc := range refCases {
+		t.Run(rc.name, func(t *testing.T) {
+			t.Attr("description", rc.description)
+			symbols := writev2.NewSymbolTable()
+			labelRefs := symbolizeSortedLabels(&symbols, basicMetric(rc.metricName))
+			_ = symbols.Symbolize("trace_id")
+			ts := writev2.TimeSeries{
+				LabelsRefs: labelRefs,
+				Samples:    []writev2.Sample{{Timestamp: nowMilli, Value: 1.0}},
+				Exemplars: []writev2.Exemplar{
+					{
+						LabelsRefs: rc.exemplarRefs,
+						Value:      1.0,
+						Timestamp:  nowMilli,
+					},
+				},
+			}
+			runRequest(t, generateRequest(RequestOpts{
+				RawSymbols:    symbols.Symbols(),
+				RawTimeseries: []writev2.TimeSeries{ts},
+				UnsafeRequest: true,
+			}), requestParams{
+				samples: 1,
+				success: false,
 			})
 		})
 	}

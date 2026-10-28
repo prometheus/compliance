@@ -329,4 +329,49 @@ func TestMetadataValidation(t *testing.T) {
 			runRequest(t, generateRequest(opts), expectedParams)
 		})
 	}
+
+	nowMilli := time.Now().UnixMilli()
+	refCases := []struct {
+		name        string
+		helpRef     uint32
+		unitRef     uint32
+		description string
+	}{
+		{
+			name:        "out_of_bounds_help_ref",
+			helpRef:     999,
+			unitRef:     0,
+			description: "Metadata with help_ref outside symbol table bounds should be rejected",
+		},
+		{
+			name:        "out_of_bounds_unit_ref",
+			helpRef:     0,
+			unitRef:     999,
+			description: "Metadata with unit_ref outside symbol table bounds should be rejected",
+		},
+	}
+
+	for _, rc := range refCases {
+		t.Run(rc.name, func(t *testing.T) {
+			t.Attr("description", rc.description)
+			symbols := writev2.NewSymbolTable()
+			labelRefs := symbolizeSortedLabels(&symbols, basicMetric("oob_metadata_metric"))
+			ts := writev2.TimeSeries{
+				LabelsRefs: labelRefs,
+				Metadata: writev2.Metadata{
+					Type:    writev2.Metadata_METRIC_TYPE_COUNTER,
+					HelpRef: rc.helpRef,
+					UnitRef: rc.unitRef,
+				},
+				Samples: []writev2.Sample{{Timestamp: nowMilli, Value: 1.0}},
+			}
+			runRequest(t, generateRequest(RequestOpts{
+				RawSymbols:    symbols.Symbols(),
+				RawTimeseries: []writev2.TimeSeries{ts},
+				UnsafeRequest: true,
+			}), requestParams{
+				success: false,
+			})
+		})
+	}
 }

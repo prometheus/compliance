@@ -117,6 +117,7 @@ type requestParams struct {
 	success          bool
 	retryable        bool // Reserved for future use to indicate if the request should be retried on failure.
 	exactReponseCode int
+	allowAny4xx      bool
 	validateHeaders  func(t *testing.T, header http.Header)
 }
 
@@ -144,7 +145,7 @@ func validateResponse(t *testing.T, params requestParams, resp *http.Response) {
 	case 4:
 		// HTTP 4xx.
 		require.False(t, params.retryable, "Response code is %d but retryable is true", resp.StatusCode)
-		if params.exactReponseCode == 0 {
+		if params.exactReponseCode == 0 && !params.allowAny4xx {
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode, "Response code should be exactly %d", http.StatusBadRequest)
 		}
 		require.GreaterOrEqual(t, params.samples, samplesWritten, "%d samples written", samplesWritten)
@@ -333,7 +334,11 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 
 		if s.StartTimestamp != nil {
-			ts.Samples[0].StartTimestamp = s.StartTimestamp.UnixMilli()
+			if s.StartTimestamp.IsZero() {
+				ts.Samples[0].StartTimestamp = ts.Samples[0].Timestamp
+			} else {
+				ts.Samples[0].StartTimestamp = s.StartTimestamp.UnixMilli()
+			}
 		}
 
 		if metricName := s.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
@@ -594,6 +599,78 @@ func histogram(sum float64, includePositive, includeNegative, includeZero, useCu
 
 	if includeZero {
 		hist.ZeroCount = &writev2.Histogram_ZeroCountInt{ZeroCountInt: 1}
+	}
+
+	if useCustomBuckets {
+		hist.Schema = -53
+		hist.CustomValues = customValues
+	}
+
+	return hist
+}
+
+// floatHistogram creates a float writev2.Histogram with the specified parameters.
+func floatHistogram(sum float64, includePositive, includeNegative, includeZero, useCustomBuckets, badCount bool) writev2.Histogram {
+	var (
+		positiveSpans  []writev2.BucketSpan
+		negativeSpans  []writev2.BucketSpan
+		positiveCounts []float64
+		negativeCounts []float64
+		customValues   []float64
+		count          float64
+	)
+
+	if includePositive {
+		positiveSpans = []writev2.BucketSpan{
+			{Offset: 0, Length: 3},
+			{Offset: 2, Length: 2},
+		}
+		positiveCounts = []float64{1.5, 2.5, 4.0, 3.0, 2.0}
+		count += 13.0
+	}
+
+	if includeNegative {
+		negativeSpans = []writev2.BucketSpan{
+			{Offset: 0, Length: 2},
+		}
+		negativeCounts = []float64{1.0, 2.0}
+		count += 3.0
+	}
+
+	if includeZero {
+		count += 1.0
+	}
+
+	if useCustomBuckets {
+		customValues = []float64{0.1, 0.5, 1.0, 2.5, 5.0, 10.0}
+		positiveSpans = []writev2.BucketSpan{
+			{Offset: 0, Length: 6},
+		}
+		positiveCounts = []float64{2.0, 3.0, 5.0, 8.0, 7.0, 5.0}
+		count = 30.0
+	}
+
+	if badCount {
+		count = -1.0
+	}
+
+	hist := writev2.Histogram{
+		Count: &writev2.Histogram_CountFloat{CountFloat: count},
+		Sum:   sum,
+	}
+
+	if includePositive || useCustomBuckets {
+		hist.PositiveSpans = positiveSpans
+		hist.PositiveCounts = positiveCounts
+	}
+
+	if includeNegative {
+		hist.NegativeSpans = negativeSpans
+		hist.NegativeCounts = negativeCounts
+	}
+
+	if includeZero {
+		hist.ZeroCount = &writev2.Histogram_ZeroCountFloat{ZeroCountFloat: 1.0}
 	}
 
 	if useCustomBuckets {

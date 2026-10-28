@@ -278,3 +278,203 @@ func TestMultipleHistogramsWithMetadata(t *testing.T) {
 		},
 		true)
 }
+
+func TestFloatHistograms(t *testing.T) {
+	must(t)
+	testCases := []struct {
+		name             string
+		labels           map[string]string
+		includePositive  bool
+		includeNegative  bool
+		includeZero      bool
+		useCustomBuckets bool
+		expectSuccess    bool
+		badCount         bool
+		description      string
+	}{
+		{
+			name:             "basic_float_histogram",
+			labels:           basicMetric("test_float_histogram"),
+			includePositive:  true,
+			includeNegative:  true,
+			includeZero:      true,
+			useCustomBuckets: false,
+			expectSuccess:    true,
+			description:      "Basic float histogram with positive, negative, and zero buckets",
+		},
+		{
+			name:             "custom_buckets_float_histogram",
+			labels:           basicMetric("test_float_custom_histogram"),
+			includePositive:  true,
+			includeNegative:  false,
+			includeZero:      false,
+			useCustomBuckets: true,
+			expectSuccess:    true,
+			description:      "Float histogram with custom bucket values (NHCB)",
+		},
+		{
+			name:             "empty_float_histogram",
+			labels:           basicMetric("empty_float_hist"),
+			includePositive:  false,
+			includeNegative:  false,
+			includeZero:      false,
+			useCustomBuckets: false,
+			expectSuccess:    true,
+			description:      "Empty float histogram with zero count and sum",
+		},
+		{
+			name:             "bad_count_float_histogram",
+			labels:           basicMetric("bad_float_hist"),
+			includePositive:  true,
+			includeNegative:  false,
+			includeZero:      false,
+			useCustomBuckets: false,
+			expectSuccess:    false,
+			badCount:         true,
+			description:      "Float histogram with mismatched total count",
+		},
+	}
+
+	for _, tc := range testCases {
+		hist := HistogramWithLabels{
+			Labels:    tc.labels,
+			Histogram: floatHistogram(1.0, tc.includePositive, tc.includeNegative, tc.includeZero, tc.useCustomBuckets, tc.badCount),
+		}
+
+		runComplianceTest(t, tc.name, tc.description,
+			RequestOpts{Histograms: []HistogramWithLabels{hist}},
+			requestParams{
+				histograms: 1,
+			},
+			tc.expectSuccess)
+	}
+}
+
+func TestHistogramResetHintsAndSchemas(t *testing.T) {
+	must(t)
+	testCases := []struct {
+		name        string
+		metricName  string
+		schema      int32
+		resetHint   writev2.Histogram_ResetHint
+		description string
+	}{
+		{
+			name:        "reset_hint_unspecified_schema_0",
+			metricName:  "hist_reset_unspecified",
+			schema:      0,
+			resetHint:   writev2.Histogram_RESET_HINT_UNSPECIFIED,
+			description: "Histogram with unspecified reset hint and schema 0",
+		},
+		{
+			name:        "reset_hint_yes_schema_3",
+			metricName:  "hist_reset_yes",
+			schema:      3,
+			resetHint:   writev2.Histogram_RESET_HINT_YES,
+			description: "Histogram with explicit counter reset hint YES and schema 3",
+		},
+		{
+			name:        "reset_hint_no_schema_minus_2",
+			metricName:  "hist_reset_no",
+			schema:      -2,
+			resetHint:   writev2.Histogram_RESET_HINT_NO,
+			description: "Histogram with counter reset hint NO and schema -2",
+		},
+		{
+			name:        "reset_hint_gauge_schema_5",
+			metricName:  "hist_reset_gauge",
+			schema:      5,
+			resetHint:   writev2.Histogram_RESET_HINT_GAUGE,
+			description: "Gauge histogram with reset hint GAUGE and schema 5",
+		},
+	}
+
+	for _, tc := range testCases {
+		rawHist := histogram(3.14, true, true, true, false, false)
+		rawHist.Schema = tc.schema
+		rawHist.ResetHint = tc.resetHint
+
+		runComplianceTest(t, tc.name, tc.description,
+			RequestOpts{
+				Histograms: []HistogramWithLabels{
+					{
+						Labels:    basicMetric(tc.metricName),
+						Histogram: rawHist,
+					},
+				},
+			},
+			requestParams{
+				histograms: 1,
+			},
+			true)
+	}
+}
+
+func TestInvalidHistogramsRejected(t *testing.T) {
+	must(t)
+	t.Attr("description", "Test that structurally invalid histograms are rejected with 400 status")
+
+	testCases := []struct {
+		name        string
+		metricName  string
+		buildHist   func() writev2.Histogram
+		description string
+	}{
+		{
+			name:        "negative_bucket_count",
+			metricName:  "invalid_neg_bucket_hist",
+			description: "Integer histogram whose delta-encoded buckets decode to a negative count",
+			buildHist: func() writev2.Histogram {
+				return writev2.Histogram{
+					Count:          &writev2.Histogram_CountInt{CountInt: 1},
+					Sum:            1.0,
+					PositiveSpans:  []writev2.BucketSpan{{Offset: 0, Length: 2}},
+					PositiveDeltas: []int64{2, -5},
+				}
+			},
+		},
+		{
+			name:        "span_length_mismatch",
+			metricName:  "invalid_span_mismatch_hist",
+			description: "Histogram where bucket span lengths do not match bucket delta count",
+			buildHist: func() writev2.Histogram {
+				return writev2.Histogram{
+					Count:          &writev2.Histogram_CountInt{CountInt: 5},
+					Sum:            1.0,
+					PositiveSpans:  []writev2.BucketSpan{{Offset: 0, Length: 3}},
+					PositiveDeltas: []int64{5},
+				}
+			},
+		},
+		{
+			name:        "unsorted_custom_bucket_values",
+			metricName:  "invalid_custom_bounds_hist",
+			description: "Custom buckets histogram with non-increasing custom_values",
+			buildHist: func() writev2.Histogram {
+				return writev2.Histogram{
+					Schema:         -53,
+					Count:          &writev2.Histogram_CountInt{CountInt: 4},
+					Sum:            2.0,
+					CustomValues:   []float64{5.0, 1.0},
+					PositiveSpans:  []writev2.BucketSpan{{Offset: 0, Length: 2}},
+					PositiveDeltas: []int64{2, 0},
+				}
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Attr("description", tc.description)
+			hist := HistogramWithLabels{
+				Labels:    basicMetric(tc.metricName),
+				Histogram: tc.buildHist(),
+			}
+			runRequest(t, generateRequest(RequestOpts{
+				Histograms: []HistogramWithLabels{hist},
+			}), requestParams{
+				success: false,
+			})
+		})
+	}
+}
