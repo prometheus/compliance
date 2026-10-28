@@ -35,10 +35,8 @@ import (
 
 func TestOpenMetricsCompliance(t *testing.T) {
 	handler := newMetricsHandler()
-	targets := map[string]openmetrics.Target{
-		"my-exporter": openmetrics.NewHandlerTarget(handler),
-	}
-	openmetrics.RunTests(t, targets, openmetrics.ComplianceTests())
+	target := openmetrics.NewHandlerTarget("my-exporter", handler)
+	openmetrics.RunTests(t, target, openmetrics.ComplianceTests())
 }
 ```
 
