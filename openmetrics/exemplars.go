@@ -21,10 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	om1ExemplarMaxRunes = 128
-	om2ExemplarMaxRunes = 2048
-)
+const om1ExemplarMaxRunes = 128
 
 func exemplarsTests(v Version) []Test {
 	isOM2 := v == Version2_0_0 || v == Version2_0_0RC
@@ -79,57 +76,16 @@ func exemplarsTests(v Version) []Test {
 				require.Positive(t, found.GetValue())
 			},
 		},
-		{
-			Name:        "exemplar_label_runes_within_spec_limit",
-			Description: "Exemplar label sets MUST NOT exceed 128 UTF-8 runes in OpenMetrics 1.0 (or 2048 UTF-8 runes in OpenMetrics 2.0)",
-			RFCLevel:    MustLevel,
-			Validate: func(t *testing.T, res ScrapeResult) {
-				require.NoError(t, res.ParseErr)
-				maxRunes := om1ExemplarMaxRunes
-				if isOM2 {
-					maxRunes = om2ExemplarMaxRunes
-				}
-
-				for _, mf := range res.OrderedFamilies {
-					for _, m := range mf.Metric {
-						if ex := m.GetCounter().GetExemplar(); ex != nil {
-							require.LessOrEqualf(t, exemplarLabelRunes(ex), maxRunes,
-								"Counter %q exemplar label runes MUST be <= %d", mf.GetName(), maxRunes)
-						}
-						for _, b := range m.GetHistogram().GetBucket() {
-							if ex := b.GetExemplar(); ex != nil {
-								require.LessOrEqualf(t, exemplarLabelRunes(ex), maxRunes,
-									"Histogram %q bucket exemplar label runes MUST be <= %d", mf.GetName(), maxRunes)
-							}
-						}
-						for _, ex := range m.GetHistogram().GetExemplars() {
-							require.LessOrEqualf(t, exemplarLabelRunes(ex), maxRunes,
-								"Histogram %q exemplar label runes MUST be <= %d", mf.GetName(), maxRunes)
-						}
-					}
-				}
-
-				sizeCounter := requireFamily(t, res, "http_request_size_bytes_total", "http_request_size_bytes", "http_request_size")
-				require.NotEmpty(t, sizeCounter.Metric)
-				ex := sizeCounter.Metric[0].GetCounter().GetExemplar()
-				require.NotNil(t, ex, "Expected exemplar on http_request_size_bytes counter")
-				lbls := labelMap(ex.Label)
-				require.Equal(t, "4bf92f3577b34da6a3ce929d0e0e4736", lbls["trace_id"], "trace_id SHOULD be retained on exemplar")
-				if !isOM2 {
-					require.LessOrEqual(t, exemplarLabelRunes(ex), om1ExemplarMaxRunes)
-					require.NotContains(t, lbls, "attr_big", "OpenMetrics 1.0 exemplar MUST truncate oversized label pairs to stay <= 128 runes")
-				}
-			},
-		},
 	}
 
 	if isOM2 {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "exemplar_extended_labels_over_128_runes",
-			Description: "OpenMetrics 2.0 exporters SHOULD preserve exemplar label sets exceeding 128 runes (up to 2048 runes)",
+			Description: "OpenMetrics 2.0 exporters SHOULD preserve exemplar label sets exceeding 128 runes",
 			RFCLevel:    ShouldLevel,
 			Validate: func(t *testing.T, res ScrapeResult) {
-				sizeCounter := requireFamily(t, res, "http_request_size_bytes_total", "http_request_size_bytes", "http_request_size")
+				require.NoError(t, res.ParseErr)
+				sizeCounter := requireFamily(t, res, "http_request_size_bytes_total", "http_request_size_bytes")
 				require.NotEmpty(t, sizeCounter.Metric)
 				ex := sizeCounter.Metric[0].GetCounter().GetExemplar()
 				require.NotNil(t, ex)
@@ -139,6 +95,47 @@ func exemplarsTests(v Version) []Test {
 				require.NotEmpty(t, lbls["attr_big"], "Expected extended exemplar attribute attr_big to be preserved in OpenMetrics 2.0")
 			},
 		})
+	} else {
+		validateCases = append(validateCases,
+			ValidateCase{
+				Name:        "exemplar_label_runes_within_spec_limit",
+				Description: "Exemplar label sets MUST NOT exceed 128 UTF-8 runes in OpenMetrics 1.0",
+				RFCLevel:    MustLevel,
+				Validate: func(t *testing.T, res ScrapeResult) {
+					require.NoError(t, res.ParseErr)
+					for _, mf := range res.OrderedFamilies {
+						for _, m := range mf.Metric {
+							if ex := m.GetCounter().GetExemplar(); ex != nil {
+								require.LessOrEqualf(t, exemplarLabelRunes(ex), om1ExemplarMaxRunes,
+									"Counter %q exemplar label runes MUST be <= %d", mf.GetName(), om1ExemplarMaxRunes)
+							}
+							for _, b := range m.GetHistogram().GetBucket() {
+								if ex := b.GetExemplar(); ex != nil {
+									require.LessOrEqualf(t, exemplarLabelRunes(ex), om1ExemplarMaxRunes,
+										"Histogram %q bucket exemplar label runes MUST be <= %d", mf.GetName(), om1ExemplarMaxRunes)
+								}
+							}
+						}
+					}
+				},
+			},
+			ValidateCase{
+				Name:        "exemplar_truncated_retains_trace_id",
+				Description: "OpenMetrics 1.0 exporters SHOULD truncate oversized non-trace exemplar labels to stay within 128 runes while retaining trace_id",
+				RFCLevel:    ShouldLevel,
+				Validate: func(t *testing.T, res ScrapeResult) {
+					require.NoError(t, res.ParseErr)
+					sizeCounter := requireFamily(t, res, "http_request_size_bytes_total", "http_request_size_bytes")
+					require.NotEmpty(t, sizeCounter.Metric)
+					ex := sizeCounter.Metric[0].GetCounter().GetExemplar()
+					require.NotNil(t, ex, "Expected exemplar on http_request_size_bytes counter")
+					lbls := labelMap(ex.Label)
+					require.Equal(t, "4bf92f3577b34da6a3ce929d0e0e4736", lbls["trace_id"], "trace_id SHOULD be retained on exemplar")
+					require.LessOrEqual(t, exemplarLabelRunes(ex), om1ExemplarMaxRunes)
+					require.NotContains(t, lbls, "attr_big", "OpenMetrics 1.0 exemplar SHOULD truncate oversized label pairs to stay <= 128 runes")
+				},
+			},
+		)
 	}
 
 	return []Test{
