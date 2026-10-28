@@ -48,15 +48,16 @@ You can also run only a specific specification version:
 
 ### Testing an external binary or container
 
-Implement `openmetrics.Target` (optionally using `openmetrics.RunCommand` to manage the child process lifecycle and pass the bound `opts.ScrapeTarget` URL to `scrapeFn`):
+Implement `openmetrics.Target` (optionally using `openmetrics.RunCommand` to manage the child process lifecycle until `ctx` is canceled):
 
 ```go
 type binaryTarget struct{}
 
-func (binaryTarget) Run(t *testing.T, opts openmetrics.Options, scrapeFn func(opts openmetrics.Options)) {
-	// Start your binary or container, wait until ready, and pass its /metrics URL:
-	opts.ScrapeTarget = "http://127.0.0.1:9100/metrics"
-	scrapeFn(opts)
+func (binaryTarget) Name() string { return "my-binary" }
+
+func (binaryTarget) Run(ctx context.Context, opts openmetrics.Options) error {
+	// Start your binary or container listening on opts.MetricsHostPort and serving opts.MetricsPath:
+	return openmetrics.RunCommand(ctx, ".", nil, "./my-exporter", "--web.listen-address="+opts.MetricsHostPort, "--web.telemetry-path="+opts.MetricsPath)
 }
 ```
 
