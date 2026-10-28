@@ -59,7 +59,7 @@ func TestHelpers(t *testing.T) {
 	}
 	require.Equal(t, len("trace_id")+len("abc")+len("utf8")+1, exemplarLabelRunes(ex))
 
-	body := []byte("# TYPE http_requests counter\nhttp_requests_total{method=\"GET\"} 5\n\"http.active\"{\"k\"=\"v\"} 1\n# EOF\n")
+	body := []byte("# TYPE http_requests counter\nhttp_requests_total{method=\"GET\"} 5\nhttp_requests_in_flight 2\n\"http.active\"{\"k\"=\"v\"} 1\n# EOF\n")
 	require.Equal(t, []string{`http_requests_total{method="GET"} 5`}, sampleLinesForFamily(body, "http_requests"))
 	require.Equal(t, []string{`"http.active"{"k"="v"} 1`}, sampleLinesForFamily(body, "http.active"))
 }

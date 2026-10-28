@@ -94,6 +94,17 @@ func exemplarLabelRunes(e *dto.Exemplar) int {
 	return total
 }
 
+var openMetricsSampleSuffixes = []string{
+	"_total",
+	"_created",
+	"_bucket",
+	"_sum",
+	"_count",
+	"_gsum",
+	"_gcount",
+	"_info",
+}
+
 // sampleLinesForFamily returns all sample lines in body belonging to familyName.
 func sampleLinesForFamily(body []byte, familyName string) []string {
 	var out []string
@@ -103,13 +114,24 @@ func sampleLinesForFamily(body []byte, familyName string) []string {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if strings.HasPrefix(line, familyName+" ") ||
-			strings.HasPrefix(line, familyName+"{") ||
-			strings.HasPrefix(line, familyName+"_") ||
+		if hasSampleMetricPrefix(line, familyName) ||
 			strings.HasPrefix(line, quotedPrefix) ||
 			strings.HasPrefix(line, braceQuotedPrefix) {
 			out = append(out, line)
 		}
 	}
 	return out
+}
+
+func hasSampleMetricPrefix(line, familyName string) bool {
+	if strings.HasPrefix(line, familyName+" ") || strings.HasPrefix(line, familyName+"{") {
+		return true
+	}
+	for _, suf := range openMetricsSampleSuffixes {
+		withSuf := familyName + suf
+		if strings.HasPrefix(line, withSuf+" ") || strings.HasPrefix(line, withSuf+"{") {
+			return true
+		}
+	}
+	return false
 }
