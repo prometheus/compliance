@@ -71,14 +71,14 @@ func syntaxTests(v Version) []Test {
 					Description: "Exposition MUST end with # EOF and MUST NOT have trailing data after # EOF",
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
-						s := string(res.Body)
-						require.True(t, strings.HasSuffix(s, "# EOF\n") || strings.HasSuffix(s, "# EOF"),
-							"Exposition MUST end with '# EOF\\n' or '# EOF'")
-						idx := strings.Index(s, "# EOF")
-						require.NotEqual(t, -1, idx, "Exposition MUST contain '# EOF'")
-						trailing := s[idx+len("# EOF"):]
-						require.True(t, trailing == "" || trailing == "\n",
-							"Exposition MUST NOT have trailing data after '# EOF', got %q", trailing)
+						trimmed := strings.TrimSuffix(string(res.Body), "\n")
+						require.True(t, trimmed == "# EOF" || strings.HasSuffix(trimmed, "\n# EOF"),
+							"Exposition MUST end with a standalone '# EOF' or '# EOF\\n' line")
+						lines := strings.Split(trimmed, "\n")
+						for i, line := range lines[:len(lines)-1] {
+							require.NotEqualf(t, "# EOF", line,
+								"Exposition MUST NOT have trailing data after '# EOF' at line %d", i+1)
+						}
 					},
 				},
 				{
