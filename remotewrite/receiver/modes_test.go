@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/prometheus/model/value"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 )
@@ -36,7 +37,7 @@ func TestContentTypeModes(t *testing.T) {
 		{
 			name:        "default_mode",
 			metricName:  "mode_default_requests_total",
-			contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request",
+			contentType: remote.ContentTypeHeader(remote.WriteV2MessageType, remote.WriteModeNone),
 			allow415:    true,
 			description: "Default Content-Type without explicit mode parameter",
 		},
@@ -50,14 +51,14 @@ func TestContentTypeModes(t *testing.T) {
 		{
 			name:        "stateless_mode",
 			metricName:  "mode_stateless_requests_total",
-			contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request;mode=stateless",
+			contentType: remote.ContentTypeHeader(remote.WriteV2MessageType, remote.WriteModeStateless),
 			allow415:    true,
 			description: "Explicit mode=stateless in Content-Type",
 		},
 		{
 			name:        "stateless_st_mode",
 			metricName:  "mode_stateless_st_requests_total",
-			contentType: "application/x-protobuf;proto=io.prometheus.write.v2.Request;mode=stateless-st",
+			contentType: remote.ContentTypeHeader(remote.WriteV2MessageType, remote.WriteModeStatelessST),
 			description: "Explicit mode=stateless-st in Content-Type",
 		},
 		{
@@ -136,7 +137,7 @@ func TestStatelessMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless mode counter with explicit metadata and attached exemplar",
 			RequestOpts{
-				Mode:      WriteModeStateless,
+				Mode:      remote.WriteModeStateless,
 				Samples:   []SampleWithLabels{sample},
 				Metadata:  []MetadataWithLabels{metadata},
 				Exemplars: []ExemplarWithLabels{exemplar},
@@ -162,7 +163,7 @@ func TestStatelessMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless mode gauge with explicit metadata",
 			RequestOpts{
-				Mode:     WriteModeStateless,
+				Mode:     remote.WriteModeStateless,
 				Samples:  []SampleWithLabels{sample},
 				Metadata: []MetadataWithLabels{metadata},
 			},
@@ -202,7 +203,7 @@ func TestStatelessMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless mode summary quantile, sum, and count series with explicit SUMMARY metadata",
 			RequestOpts{
-				Mode:     WriteModeStateless,
+				Mode:     remote.WriteModeStateless,
 				Samples:  samples,
 				Metadata: metadata,
 			},
@@ -232,7 +233,7 @@ func TestStatelessMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless mode info and stateset series with explicit metadata",
 			RequestOpts{
-				Mode:     WriteModeStateless,
+				Mode:     remote.WriteModeStateless,
 				Samples:  samples,
 				Metadata: metadata,
 			},
@@ -261,7 +262,7 @@ func TestStatelessMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless mode native histogram with explicit metadata and attached exemplar",
 			RequestOpts{
-				Mode:       WriteModeStateless,
+				Mode:       remote.WriteModeStateless,
 				Histograms: []HistogramWithLabels{hist},
 				Metadata:   []MetadataWithLabels{metadata},
 				Exemplars:  []ExemplarWithLabels{exemplar},
@@ -292,7 +293,7 @@ func TestStatelessMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless mode NHCB custom buckets histogram with explicit metadata and exemplar",
 			RequestOpts{
-				Mode:       WriteModeStateless,
+				Mode:       remote.WriteModeStateless,
 				Histograms: []HistogramWithLabels{hist},
 				Metadata:   []MetadataWithLabels{metadata},
 				Exemplars:  []ExemplarWithLabels{exemplar},
@@ -319,7 +320,7 @@ func TestStatelessMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless mode gauge histogram with explicit GAUGEHISTOGRAM metadata",
 			RequestOpts{
-				Mode:       WriteModeStateless,
+				Mode:       remote.WriteModeStateless,
 				Histograms: []HistogramWithLabels{hist},
 				Metadata:   []MetadataWithLabels{metadata},
 			},
@@ -355,7 +356,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode counter with non-zero start_timestamp, metadata, and exemplar",
 			RequestOpts{
-				Mode:      WriteModeStatelessST,
+				Mode:      remote.WriteModeStatelessST,
 				Samples:   []SampleWithLabels{sample},
 				Metadata:  []MetadataWithLabels{metadata},
 				Exemplars: []ExemplarWithLabels{exemplar},
@@ -383,7 +384,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode counter where start_timestamp equals timestamp",
 			RequestOpts{
-				Mode:     WriteModeStatelessST,
+				Mode:     remote.WriteModeStatelessST,
 				Samples:  []SampleWithLabels{sample},
 				Metadata: []MetadataWithLabels{metadata},
 			},
@@ -406,7 +407,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode counter staleness marker without start_timestamp",
 			RequestOpts{
-				Mode:     WriteModeStatelessST,
+				Mode:     remote.WriteModeStatelessST,
 				Samples:  []SampleWithLabels{sample},
 				Metadata: []MetadataWithLabels{metadata},
 			},
@@ -430,7 +431,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode gauge without start_timestamp",
 			RequestOpts{
-				Mode:     WriteModeStatelessST,
+				Mode:     remote.WriteModeStatelessST,
 				Samples:  []SampleWithLabels{sample},
 				Metadata: []MetadataWithLabels{metadata},
 			},
@@ -480,7 +481,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode summary with start_timestamp on _sum and _count and no start_timestamp on quantile",
 			RequestOpts{
-				Mode:     WriteModeStatelessST,
+				Mode:     remote.WriteModeStatelessST,
 				Samples:  samples,
 				Metadata: metadata,
 			},
@@ -510,7 +511,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode native histogram with start_timestamp, metadata, and exemplar",
 			RequestOpts{
-				Mode:       WriteModeStatelessST,
+				Mode:       remote.WriteModeStatelessST,
 				Histograms: []HistogramWithLabels{hist},
 				Metadata:   []MetadataWithLabels{metadata},
 				Exemplars:  []ExemplarWithLabels{exemplar},
@@ -537,7 +538,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode NHCB histogram with start_timestamp and metadata",
 			RequestOpts{
-				Mode:       WriteModeStatelessST,
+				Mode:       remote.WriteModeStatelessST,
 				Histograms: []HistogramWithLabels{hist},
 				Metadata:   []MetadataWithLabels{metadata},
 			},
@@ -562,7 +563,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode float histogram with start_timestamp and metadata",
 			RequestOpts{
-				Mode:       WriteModeStatelessST,
+				Mode:       remote.WriteModeStatelessST,
 				Histograms: []HistogramWithLabels{hist},
 				Metadata:   []MetadataWithLabels{metadata},
 			},
@@ -588,7 +589,7 @@ func TestStatelessSTMode(t *testing.T) {
 
 		runComplianceTest(t, "", "Stateless-ST mode native histogram where start_timestamp equals timestamp",
 			RequestOpts{
-				Mode:       WriteModeStatelessST,
+				Mode:       remote.WriteModeStatelessST,
 				Histograms: []HistogramWithLabels{hist},
 				Metadata:   []MetadataWithLabels{metadata},
 			},
@@ -612,7 +613,7 @@ func TestModeValidation(t *testing.T) {
 			name:        "stateless_metadata_only_timeseries",
 			description: "Metadata-only TimeSeries in stateless mode should be rejected with 400",
 			opts: RequestOpts{
-				Mode: WriteModeStateless,
+				Mode: remote.WriteModeStateless,
 				Metadata: []MetadataWithLabels{
 					{
 						Labels: basicMetric("stateless_orphan_metadata_metric"),
@@ -627,7 +628,7 @@ func TestModeValidation(t *testing.T) {
 			name:        "stateless_exemplar_only_timeseries",
 			description: "Exemplar-only TimeSeries without samples or histograms in stateless mode should be rejected with 400",
 			opts: RequestOpts{
-				Mode: WriteModeStateless,
+				Mode: remote.WriteModeStateless,
 				Exemplars: []ExemplarWithLabels{
 					{
 						Labels:         basicMetric("stateless_orphan_exemplar_metric"),
@@ -642,7 +643,7 @@ func TestModeValidation(t *testing.T) {
 			name:        "stateless_st_metadata_only_timeseries",
 			description: "Metadata-only TimeSeries in stateless-st mode should be rejected with 400",
 			opts: RequestOpts{
-				Mode: WriteModeStatelessST,
+				Mode: remote.WriteModeStatelessST,
 				Metadata: []MetadataWithLabels{
 					{
 						Labels: basicMetric("stateless_st_orphan_metadata_metric"),
@@ -657,7 +658,7 @@ func TestModeValidation(t *testing.T) {
 			name:        "stateless_st_exemplar_only_timeseries",
 			description: "Exemplar-only TimeSeries without samples or histograms in stateless-st mode should be rejected with 400",
 			opts: RequestOpts{
-				Mode: WriteModeStatelessST,
+				Mode: remote.WriteModeStatelessST,
 				Exemplars: []ExemplarWithLabels{
 					{
 						Labels:         basicMetric("stateless_st_orphan_exemplar_metric"),

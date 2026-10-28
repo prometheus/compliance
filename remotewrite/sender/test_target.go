@@ -33,15 +33,15 @@ type Sender interface {
 
 // Mode specifies the optional Remote-Write 2.0 mode as defined in
 // https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/#modes.
-type Mode string
+type Mode = remote.WriteMode
 
 const (
 	// ModeNone is the default Remote-Write mode (no mode parameter in Content-Type).
-	ModeNone Mode = ""
+	ModeNone = remote.WriteModeNone
 	// ModeStateless is the "stateless" Remote-Write 2.0 mode.
-	ModeStateless Mode = "stateless"
+	ModeStateless = remote.WriteModeStateless
 	// ModeStatelessST is the "stateless-st" Remote-Write 2.0 mode.
-	ModeStatelessST Mode = "stateless-st"
+	ModeStatelessST = remote.WriteModeStatelessST
 )
 
 // Options represents the sender options for a given test.

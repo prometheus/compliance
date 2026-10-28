@@ -25,19 +25,10 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/common/model"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
-)
-
-// WriteMode represents the Remote-Write 2.0 mode parameter in Content-Type.
-type WriteMode string
-
-const (
-	WriteModeDefault     WriteMode = ""
-	WriteModeNone        WriteMode = "none"
-	WriteModeStateless   WriteMode = "stateless"
-	WriteModeStatelessST WriteMode = "stateless-st"
 )
 
 // symbolizeSortedLabels symbolizes a label map with label names sorted in lexicographical order,
@@ -191,7 +182,7 @@ type RequestOpts struct {
 	Metadata      []MetadataWithLabels
 	Histograms    []HistogramWithLabels
 	UnsafeRequest bool
-	Mode          WriteMode
+	Mode          remote.WriteMode
 	ContentType   string
 	RawTimeseries []writev2.TimeSeries
 	RawSymbols    []string
@@ -520,10 +511,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 
 	contentType := opts.ContentType
 	if contentType == "" {
-		contentType = "application/x-protobuf;proto=io.prometheus.write.v2.Request"
-		if opts.Mode != WriteModeDefault {
-			contentType += ";mode=" + string(opts.Mode)
-		}
+		contentType = remote.ContentTypeHeader(remote.WriteV2MessageType, opts.Mode)
 	}
 
 	httpReq := http.Request{
