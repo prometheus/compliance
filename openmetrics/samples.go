@@ -61,6 +61,7 @@ func samplesTests(v Version) []Test {
 					Description: "Counter series SHOULD include a valid start/created timestamp (_created line in OM 1.0, inline st@ in OM 2.0)",
 					RFCLevel:    ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
 						reqCounter := requireFamily(t, res, "http_requests_total", "http_requests")
 						for _, m := range reqCounter.Metric {
 							ct := m.GetCounter().GetCreatedTimestamp()
@@ -69,15 +70,15 @@ func samplesTests(v Version) []Test {
 							require.Positive(t, ct.AsTime().UnixNano())
 						}
 
+						base := strings.TrimSuffix(reqCounter.GetName(), "_total")
 						if isOM2 {
 							lines := sampleLinesForFamily(res.Body, reqCounter.GetName())
 							require.NotEmpty(t, lines)
 							for _, l := range lines {
 								require.Contains(t, l, " st@", "OpenMetrics 2.0 counter sample line SHOULD contain inline st@ start timestamp")
-								require.NotContains(t, l, "_created", "OpenMetrics 2.0 MUST NOT emit separate _created lines")
 							}
+							require.NotContains(t, string(res.Body), base+"_created", "OpenMetrics 2.0 MUST NOT emit separate _created lines")
 						} else {
-							base := strings.TrimSuffix(reqCounter.GetName(), "_total")
 							require.Contains(t, string(res.Body), base+"_created", "OpenMetrics 1.0 counter SHOULD emit _created lines")
 						}
 					},
