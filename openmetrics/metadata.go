@@ -74,9 +74,21 @@ func metadataTests(v Version) []Test {
 					Description: "Metric families SHOULD include a # TYPE descriptor",
 					RFCLevel:    ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
 						require.NotEmpty(t, res.OrderedFamilies)
+						seenType := make(map[string]bool)
+						for line := range strings.SplitSeq(string(res.Body), "\n") {
+							if rest, ok := strings.CutPrefix(line, "# TYPE "); ok {
+								if name, _, ok := cutDescriptorMetricName(rest); ok {
+									seenType[name] = true
+								}
+							}
+						}
 						for _, mf := range res.OrderedFamilies {
-							require.NotNilf(t, mf.Type, "MetricFamily %q SHOULD include a # TYPE descriptor", mf.GetName())
+							name := mf.GetName()
+							baseName := strings.TrimSuffix(name, "_total")
+							require.Truef(t, seenType[name] || seenType[baseName],
+								"MetricFamily %q SHOULD include a # TYPE descriptor", name)
 						}
 					},
 				},
@@ -85,6 +97,7 @@ func metadataTests(v Version) []Test {
 					Description: "Metric families SHOULD include a non-empty # HELP descriptor",
 					RFCLevel:    ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
 						require.NotEmpty(t, res.OrderedFamilies)
 						for _, mf := range res.OrderedFamilies {
 							require.NotEmptyf(t, mf.GetHelp(), "MetricFamily %q SHOULD include a non-empty # HELP descriptor", mf.GetName())
@@ -96,6 +109,8 @@ func metadataTests(v Version) []Test {
 					Description: "Metric families with units SHOULD include a # UNIT descriptor",
 					RFCLevel:    ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
+						require.NotEmpty(t, res.OrderedFamilies)
 						foundUnit := false
 						for _, mf := range res.OrderedFamilies {
 							if mf.GetUnit() != "" {
@@ -111,6 +126,8 @@ func metadataTests(v Version) []Test {
 					Description: "When # UNIT is specified, the metric family name MUST end with _<unit> in OpenMetrics 1.0 (SHOULD in OpenMetrics 2.0)",
 					RFCLevel:    unitSuffixLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
+						require.NotEmpty(t, res.OrderedFamilies)
 						for _, mf := range res.OrderedFamilies {
 							unit := mf.GetUnit()
 							if unit == "" {
