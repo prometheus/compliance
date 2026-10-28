@@ -37,7 +37,9 @@ scrape_configs:
     scrape_interval: {{.ScrapeInterval}}
     honor_labels: true
     honor_timestamps: true
+    scrape_native_histograms: true
     scrape_protocols:
+      - PrometheusProto
       - OpenMetricsText1.0.0
       - PrometheusText0.0.4
     static_configs:

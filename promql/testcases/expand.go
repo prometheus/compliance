@@ -68,6 +68,9 @@ var testVariantArgs = map[string][]string{
 	"dateFunc":             {"day_of_month", "day_of_week", "days_in_month", "hour", "minute", "month", "year"},
 	"smoothingFactor":      {"0.1", "0.5", "0.8"},
 	"trendFactor":          {"0.1", "0.5", "0.8"},
+	"histogramAggrOp":      {"sum", "avg", "count", "group"},
+	"histogramTimeAggrOp":  {"sum", "avg", "count", "absent", "last"},
+	"histogramFunc":        {"histogram_count", "histogram_sum", "histogram_avg", "histogram_stddev", "histogram_stdvar"},
 }
 
 // tprintf replaces template arguments in a string with their instantiations from the provided map.
