@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package receiver
 
 import (
 	"math"
@@ -601,10 +601,14 @@ func TestStatelessSTMode(t *testing.T) {
 }
 
 func TestModeValidation(t *testing.T) {
-	should(t)
-	t.Attr("description", "Test that requests violating stateless or stateless-st mode requirements are rejected with 400 status")
+	TestStatelessModeValidation(t)
+	TestStatelessSTModeValidation(t)
+}
 
-	startTime := time.Now().Add(-30 * time.Minute)
+func TestStatelessModeValidation(t *testing.T) {
+	should(t)
+	t.Attr("description", "Test that requests violating stateless mode requirements are rejected with 400 status")
+
 	testCases := []struct {
 		name        string
 		description string
@@ -680,6 +684,32 @@ func TestModeValidation(t *testing.T) {
 				},
 			},
 		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			should(t)
+			t.Attr("description", tc.description)
+			runRequest(t, generateRequest(tc.opts), requestParams{
+				samples:    len(tc.opts.Samples),
+				histograms: len(tc.opts.Histograms),
+				exemplars:  len(tc.opts.Exemplars),
+				success:    false,
+			})
+		})
+	}
+}
+
+func TestStatelessSTModeValidation(t *testing.T) {
+	should(t)
+	t.Attr("description", "Test that requests violating stateless-st mode requirements are rejected with 400 status")
+
+	startTime := time.Now().Add(-30 * time.Minute)
+	testCases := []struct {
+		name        string
+		description string
+		opts        RequestOpts
+	}{
 		{
 			name:        "stateless_st_metadata_only_timeseries",
 			description: "Metadata-only TimeSeries in stateless-st mode should be rejected with 400",

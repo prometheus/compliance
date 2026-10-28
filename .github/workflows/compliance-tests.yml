@@ -43,7 +43,7 @@ jobs:
       - run: cd remotewrite && make receiver PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE="\"${SKIP_TESTS}\""
         env:
           # Skip RFC 9110 Content-Type mode syntax and RFC 7694 415 response header checks until Prometheus updates client_golang/exp (https://github.com/prometheus/client_golang/pull/2188), and receiver mode SHOULD rejections until implemented in Prometheus.
-          SKIP_TESTS: "TestContentTypeModes/rfc9110_|TestBadContentTypeModes|TestUnsupportedContentTypeAcceptHeader|TestUnsupportedContentEncodingAcceptEncodingHeader|TestModeValidation/.*_(classic_histogram_samples|untyped_metadata|without_start_timestamp)"
+          SKIP_TESTS: "TestCompliance/TestContentTypeModes/rfc9110_|TestCompliance/TestBadContentTypeModes|TestCompliance/TestUnsupportedContentTypeAcceptHeader|TestCompliance/TestUnsupportedContentEncodingAcceptEncodingHeader|TestStateless.*Compliance/Test.*ModeValidation/.*_(classic_histogram_samples|untyped_metadata|without_start_timestamp)"
 
   promql:
     name: PromQL

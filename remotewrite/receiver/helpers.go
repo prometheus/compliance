@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package main provides compliance testing helpers for Prometheus remote write v2 receivers.
-package main
+// Package receiver provides compliance tests for Prometheus Remote-Write 2.0 receivers.
+package receiver
 
 import (
 	"bytes"
