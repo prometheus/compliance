@@ -21,9 +21,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func metadataTests(mode Mode) []Test {
+func metadataTests(mode remote.WriteMode) []Test {
 	typeLevel := ShouldLevel
-	if mode != ModeNone {
+	if mode != remote.WriteModeNone {
 		typeLevel = MustLevel
 	}
 
@@ -42,7 +42,7 @@ func metadataTests(mode Mode) []Test {
 		},
 	}
 
-	if mode != ModeNone {
+	if mode != remote.WriteModeNone {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "no_unspecified_metadata_type",
 			Description: "Metadata.Type MUST be specified and MUST NOT be METRIC_TYPE_UNSPECIFIED (0) in stateless modes.",
@@ -159,7 +159,7 @@ func metadataTests(mode Mode) []Test {
 		},
 	)
 
-	if mode == ModeNone {
+	if mode == remote.WriteModeNone {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "untyped_metadata",
 			Description: "Series without TYPE/HELP/UNIT metadata MUST use METRIC_TYPE_UNSPECIFIED and zero references.",

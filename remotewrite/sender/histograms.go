@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func histogramsTests(mode Mode) []Test {
+func histogramsTests(mode remote.WriteMode) []Test {
 	const (
 		basicHistMetric      = "request_duration_seconds"
 		negBucketsHistMetric = "temperature_delta_celsius"
@@ -39,7 +39,7 @@ func histogramsTests(mode Mode) []Test {
 	startMs := startTime.UnixMilli()
 
 	stLevel := ShouldLevel
-	if mode == ModeStatelessST {
+	if mode == remote.WriteModeStatelessST {
 		stLevel = MustLevel
 	}
 
@@ -275,7 +275,7 @@ func histogramsTests(mode Mode) []Test {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, basicHistMetric)
 						require.NotNil(t, hist)
-						if mode == ModeStatelessST || hist.StartTimestamp != 0 {
+						if mode == remote.WriteModeStatelessST || hist.StartTimestamp != 0 {
 							require.Equal(t, startMs, hist.StartTimestamp)
 							require.LessOrEqual(t, hist.StartTimestamp, hist.Timestamp, "Histogram start_timestamp should be before or equal to timestamp")
 						}
@@ -412,7 +412,7 @@ http_request_duration_seconds_created 1500.0
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
-						if mode != ModeNone {
+						if mode != remote.WriteModeNone {
 							hist := findHistogramData(req, "http_request_duration_seconds")
 							require.NotNil(t, hist, "Stateless mode sender MUST encode classic histogram as a Histogram message")
 							require.Equal(t, int32(-53), hist.Schema, "NHCB must use schema -53")
@@ -425,7 +425,7 @@ http_request_duration_seconds_created 1500.0
 								"Stateless mode MUST NOT send classic _sum float series")
 							require.Empty(t, findTimeseriesByMetricName(req, "http_request_duration_seconds_count"),
 								"Stateless mode MUST NOT send classic _count float series")
-							if mode == ModeStatelessST {
+							if mode == remote.WriteModeStatelessST {
 								require.Equal(t, int64(1500000), hist.StartTimestamp,
 									"Stateless-ST mode MUST set start_timestamp on histogram")
 							}

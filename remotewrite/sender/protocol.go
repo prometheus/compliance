@@ -28,9 +28,9 @@ import (
 // snappyFramedHeader is the 10-byte stream identifier chunk magic used by Snappy framed format.
 var snappyFramedHeader = []byte{0xff, 0x06, 0x00, 0x00, 0x73, 0x4e, 0x61, 0x50, 0x50, 0x59}
 
-func protocolTests(mode Mode) []Test {
+func protocolTests(mode remote.WriteMode) []Test {
 	protoParamLevel := ShouldLevel
-	if mode != ModeNone {
+	if mode != remote.WriteModeNone {
 		protoParamLevel = MustLevel
 	}
 
@@ -86,7 +86,7 @@ func protocolTests(mode Mode) []Test {
 					}
 					if modeParam, ok := params["mode"]; ok {
 						expectedMode := "none"
-						if mode != ModeNone {
+						if mode != remote.WriteModeNone {
 							expectedMode = string(mode)
 						}
 						require.Equal(t, expectedMode, modeParam, "mode parameter MUST be %q", expectedMode)
@@ -109,7 +109,7 @@ func protocolTests(mode Mode) []Test {
 		},
 	}
 
-	if mode != ModeNone {
+	if mode != remote.WriteModeNone {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "content_type_mode_param",
 			Description: fmt.Sprintf("Senders MUST use Content-Type with mode=%s in %s mode", mode, mode),
@@ -175,7 +175,7 @@ func protocolTests(mode Mode) []Test {
 		},
 	}
 
-	if mode == ModeNone {
+	if mode == remote.WriteModeNone {
 		tests = append(tests, Test{
 			Name:        "rw1_compatibility",
 			Description: "Senders MAY support 1.x Receivers using prometheus.WriteRequest",

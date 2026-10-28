@@ -24,18 +24,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func exemplarsTests(mode Mode) []Test {
+func exemplarsTests(mode remote.WriteMode) []Test {
 	timeNow := time.Now().Truncate(time.Millisecond)
 	explicitExemplarTime := timeNow.Add(-5 * time.Second)
 	explicitExemplarTS := timestamp.FromTime(explicitExemplarTime)
 
 	exemplarLevel := MustLevel
-	if mode != ModeNone {
+	if mode != remote.WriteModeNone {
 		exemplarLevel = ShouldLevel
 	}
 
 	validateCases := make([]ValidateCase, 0, 6)
-	if mode != ModeNone {
+	if mode != remote.WriteModeNone {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "no_exemplar_only_timeseries",
 			Description: "Every TimeSeries MUST have at least one sample or histogram; exemplar-only TimeSeries MUST NOT be sent in stateless modes.",

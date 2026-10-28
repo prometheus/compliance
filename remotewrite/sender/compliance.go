@@ -39,7 +39,7 @@ import (
 
 // ComplianceTests returns official compliance sender tests.
 func ComplianceTests() (ret []Test) {
-	return complianceTestsForMode(ModeNone)
+	return complianceTestsForMode(remote.WriteModeNone)
 }
 
 // StatelessComplianceTests returns compliance sender tests for the "stateless"
@@ -47,7 +47,7 @@ func ComplianceTests() (ret []Test) {
 //
 // See: https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/#stateless
 func StatelessComplianceTests() (ret []Test) {
-	return complianceTestsForMode(ModeStateless)
+	return complianceTestsForMode(remote.WriteModeStateless)
 }
 
 // StatelessSTComplianceTests returns compliance sender tests for the "stateless-st"
@@ -55,10 +55,10 @@ func StatelessComplianceTests() (ret []Test) {
 //
 // See: https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/#stateless-st
 func StatelessSTComplianceTests() (ret []Test) {
-	return complianceTestsForMode(ModeStatelessST)
+	return complianceTestsForMode(remote.WriteModeStatelessST)
 }
 
-func complianceTestsForMode(mode Mode) (ret []Test) {
+func complianceTestsForMode(mode remote.WriteMode) (ret []Test) {
 	ret = append(ret, protocolTests(mode)...)
 	ret = append(ret, symbolsTests()...)
 	ret = append(ret, labelsTests()...)
@@ -109,7 +109,7 @@ type ReceiverResult struct {
 	// RemoteWrite version that this test was configured with.
 	Version remote.WriteMessageType
 	// RemoteWrite mode that this test was configured with.
-	Mode Mode
+	Mode remote.WriteMode
 	// All sender requests received by the test receiver.
 	Requests []ReceiverRequest
 }
@@ -156,9 +156,9 @@ type Test struct {
 	// that the target must use.
 	// This adds another "/rw<number>/" sub-test.
 	Version remote.WriteMessageType
-	// RemoteWrite mode to configure the target with (e.g. ModeStateless, ModeStatelessST).
+	// RemoteWrite mode to configure the target with (e.g. remote.WriteModeStateless, remote.WriteModeStatelessST).
 	// When set, this appends "-<mode>" to the "/rw2/" sub-test (e.g. "/rw2-stateless/").
-	Mode Mode
+	Mode remote.WriteMode
 	// ScrapeContentType specifies the Content-Type header served by the scrape target.
 	// If empty, defaults to OpenMetrics 1.0 text format (OM1ContentType).
 	ScrapeContentType string
@@ -205,7 +205,7 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 			protoMsgName = "rw1"
 		case remote.WriteV2MessageType:
 			protoMsgName = "rw2"
-			if tc.Mode != ModeNone {
+			if tc.Mode != remote.WriteModeNone {
 				protoMsgName = fmt.Sprintf("rw2-%s", tc.Mode)
 			}
 		default:
@@ -305,7 +305,7 @@ type receiver struct {
 	server *httptest.Server
 
 	msg       remote.WriteMessageType
-	mode      Mode
+	mode      remote.WriteMode
 	requests  []ReceiverRequest
 	responses []ReceiverResponse
 
@@ -316,7 +316,7 @@ type receiver struct {
 // captures requests and respond with the given responses sequentially until they finish or context is done.
 //
 // NOTE: This kind of receiver will only work for non-sharded, single sender.
-func newSyncReceiver(msg remote.WriteMessageType, mode Mode, responses []ReceiverResponse) *receiver {
+func newSyncReceiver(msg remote.WriteMessageType, mode remote.WriteMode, responses []ReceiverResponse) *receiver {
 	r := &receiver{
 		closeCh:   make(chan struct{}, 1),
 		requests:  make([]ReceiverRequest, 0, len(responses)),
