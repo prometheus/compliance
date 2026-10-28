@@ -14,6 +14,7 @@
 package promql
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -32,10 +33,13 @@ import (
 
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/compliance/promql/comparer"
 	"github.com/prometheus/compliance/promql/config"
 	"github.com/prometheus/compliance/promql/testcases"
+	"google.golang.org/protobuf/proto"
 )
 
 //go:embed promql-test-queries.yml
@@ -276,20 +280,28 @@ func waitReplayerAndTarget(ctx context.Context, replayer *scrapeReplayer, promAP
 	}
 }
 
-const om1ContentType = "application/openmetrics-text; version=1.0.0; charset=utf-8"
+const (
+	om1ContentType   = "application/openmetrics-text; version=1.0.0; charset=utf-8"
+	protoContentType = "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited"
+)
 
-// scrapeReplayer serves a sequence of pre-computed OpenMetrics 1.0 snapshots,
-// advancing by one snapshot on each HTTP scrape until all snapshots have been served.
+type scrapeSnapshot struct {
+	proto  []byte
+	omText string
+}
+
+// scrapeReplayer serves a sequence of pre-computed PrometheusProto and OpenMetrics 1.0
+// snapshots, advancing by one snapshot on each HTTP scrape until all snapshots have been served.
 type scrapeReplayer struct {
 	server    *httptest.Server
 	mu        sync.Mutex
-	snapshots []string
+	snapshots []scrapeSnapshot
 	idx       int
 	doneOnce  sync.Once
 	doneCh    chan struct{}
 }
 
-func newScrapeReplayer(snapshots []string) *scrapeReplayer {
+func newScrapeReplayer(snapshots []scrapeSnapshot) *scrapeReplayer {
 	r := &scrapeReplayer{
 		snapshots: snapshots,
 		doneCh:    make(chan struct{}),
@@ -298,23 +310,35 @@ func newScrapeReplayer(snapshots []string) *scrapeReplayer {
 	return r
 }
 
-func (r *scrapeReplayer) handleScrape(w http.ResponseWriter, _ *http.Request) {
+func (r *scrapeReplayer) handleScrape(w http.ResponseWriter, req *http.Request) {
 	r.mu.Lock()
-	var body string
-	if r.idx < len(r.snapshots) {
-		body = r.snapshots[r.idx]
+	var snap scrapeSnapshot
+	hasSnap := r.idx < len(r.snapshots)
+	if hasSnap {
+		snap = r.snapshots[r.idx]
 		r.idx++
 		if r.idx == len(r.snapshots) {
 			r.doneOnce.Do(func() { close(r.doneCh) })
 		}
-	} else {
-		body = "# EOF\n"
 	}
 	r.mu.Unlock()
 
+	if strings.Contains(req.Header.Get("Accept"), expfmt.ProtoType) {
+		w.Header().Set("Content-Type", protoContentType)
+		w.WriteHeader(http.StatusOK)
+		if hasSnap {
+			_, _ = w.Write(snap.proto)
+		}
+		return
+	}
+
 	w.Header().Set("Content-Type", om1ContentType)
 	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, body)
+	if hasSnap {
+		_, _ = io.WriteString(w, snap.omText)
+	} else {
+		_, _ = io.WriteString(w, "# EOF\n")
+	}
 }
 
 func (r *scrapeReplayer) HostPort(t *testing.T) string {
@@ -340,10 +364,13 @@ func (r *scrapeReplayer) Close() {
 	r.server.Close()
 }
 
-// generateDemoSnapshots builds deterministic OpenMetrics 1.0 scrape payloads covering
-// [end-70m, end] for the demo_* metrics used by promql-test-queries.yml.
-// TODO(bwplotka): Support Native Histograms long term (e.g. via Prometheus Protobuf or OpenMetrics 2.0 scrape payloads and NH test queries in promql-test-queries.yml).
-func generateDemoSnapshots(end time.Time) []string {
+func labelPair(name, value string) *dto.LabelPair {
+	return &dto.LabelPair{Name: proto.String(name), Value: proto.String(value)}
+}
+
+// generateDemoSnapshots builds deterministic PrometheusProto and OpenMetrics 1.0 scrape
+// payloads covering [end-70m, end] for the demo_* metrics used by promql-test-queries.yml.
+func generateDemoSnapshots(end time.Time) []scrapeSnapshot {
 	var timestamps []time.Time
 	// Coarse 2m steps over [end-70m, end-12m) to populate 1h range lookups and 10m offsets.
 	for ts := end.Add(-70 * time.Minute); ts.Before(end.Add(-12 * time.Minute)); ts = ts.Add(2 * time.Minute) {
@@ -362,36 +389,57 @@ func generateDemoSnapshots(end time.Time) []string {
 	memTypes := []string{"free", "buffers", "cached"}
 	cpuModes := []string{"idle", "user"}
 	methods := []string{"GET", "POST"}
-	bucketBounds := []string{"0.05", "0.1", "0.2", "0.4", "0.8", "+Inf"}
+	bucketBounds := []float64{0.05, 0.1, 0.2, 0.4, 0.8}
 
 	resetTime := end.Add(-4 * time.Minute)
 	baseTime := timestamps[0]
 
-	snapshots := make([]string, 0, len(timestamps))
-	var sb strings.Builder
+	snapshots := make([]scrapeSnapshot, 0, len(timestamps))
+	var protoBuf, omBuf bytes.Buffer
+	stepsSinceReset := 0
 
 	for stepIdx, ts := range timestamps {
-		sb.Reset()
-		tsSec := ts.Unix()
+		tsMs := ts.UnixMilli()
 		elapsedSec := ts.Sub(baseTime).Seconds()
+		stepsSinceReset++
+		if ts.Equal(resetTime) {
+			stepsSinceReset = 1
+		}
 
 		// 1. demo_num_cpus (gauge).
-		sb.WriteString("# TYPE demo_num_cpus gauge\n")
+		numCPUs := &dto.MetricFamily{
+			Name: proto.String("demo_num_cpus"),
+			Type: dto.MetricType_GAUGE.Enum(),
+		}
 		for _, inst := range instances {
-			fmt.Fprintf(&sb, "demo_num_cpus{instance=%q} 4 %d\n", inst, tsSec)
+			numCPUs.Metric = append(numCPUs.Metric, &dto.Metric{
+				Label:       []*dto.LabelPair{labelPair("instance", inst)},
+				Gauge:       &dto.Gauge{Value: proto.Float64(4)},
+				TimestampMs: proto.Int64(tsMs),
+			})
 		}
 
 		// 2. demo_memory_usage_bytes (gauge).
-		sb.WriteString("# TYPE demo_memory_usage_bytes gauge\n")
+		memUsage := &dto.MetricFamily{
+			Name: proto.String("demo_memory_usage_bytes"),
+			Type: dto.MetricType_GAUGE.Enum(),
+		}
 		for instIdx, inst := range instances {
 			for typeIdx, mType := range memTypes {
 				val := 1e8*float64(instIdx+1) + 2e7*float64(typeIdx+1) + 1e6*math.Sin(float64(stepIdx)/5.0+float64(instIdx+typeIdx))
-				fmt.Fprintf(&sb, "demo_memory_usage_bytes{instance=%q,type=%q} %.4f %d\n", inst, mType, val, tsSec)
+				memUsage.Metric = append(memUsage.Metric, &dto.Metric{
+					Label:       []*dto.LabelPair{labelPair("instance", inst), labelPair("type", mType)},
+					Gauge:       &dto.Gauge{Value: proto.Float64(val)},
+					TimestampMs: proto.Int64(tsMs),
+				})
 			}
 		}
 
 		// 3. demo_cpu_usage_seconds_total (counter with a reset at end-4m).
-		sb.WriteString("# TYPE demo_cpu_usage_seconds counter\n")
+		cpuUsage := &dto.MetricFamily{
+			Name: proto.String("demo_cpu_usage_seconds_total"),
+			Type: dto.MetricType_COUNTER.Enum(),
+		}
 		counterElapsed := elapsedSec
 		if !ts.Before(resetTime) {
 			counterElapsed = ts.Sub(resetTime).Seconds()
@@ -400,50 +448,145 @@ func generateDemoSnapshots(end time.Time) []string {
 			for modeIdx, mode := range cpuModes {
 				ratePerSec := 0.25*float64(instIdx+1) + 0.15*float64(modeIdx+1)
 				val := 10.0 + counterElapsed*ratePerSec
-				fmt.Fprintf(&sb, "demo_cpu_usage_seconds_total{instance=%q,mode=%q} %.4f %d\n", inst, mode, val, tsSec)
+				cpuUsage.Metric = append(cpuUsage.Metric, &dto.Metric{
+					Label:       []*dto.LabelPair{labelPair("instance", inst), labelPair("mode", mode)},
+					Counter:     &dto.Counter{Value: proto.Float64(val)},
+					TimestampMs: proto.Int64(tsMs),
+				})
 			}
 		}
 
 		// 4. demo_disk_usage_bytes (gauge with linear trend for deriv/predict_linear).
-		sb.WriteString("# TYPE demo_disk_usage_bytes gauge\n")
+		diskUsage := &dto.MetricFamily{
+			Name: proto.String("demo_disk_usage_bytes"),
+			Type: dto.MetricType_GAUGE.Enum(),
+		}
 		for instIdx, inst := range instances {
 			val := 5e9*float64(instIdx+1) + elapsedSec*1024.0*float64(instIdx+1)
-			fmt.Fprintf(&sb, "demo_disk_usage_bytes{instance=%q} %.2f %d\n", inst, val, tsSec)
+			diskUsage.Metric = append(diskUsage.Metric, &dto.Metric{
+				Label:       []*dto.LabelPair{labelPair("instance", inst)},
+				Gauge:       &dto.Gauge{Value: proto.Float64(val)},
+				TimestampMs: proto.Int64(tsMs),
+			})
 		}
 
 		// 5. demo_batch_last_success_timestamp_seconds (gauge stepping every minute).
-		sb.WriteString("# TYPE demo_batch_last_success_timestamp_seconds gauge\n")
+		batchSuccess := &dto.MetricFamily{
+			Name: proto.String("demo_batch_last_success_timestamp_seconds"),
+			Type: dto.MetricType_GAUGE.Enum(),
+		}
 		batchTS := ts.Truncate(time.Minute).Unix()
 		for instIdx, inst := range instances {
-			fmt.Fprintf(&sb, "demo_batch_last_success_timestamp_seconds{instance=%q} %d %d\n", inst, batchTS-int64(instIdx*10), tsSec)
+			batchSuccess.Metric = append(batchSuccess.Metric, &dto.Metric{
+				Label:       []*dto.LabelPair{labelPair("instance", inst)},
+				Gauge:       &dto.Gauge{Value: proto.Float64(float64(batchTS - int64(instIdx*10)))},
+				TimestampMs: proto.Int64(tsMs),
+			})
+		}
+
+		families := []*dto.MetricFamily{
+			numCPUs,
+			memUsage,
+			cpuUsage,
+			diskUsage,
+			batchSuccess,
 		}
 
 		// 6. demo_intermittent_metric (gauge with a >5m gap so lookback staleness triggers).
 		if ts.Before(end.Add(-8*time.Minute)) || !ts.Before(end.Add(-2*time.Minute)) {
-			sb.WriteString("# TYPE demo_intermittent_metric gauge\n")
-			for instIdx, inst := range instances {
-				fmt.Fprintf(&sb, "demo_intermittent_metric{instance=%q} %d %d\n", inst, instIdx+1, tsSec)
+			intermittent := &dto.MetricFamily{
+				Name: proto.String("demo_intermittent_metric"),
+				Type: dto.MetricType_GAUGE.Enum(),
 			}
+			for instIdx, inst := range instances {
+				intermittent.Metric = append(intermittent.Metric, &dto.Metric{
+					Label:       []*dto.LabelPair{labelPair("instance", inst)},
+					Gauge:       &dto.Gauge{Value: proto.Float64(float64(instIdx + 1))},
+					TimestampMs: proto.Int64(tsMs),
+				})
+			}
+			families = append(families, intermittent)
 		}
 
 		// 7. demo_api_request_duration_seconds (classic histogram).
-		sb.WriteString("# TYPE demo_api_request_duration_seconds histogram\n")
+		classicHist := &dto.MetricFamily{
+			Name: proto.String("demo_api_request_duration_seconds"),
+			Type: dto.MetricType_HISTOGRAM.Enum(),
+		}
 		for instIdx, inst := range instances {
 			for methodIdx, method := range methods {
 				baseCount := uint64(stepIdx+1) * uint64(instIdx+1) * uint64(methodIdx+1)
-				var totalCount uint64
-				for bIdx, le := range bucketBounds {
-					totalCount = baseCount * uint64(bIdx+1)
-					fmt.Fprintf(&sb, "demo_api_request_duration_seconds_bucket{instance=%q,method=%q,le=%q} %d %d\n", inst, method, le, totalCount, tsSec)
+				buckets := make([]*dto.Bucket, 0, len(bucketBounds))
+				for bIdx, ub := range bucketBounds {
+					buckets = append(buckets, &dto.Bucket{
+						CumulativeCount: proto.Uint64(baseCount * uint64(bIdx+1)),
+						UpperBound:      proto.Float64(ub),
+					})
 				}
-				sum := float64(totalCount) * 0.125
-				fmt.Fprintf(&sb, "demo_api_request_duration_seconds_sum{instance=%q,method=%q} %.4f %d\n", inst, method, sum, tsSec)
-				fmt.Fprintf(&sb, "demo_api_request_duration_seconds_count{instance=%q,method=%q} %d %d\n", inst, method, totalCount, tsSec)
+				totalCount := baseCount * uint64(len(bucketBounds)+1)
+				classicHist.Metric = append(classicHist.Metric, &dto.Metric{
+					Label: []*dto.LabelPair{labelPair("instance", inst), labelPair("method", method)},
+					Histogram: &dto.Histogram{
+						SampleCount: proto.Uint64(totalCount),
+						SampleSum:   proto.Float64(float64(totalCount) * 0.125),
+						Bucket:      buckets,
+					},
+					TimestampMs: proto.Int64(tsMs),
+				})
+			}
+		}
+		families = append(families, classicHist)
+
+		// 8. demo_api_request_duration_native_seconds (native histogram with a counter reset at end-4m).
+		nativeHist := &dto.MetricFamily{
+			Name: proto.String("demo_api_request_duration_native_seconds"),
+			Type: dto.MetricType_HISTOGRAM.Enum(),
+		}
+		for instIdx, inst := range instances {
+			for methodIdx, method := range methods {
+				baseCount := int64(stepsSinceReset) * int64(instIdx+1) * int64(methodIdx+1)
+				totalCount := uint64(11 * baseCount)
+				nativeHist.Metric = append(nativeHist.Metric, &dto.Metric{
+					Label: []*dto.LabelPair{labelPair("instance", inst), labelPair("method", method)},
+					Histogram: &dto.Histogram{
+						SampleCount:   proto.Uint64(totalCount),
+						SampleSum:     proto.Float64(float64(baseCount) * 2.875),
+						Schema:        proto.Int32(0),
+						ZeroThreshold: proto.Float64(0.001),
+						ZeroCount:     proto.Uint64(uint64(baseCount)),
+						PositiveSpan: []*dto.BucketSpan{
+							{Offset: proto.Int32(-4), Length: proto.Uint32(4)},
+						},
+						PositiveDelta: []int64{2 * baseCount, 2 * baseCount, -baseCount, -2 * baseCount},
+					},
+					TimestampMs: proto.Int64(tsMs),
+				})
 			}
 		}
 
-		sb.WriteString("# EOF\n")
-		snapshots = append(snapshots, sb.String())
+		protoBuf.Reset()
+		omBuf.Reset()
+		protoEnc := expfmt.NewEncoder(&protoBuf, expfmt.NewFormat(expfmt.TypeProtoDelim))
+		omEnc := expfmt.NewEncoder(&omBuf, expfmt.NewFormat(expfmt.TypeOpenMetrics))
+		for _, mf := range families {
+			if err := protoEnc.Encode(mf); err != nil {
+				panic(err)
+			}
+			if err := omEnc.Encode(mf); err != nil {
+				panic(err)
+			}
+		}
+		if err := protoEnc.Encode(nativeHist); err != nil {
+			panic(err)
+		}
+		if err := omEnc.(expfmt.Closer).Close(); err != nil {
+			panic(err)
+		}
+
+		snapshots = append(snapshots, scrapeSnapshot{
+			proto:  bytes.Clone(protoBuf.Bytes()),
+			omText: omBuf.String(),
+		})
 	}
 
 	return snapshots

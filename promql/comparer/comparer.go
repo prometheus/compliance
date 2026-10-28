@@ -114,6 +114,9 @@ func (c *Comparer) Compare(tc *TestCase) (*Result, error) {
 				if len(r.Values) > 0 && r.Values[0].Timestamp.Time().Sub(tc.Start) <= 2*time.Millisecond {
 					r.Values = r.Values[1:]
 				}
+				if len(r.Histograms) > 0 && r.Histograms[0].Timestamp.Time().Sub(tc.Start) <= 2*time.Millisecond {
+					r.Histograms = r.Histograms[1:]
+				}
 			}
 		}
 	}
@@ -122,6 +125,19 @@ func (c *Comparer) Compare(tc *TestCase) (*Result, error) {
 		TestCase: tc,
 		Diff:     cmp.Diff(refResult, testResult, c.compareOptions),
 	}, nil
+}
+
+type comparableHistogram struct {
+	Count   float64
+	Sum     float64
+	Buckets []comparableHistogramBucket
+}
+
+type comparableHistogramBucket struct {
+	Boundaries int32
+	Lower      float64
+	Upper      float64
+	Count      float64
 }
 
 func addFloatCompareOptions(queryTweaks []*config.QueryTweak, options *cmp.Options) {
@@ -142,6 +158,31 @@ func addFloatCompareOptions(queryTweaks []*config.QueryTweak, options *cmp.Optio
 		// Translate sample values into float64 so that cmpopts.EquateApprox() works.
 		cmp.Transformer("TranslateFloat64", func(in model.SampleValue) float64 {
 			return float64(in)
+		}),
+		// Translate SampleHistogram into plain float64 fields so go-cmp does not
+		// short-circuit on (*model.SampleHistogram).Equal exact equality and
+		// applies cmpopts.EquateApprox() and cmpopts.EquateNaNs() to Count, Sum,
+		// and bucket bounds/counts.
+		cmp.Transformer("TranslateSampleHistogram", func(in *model.SampleHistogram) *comparableHistogram {
+			if in == nil {
+				return nil
+			}
+			buckets := make([]comparableHistogramBucket, len(in.Buckets))
+			for i, b := range in.Buckets {
+				if b != nil {
+					buckets[i] = comparableHistogramBucket{
+						Boundaries: b.Boundaries,
+						Lower:      float64(b.Lower),
+						Upper:      float64(b.Upper),
+						Count:      float64(b.Count),
+					}
+				}
+			}
+			return &comparableHistogram{
+				Count:   float64(in.Count),
+				Sum:     float64(in.Sum),
+				Buckets: buckets,
+			}
 		}),
 		cmpopts.EquateApprox(fraction, margin),
 		// A NaN is usually not treated as equal to another NaN, but we want to treat it as such here.

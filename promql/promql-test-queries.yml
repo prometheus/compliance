@@ -244,3 +244,42 @@ test_cases:
   # Subqueries.
   - query: 'max_over_time((time() - max(demo_batch_last_success_timestamp_seconds) < 1000)[5m:10s] offset 5m)'
   - query: 'avg_over_time(rate(demo_cpu_usage_seconds_total[1m])[2m:10s])'
+
+  # Native histograms.
+  - query: 'demo_api_request_duration_native_seconds'
+  - query: 'demo_api_request_duration_native_seconds{method="GET"}'
+  - query: 'demo_api_request_duration_native_seconds offset {{.offset}}'
+    variant_args: ['offset']
+  - query: '{{.histogramAggrOp}}(demo_api_request_duration_native_seconds)'
+    variant_args: ['histogramAggrOp']
+  - query: '{{.histogramAggrOp}} by(instance) (demo_api_request_duration_native_seconds)'
+    variant_args: ['histogramAggrOp']
+  - query: '{{.histogramAggrOp}} without(instance) (demo_api_request_duration_native_seconds)'
+    variant_args: ['histogramAggrOp']
+  - query: 'demo_api_request_duration_native_seconds + demo_api_request_duration_native_seconds'
+  - query: 'demo_api_request_duration_native_seconds - demo_api_request_duration_native_seconds'
+  - query: 'demo_api_request_duration_native_seconds * 2'
+  - query: '2 * demo_api_request_duration_native_seconds'
+  - query: 'demo_api_request_duration_native_seconds / 2'
+  - query: 'demo_api_request_duration_native_seconds == demo_api_request_duration_native_seconds'
+  - query: 'demo_api_request_duration_native_seconds != demo_api_request_duration_native_seconds'
+  - query: 'demo_api_request_duration_native_seconds == bool demo_api_request_duration_native_seconds'
+  - query: 'demo_api_request_duration_native_seconds != bool demo_api_request_duration_native_seconds'
+  - query: 'demo_api_request_duration_native_seconds * on(instance, job) group_left demo_num_cpus'
+  - query: 'demo_api_request_duration_native_seconds / on(instance, job) group_left demo_num_cpus'
+  - query: '{{.histogramTimeAggrOp}}_over_time(demo_api_request_duration_native_seconds[{{.range}}])'
+    variant_args: ['histogramTimeAggrOp', 'range']
+  - query: '{{.extrapolatedRateFunc}}(demo_api_request_duration_native_seconds[{{.range}}])'
+    variant_args: ['extrapolatedRateFunc', 'range']
+  - query: '{{.instantRateFunc}}(demo_api_request_duration_native_seconds[{{.range}}])'
+    variant_args: ['instantRateFunc', 'range']
+  - query: 'resets(demo_api_request_duration_native_seconds[{{.range}}])'
+    variant_args: ['range']
+  - query: '{{.histogramFunc}}(rate(demo_api_request_duration_native_seconds[1m]))'
+    variant_args: ['histogramFunc']
+  - query: 'histogram_fraction(0, 0.2, rate(demo_api_request_duration_native_seconds[1m]))'
+  - query: 'histogram_fraction(-Inf, +Inf, rate(demo_api_request_duration_native_seconds[1m]))'
+  - query: 'histogram_quantile({{.quantile}}, rate(demo_api_request_duration_native_seconds[1m]))'
+    variant_args: ['quantile']
+  - query: 'histogram_quantile({{.quantile}}, sum by(instance, method) (rate(demo_api_request_duration_native_seconds[1m])))'
+    variant_args: ['quantile']
