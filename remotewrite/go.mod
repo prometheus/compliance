@@ -7,10 +7,13 @@ require (
 	github.com/oklog/run v1.2.0
 	github.com/prometheus/client_golang/exp v0.0.0-20250914183048-a974e0d45e0a
 	github.com/prometheus/common v0.67.2
+	github.com/prometheus/compliance/common v0.0.0-00010101000000-000000000000
 	github.com/prometheus/prometheus v0.307.4-0.20251119130332-1174b0ce4f1f
 	github.com/prometheus/sigv4 v0.3.0
 	github.com/stretchr/testify v1.11.1
 )
+
+replace github.com/prometheus/compliance/common => ../common
 
 require (
 	cloud.google.com/go/auth v0.17.0 // indirect
