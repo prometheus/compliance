@@ -27,3 +27,12 @@ for vendors or those who wish to maintain high Prometheus compatibility over tim
 ## Remote Write: Sender
 
 The [remotewrite/sender](remotewrite/sender/README.md) directory contains code to test compliance with the [Prometheus Remote Write specification](https://prometheus.io/docs/specs/remote_write_spec/) as a sender.
+
+## Credits
+
+Current maintainers are listed in [MAINTAINERS.md](MAINTAINERS.md). This project builds on the work of its original authors and previous maintainers:
+
+* [Tom Wilkie](https://github.com/tomwilkie), who created this repository and authored the original Remote Write sender compliance test suite.
+* [Julius Volz](https://github.com/juliusv) ([PromLabs](https://promlabs.com/)), who authored and donated the original [PromQL compliance tester](https://promlabs.com/blog/2020/08/06/comparing-promql-correctness-across-vendors) and query test suite.
+* [Richard "RichiH" Hartmann](https://github.com/RichiH), who set up the repository structure, OpenMetrics compliance references, and initial Remote Write targets.
+* [Ganesh Vernekar](https://github.com/codesome), who authored the Alert Generator compliance specification and test suite.

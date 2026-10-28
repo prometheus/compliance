@@ -1,36 +1,27 @@
+// Copyright The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package config
 
 import (
-	"bytes"
-	"fmt"
-	"os"
-
 	"github.com/prometheus/common/model"
 	"gopkg.in/yaml.v2"
 )
 
-// Config models the main configuration file.
+// Config models the PromQL compliance test queries configuration file.
 type Config struct {
-	ReferenceTargetConfig TargetConfig        `yaml:"reference_target_config"`
-	TestTargetConfig      TargetConfig        `yaml:"test_target_config"`
-	QueryTweaks           []*QueryTweak       `yaml:"query_tweaks"`
-	TestCases             []*TestCase         `yaml:"test_cases"`
-	QueryTimeParameters   QueryTimeParameters `yaml:"query_time_parameters"`
-}
-
-type QueryTimeParameters struct {
-	EndTime             string  `yaml:"end_time"`
-	RangeInSeconds      float64 `yaml:"range_in_seconds"`
-	ResolutionInSeconds float64 `yaml:"resolution_in_seconds"`
-}
-
-// TargetConfig represents the configuration of a single Prometheus API endpoint.
-type TargetConfig struct {
-	QueryURL      string            `yaml:"query_url"`
-	BasicAuthUser string            `yaml:"basic_auth_user"`
-	BasicAuthPass string            `yaml:"basic_auth_pass"`
-	Headers       map[string]string `yaml:"headers"`
-	TSDBPath      string            `yaml:"tsdb_path"`
+	QueryTweaks []*QueryTweak `yaml:"query_tweaks"`
+	TestCases   []*TestCase   `yaml:"test_cases"`
 }
 
 // A QueryTweak restricts or modifies a query in certain ways that avoids certain systematic errors and/or later comparison problems.
@@ -46,6 +37,7 @@ type QueryTweak struct {
 	AdjustValueTolerance   *AdjustValueTolerance `yaml:"adjust_value_tolerance" json:"adjustValueTolerance,omitempty"`
 }
 
+// AdjustValueTolerance configures approximate float comparison tolerances.
 type AdjustValueTolerance struct {
 	Fraction *float64 `yaml:"fraction" json:"fraction,omitempty"`
 	Margin   *float64 `yaml:"margin" json:"margin,omitempty"`
@@ -59,30 +51,10 @@ type TestCase struct {
 	ShouldFail     bool     `yaml:"should_fail,omitempty"`
 }
 
-// LoadFromFiles parses the given YAML files into a Config.
-func LoadFromFiles(filenames []string) (*Config, error) {
-	var buf bytes.Buffer
-	for _, f := range filenames {
-		content, err := os.ReadFile(f)
-		if err != nil {
-			return nil, fmt.Errorf("error reading config file %s: %w", f, err)
-		}
-		if _, err := buf.Write(content); err != nil {
-			return nil, fmt.Errorf("error appending config file %s to buffer: %w", f, err)
-		}
-	}
-	cfg, err := Load(buf.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("error parsing YAML files %s: %w", filenames, err)
-	}
-	return cfg, nil
-}
-
 // Load parses the YAML input into a Config.
 func Load(content []byte) (*Config, error) {
 	cfg := &Config{}
-	err := yaml.UnmarshalStrict(content, cfg)
-	if err != nil {
+	if err := yaml.UnmarshalStrict(content, cfg); err != nil {
 		return nil, err
 	}
 	return cfg, nil
