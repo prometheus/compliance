@@ -88,12 +88,15 @@ See Makefile for detailed invocation.
 Tests that Remote-Write endpoints properly handle incoming requests by sending various Remote-Write v2 requests and validating responses.
 
 Tests cover:
-- Float samples handling
-- Native Histograms handling
+- Float samples handling (including `start_timestamp` and chronological batching)
+- Native Histograms handling (integer and float histograms, custom buckets/NHCB, reset hints, schemas, `start_timestamp`)
 - Exemplars handling
-- Protocol headers and response codes
-- Error conditions and edge cases
-- Content-Type validation
+- Metadata handling
+- Symbol table and label set validation
+- Protocol headers, compression (Snappy block format), and response codes
+- Error conditions, partial writes, and edge cases
+- `Content-Type` and mode negotiation (`none`, `stateless`, `stateless-st`)
+- RFC 7694 `415 Unsupported Media Type` response headers (`Accept`, `Accept-Encoding`)
 - Response headers (`X-Prometheus-Remote-Write-*-Written`)
 
 ### Limitations
@@ -104,12 +107,12 @@ This test suite does not verify data ingestion by reading data back from the rec
 
 ### Prerequisites
 
-You need a receiving endpoint you want to test.
+You need a receiving endpoint you want to test. By default, if `local-prometheus` is configured (as in `config_example.yml`) and no server is already listening at its configured address (`127.0.0.1:9090`), the test suite automatically downloads/builds and runs Prometheus with Remote-Write Receiver enabled as the reference implementation.
 
-For example, a Prometheus server with Remote-Write Receiver enabled could be used as a baseline:
+Alternatively, you can start your own Prometheus server with Remote-Write Receiver enabled:
 
 ```bash
-prometheus --web.enable-remote-write-receiver --enable-feature=native-histograms # Add config file.
+prometheus --web.enable-remote-write-receiver --enable-feature=st-storage,exemplar-storage,metadata-wal-records # Add config file.
 ```
 
 ### Configuration

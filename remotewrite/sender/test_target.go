@@ -31,26 +31,13 @@ type Sender interface {
 	Run(context.Context, Options) error
 }
 
-// Mode specifies the optional Remote-Write 2.0 mode as defined in
-// https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/#modes.
-type Mode string
-
-const (
-	// ModeNone is the default Remote-Write mode (no mode parameter in Content-Type).
-	ModeNone Mode = ""
-	// ModeStateless is the "stateless" Remote-Write 2.0 mode.
-	ModeStateless Mode = "stateless"
-	// ModeStatelessST is the "stateless-st" Remote-Write 2.0 mode.
-	ModeStatelessST Mode = "stateless-st"
-)
-
 // Options represents the sender options for a given test.
 type Options struct {
 	ScrapeTargetHostPort   string
 	ScrapeTargetJobName    string
 	RemoteWriteEndpointURL string
 	RemoteWriteMessage     remote.WriteMessageType
-	RemoteWriteMode        Mode
+	RemoteWriteMode        remote.WriteMode
 }
 
 // RunCommand runs the given command with the given args until context is done.

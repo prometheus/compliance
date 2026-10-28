@@ -40,7 +40,7 @@ func ToOpenMetricsTimestampString(t time.Time) string {
 	)
 }
 
-func samplesTests(mode Mode) []Test {
+func samplesTests(mode remote.WriteMode) []Test {
 	timeNow := time.Now()
 	st := timeNow.Add(-2 * time.Hour)
 	// NOTE: Keep explicitTS in the future so WAL watchers started during parallel subtests do not skip it as
@@ -48,7 +48,7 @@ func samplesTests(mode Mode) []Test {
 	explicitTS := timeNow.Add(9 * time.Minute)
 
 	stLevel := ShouldLevel
-	if mode == ModeStatelessST {
+	if mode == remote.WriteModeStatelessST {
 		stLevel = MustLevel
 	}
 
@@ -133,7 +133,7 @@ test_gauge_with_ts 2 %v
 					Description: "Sample/Histogram SHOULD have start timestamp for a histogram (MUST in stateless-st mode)",
 					RFCLevel:    stLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						if mode != ModeNone {
+						if mode != remote.WriteModeNone {
 							hist := findHistogramData(res.Requests[0].RW2, "test_histogram")
 							require.NotNil(t, hist, "Histogram for test_histogram must be present")
 							require.Equal(t, timestamp.FromTime(st), hist.StartTimestamp,

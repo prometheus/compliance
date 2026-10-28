@@ -78,6 +78,21 @@ func RunCommand(ctx context.Context, dir string, extraEnvVars []string, prog str
 
 var downloadMtx sync.Mutex
 
+const (
+	// TODO(bwplotka): Switch back to DefaultPrometheusDownloadURL once a Prometheus release includes https://github.com/prometheus/prometheus/pull/20098.
+	DefaultPrometheusDownloadURL = ""
+	DefaultPrometheusGitRef      = "6f22682586f217ba0e1172f8111a61db47179798" // https://github.com/prometheus/prometheus/pull/20098
+)
+
+// GetPrometheusBinary downloads or builds the default Prometheus binary (see
+// DefaultPrometheusDownloadURL and DefaultPrometheusGitRef) into ./bin/.
+func GetPrometheusBinary() (string, error) {
+	if DefaultPrometheusDownloadURL != "" {
+		return DownloadBinary(DefaultPrometheusDownloadURL, "prometheus")
+	}
+	return BuildPrometheusBinary(DefaultPrometheusGitRef)
+}
+
 // BuildPrometheusBinary builds github.com/prometheus/prometheus/cmd/prometheus at gitRef
 // into ./bin/prometheus-<shortRef>, returning the path to the executable binary.
 // If the binary already exists in ./bin/, building is skipped.

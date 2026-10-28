@@ -25,11 +25,7 @@ import (
 	"github.com/prometheus/compliance/remotewrite/sender"
 )
 
-const (
-	// TODO(bwplotka): Switch back to prometheusDownloadURL once a Prometheus release includes https://github.com/prometheus/prometheus/pull/20098.
-	prometheusDownloadURL = ""
-	prometheusGitRef      = "6f22682586f217ba0e1172f8111a61db47179798" // https://github.com/prometheus/prometheus/pull/20098
-	scrapeConfigTemplate  = `
+const scrapeConfigTemplate = `
 global:
   scrape_interval: 1s
 
@@ -60,7 +56,6 @@ scrape_configs:
     static_configs:
     - targets: ["{{.ScrapeTargetHostPort}}"]
 `
-)
 
 var scrapeConfigTmpl = template.Must(template.New("config").Parse(scrapeConfigTemplate))
 
@@ -70,11 +65,11 @@ func (p prometheus) Name() string { return "prometheus" }
 
 // Run runs a Prometheus process for a test target options, until ctx is done.
 //
-// It auto-downloads or builds the Prometheus binary (see prometheusDownloadURL and prometheusGitRef).
+// It auto-downloads or builds the Prometheus binary (see common.GetPrometheusBinary).
 // TODO(bwplotka): Process based runners are prone to leaking processes; add docker runner and/or figure out cleanup.
 // Manually this could be done with 'killall -m "prometheus-3." -kill'.
 func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
-	binary, err := getPrometheusBinary()
+	binary, err := common.GetPrometheusBinary()
 	if err != nil {
 		return err
 	}
@@ -104,10 +99,3 @@ func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
 }
 
 var _ sender.Sender = prometheus{}
-
-func getPrometheusBinary() (string, error) {
-	if prometheusDownloadURL != "" {
-		return common.DownloadBinary(prometheusDownloadURL, "prometheus")
-	}
-	return common.BuildPrometheusBinary(prometheusGitRef)
-}

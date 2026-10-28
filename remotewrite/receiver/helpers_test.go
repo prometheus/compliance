@@ -17,16 +17,33 @@ package main
 import (
 	"bytes"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/common/model"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
+
+// symbolizeSortedLabels symbolizes a label map with label names sorted in lexicographical order,
+// as required by the Remote-Write 2.0 specification.
+func symbolizeSortedLabels(symbols *writev2.SymbolsTable, lbls map[string]string) []uint32 {
+	if len(lbls) == 0 {
+		return nil
+	}
+	keys := slices.Sorted(maps.Keys(lbls))
+	refs := make([]uint32, 0, len(keys)*2)
+	for _, k := range keys {
+		refs = append(refs, symbols.Symbolize(k), symbols.Symbolize(lbls[k]))
+	}
+	return refs
+}
 
 // ticker provides a global ticker for timing-based operations in tests.
 var ticker = time.NewTicker(10 * time.Millisecond)
@@ -91,6 +108,8 @@ type requestParams struct {
 	success          bool
 	retryable        bool // Reserved for future use to indicate if the request should be retried on failure.
 	exactReponseCode int
+	allowAny4xx      bool
+	validateHeaders  func(t *testing.T, header http.Header)
 }
 
 // validateResponse validates an HTTP response against expected request parameters.
@@ -117,7 +136,7 @@ func validateResponse(t *testing.T, params requestParams, resp *http.Response) {
 	case 4:
 		// HTTP 4xx.
 		require.False(t, params.retryable, "Response code is %d but retryable is true", resp.StatusCode)
-		if params.exactReponseCode == 0 {
+		if params.exactReponseCode == 0 && !params.allowAny4xx {
 			require.Equal(t, http.StatusBadRequest, resp.StatusCode, "Response code should be exactly %d", http.StatusBadRequest)
 		}
 		require.GreaterOrEqual(t, params.samples, samplesWritten, "%d samples written", samplesWritten)
@@ -134,6 +153,9 @@ func validateResponse(t *testing.T, params requestParams, resp *http.Response) {
 		require.GreaterOrEqual(t, params.samples+params.exemplars+params.histograms, samplesWritten+exemplarsWritten+histogramsWritten, "Total written")
 	default:
 		require.Fail(t, "Response code is %d but should be 200, 400, or 500", resp.StatusCode)
+	}
+	if params.validateHeaders != nil {
+		params.validateHeaders(t, resp.Header)
 	}
 }
 
@@ -160,6 +182,10 @@ type RequestOpts struct {
 	Metadata      []MetadataWithLabels
 	Histograms    []HistogramWithLabels
 	UnsafeRequest bool
+	Mode          remote.WriteMode
+	ContentType   string
+	RawTimeseries []writev2.TimeSeries
+	RawSymbols    []string
 }
 
 // generateRequest generates an HTTP request with the given options.
@@ -253,10 +279,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 	usedExemplars := make(map[int]bool)
 
 	for i, s := range opts.Samples {
-		var labelRefs []uint32
-		for k, v := range s.Labels {
-			labelRefs = append(labelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-		}
+		labelRefs := symbolizeSortedLabels(&symbols, s.Labels)
 
 		// Check if there are any exemplars for this sample.
 		var sampleExemplars []writev2.Exemplar
@@ -272,10 +295,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 			// Match exemplar with sample by labels.
 			match := labelsMatch(mapToMetric(s.Labels), ew.Labels)
 			if match {
-				var exemplarLabelRefs []uint32
-				for k, v := range ew.ExemplarLabels {
-					exemplarLabelRefs = append(exemplarLabelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-				}
+				exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
 
 				exemplar := writev2.Exemplar{
 					LabelsRefs: exemplarLabelRefs,
@@ -305,7 +325,11 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 
 		if s.StartTimestamp != nil {
-			ts.Samples[0].StartTimestamp = s.StartTimestamp.UnixMilli()
+			if s.StartTimestamp.IsZero() {
+				ts.Samples[0].StartTimestamp = ts.Samples[0].Timestamp
+			} else {
+				ts.Samples[0].StartTimestamp = s.StartTimestamp.UnixMilli()
+			}
 		}
 
 		if metricName := s.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
@@ -325,10 +349,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 	}
 
 	for i, hw := range opts.Histograms {
-		var labelRefs []uint32
-		for k, v := range hw.Labels {
-			labelRefs = append(labelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-		}
+		labelRefs := symbolizeSortedLabels(&symbols, hw.Labels)
 
 		// Create a copy of the histogram and overwrite its timestamp.
 		hist := hw.Histogram
@@ -348,10 +369,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 			// Match exemplar with histogram by labels.
 			match := labelsMatch(mapToMetric(hw.Labels), ew.Labels)
 			if match {
-				var exemplarLabelRefs []uint32
-				for k, v := range ew.ExemplarLabels {
-					exemplarLabelRefs = append(exemplarLabelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-				}
+				exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
 
 				exemplar := writev2.Exemplar{
 					LabelsRefs: exemplarLabelRefs,
@@ -376,7 +394,11 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 
 		if hw.StartTimestamp != nil {
-			ts.Histograms[0].StartTimestamp = hw.StartTimestamp.UnixMilli()
+			if hw.StartTimestamp.IsZero() {
+				ts.Histograms[0].StartTimestamp = ts.Histograms[0].Timestamp
+			} else {
+				ts.Histograms[0].StartTimestamp = hw.StartTimestamp.UnixMilli()
+			}
 		}
 
 		if metricName := hw.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
@@ -413,15 +435,8 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 
 		if !matched {
-			var labelRefs []uint32
-			for k, v := range ew.Labels {
-				labelRefs = append(labelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-			}
-
-			var exemplarLabelRefs []uint32
-			for k, v := range ew.ExemplarLabels {
-				exemplarLabelRefs = append(exemplarLabelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-			}
+			labelRefs := symbolizeSortedLabels(&symbols, ew.Labels)
+			exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
 
 			exemplar := writev2.Exemplar{
 				LabelsRefs: exemplarLabelRefs,
@@ -463,10 +478,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 
 		if !matched {
-			var labelRefs []uint32
-			for k, v := range mw.Labels {
-				labelRefs = append(labelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-			}
+			labelRefs := symbolizeSortedLabels(&symbols, mw.Labels)
 
 			ts := writev2.TimeSeries{
 				LabelsRefs: labelRefs,
@@ -480,19 +492,33 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 	}
 
+	if len(opts.RawTimeseries) > 0 {
+		timeseries = append(timeseries, opts.RawTimeseries...)
+	}
+
+	reqSymbols := symbols.Symbols()
+	if opts.RawSymbols != nil {
+		reqSymbols = opts.RawSymbols
+	}
+
 	req := &writev2.Request{
-		Symbols:    symbols.Symbols(),
+		Symbols:    reqSymbols,
 		Timeseries: timeseries,
 	}
 
 	data, _ := req.Marshal()
 	compressed := snappy.Encode(nil, data)
 
+	contentType := opts.ContentType
+	if contentType == "" {
+		contentType = remote.ContentTypeHeader(remote.WriteV2MessageType, opts.Mode)
+	}
+
 	httpReq := http.Request{
 		Method: "POST",
 		Header: http.Header{
 			"Content-Encoding":                  []string{"snappy"},
-			"Content-Type":                      []string{"application/x-protobuf;proto=io.prometheus.write.v2.Request"},
+			"Content-Type":                      []string{contentType},
 			"X-Prometheus-Remote-Write-Version": []string{"2.0.0"},
 		},
 		Body: io.NopCloser(bytes.NewReader(compressed)),
@@ -571,6 +597,42 @@ func histogram(sum float64, includePositive, includeNegative, includeZero, useCu
 		hist.Schema = -53
 		hist.CustomValues = customValues
 	}
+
+	return hist
+}
+
+// floatHistogram creates a float writev2.Histogram with the specified parameters
+// by converting the integer histogram from histogram() into float counts.
+func floatHistogram(sum float64, includePositive, includeNegative, includeZero, useCustomBuckets, badCount bool) writev2.Histogram {
+	hist := histogram(sum, includePositive, includeNegative, includeZero, useCustomBuckets, false)
+
+	deltasToCounts := func(deltas []int64) []float64 {
+		if len(deltas) == 0 {
+			return nil
+		}
+		counts := make([]float64, len(deltas))
+		var curr int64
+		for i, d := range deltas {
+			curr += d
+			counts[i] = float64(curr)
+		}
+		return counts
+	}
+
+	hist.PositiveCounts = deltasToCounts(hist.PositiveDeltas)
+	hist.PositiveDeltas = nil
+	hist.NegativeCounts = deltasToCounts(hist.NegativeDeltas)
+	hist.NegativeDeltas = nil
+
+	if includeZero {
+		hist.ZeroCount = &writev2.Histogram_ZeroCountFloat{ZeroCountFloat: float64(hist.GetZeroCountInt())}
+	}
+
+	count := float64(hist.GetCountInt())
+	if badCount {
+		count = -1.0
+	}
+	hist.Count = &writev2.Histogram_CountFloat{CountFloat: count}
 
 	return hist
 }
