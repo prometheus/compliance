@@ -27,13 +27,34 @@ import (
 	"github.com/golang/snappy"
 	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/prompb"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
 
-// symbolizeSortedLabels symbolizes a label map with label names sorted in lexicographical order,
-// as required by the Remote-Write 2.0 specification.
+// mergeExternalLabels merges the configured global external_labels into lbls
+// without overwriting keys already present in lbls. Empty label maps are returned
+// unchanged so negative tests for empty label sets remain intact.
+func mergeExternalLabels(lbls map[string]string) map[string]string {
+	if len(lbls) == 0 || len(externalLabels) == 0 {
+		return lbls
+	}
+	merged := make(map[string]string, len(externalLabels)+len(lbls))
+	maps.Copy(merged, externalLabels)
+	maps.Copy(merged, lbls)
+	return merged
+}
+
+// symbolizeSortedLabels symbolizes a series label map with global external_labels merged
+// and label names sorted in lexicographical order, as required by the Remote-Write 2.0 specification.
 func symbolizeSortedLabels(symbols *writev2.SymbolsTable, lbls map[string]string) []uint32 {
+	return symbolizeSortedRawLabels(symbols, mergeExternalLabels(lbls))
+}
+
+// symbolizeSortedRawLabels symbolizes a label map without merging external_labels,
+// with label names sorted in lexicographical order. Used for exemplar attachment labels.
+func symbolizeSortedRawLabels(symbols *writev2.SymbolsTable, lbls map[string]string) []uint32 {
 	if len(lbls) == 0 {
 		return nil
 	}
@@ -295,7 +316,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 			// Match exemplar with sample by labels.
 			match := labelsMatch(mapToMetric(s.Labels), ew.Labels)
 			if match {
-				exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
+				exemplarLabelRefs := symbolizeSortedRawLabels(&symbols, ew.ExemplarLabels)
 
 				exemplar := writev2.Exemplar{
 					LabelsRefs: exemplarLabelRefs,
@@ -369,7 +390,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 			// Match exemplar with histogram by labels.
 			match := labelsMatch(mapToMetric(hw.Labels), ew.Labels)
 			if match {
-				exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
+				exemplarLabelRefs := symbolizeSortedRawLabels(&symbols, ew.ExemplarLabels)
 
 				exemplar := writev2.Exemplar{
 					LabelsRefs: exemplarLabelRefs,
@@ -436,7 +457,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 
 		if !matched {
 			labelRefs := symbolizeSortedLabels(&symbols, ew.Labels)
-			exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
+			exemplarLabelRefs := symbolizeSortedRawLabels(&symbols, ew.ExemplarLabels)
 
 			exemplar := writev2.Exemplar{
 				LabelsRefs: exemplarLabelRefs,
@@ -699,5 +720,105 @@ func runComplianceTest(t *testing.T, name string, description string, opts Reque
 		mustParams.strict = false
 
 		runRequest(t, generateRequest(opts), mustParams)
+	})
+}
+
+func TestExternalLabelsInjection(t *testing.T) {
+	origExternalLabels := externalLabels
+	t.Cleanup(func() {
+		externalLabels = origExternalLabels
+	})
+
+	_, err := config.LoadFile("config_example.yml", false, nil)
+	require.NoError(t, err)
+
+	promCfg, err := config.Load(`
+global:
+  external_labels:
+    project_id: test-project
+    location: us-central1
+    job: default-job
+remote_write:
+  - name: test-receiver
+    url: http://127.0.0.1:9090/api/v1/write
+`, nil)
+	require.NoError(t, err)
+	externalLabels = promCfg.GlobalConfig.ExternalLabels.Map()
+
+	t.Run("merges_and_sorts_series_labels_without_affecting_exemplar_labels", func(t *testing.T) {
+		httpReq := generateRequest(RequestOpts{
+			Samples: []SampleWithLabels{
+				{
+					Labels: map[string]string{"__name__": "test_metric_total", "job": "override-job"},
+					Value:  1.0,
+				},
+			},
+			Exemplars: []ExemplarWithLabels{
+				{
+					Labels:         map[string]string{"__name__": "test_metric_total", "job": "override-job"},
+					ExemplarLabels: map[string]string{"trace_id": "abc123"},
+					Value:          1.0,
+				},
+			},
+		})
+
+		compressed, err := io.ReadAll(httpReq.Body)
+		require.NoError(t, err)
+		raw, err := snappy.Decode(nil, compressed)
+		require.NoError(t, err)
+
+		var req writev2.Request
+		require.NoError(t, req.Unmarshal(raw))
+		require.Len(t, req.Timeseries, 1)
+
+		ts := req.Timeseries[0]
+		gotSeriesLabels := make([]string, 0, len(ts.LabelsRefs))
+		for _, ref := range ts.LabelsRefs {
+			gotSeriesLabels = append(gotSeriesLabels, req.Symbols[ref])
+		}
+		// Series labels must include externalLabels in lexicographical order, with explicit test labels taking precedence.
+		require.Equal(t, []string{
+			"__name__", "test_metric_total",
+			"job", "override-job",
+			"location", "us-central1",
+			"project_id", "test-project",
+		}, gotSeriesLabels)
+
+		require.Len(t, ts.Exemplars, 1)
+		gotExemplarLabels := make([]string, 0, len(ts.Exemplars[0].LabelsRefs))
+		for _, ref := range ts.Exemplars[0].LabelsRefs {
+			gotExemplarLabels = append(gotExemplarLabels, req.Symbols[ref])
+		}
+		// Exemplar attachment labels must not receive externalLabels.
+		require.Equal(t, []string{"trace_id", "abc123"}, gotExemplarLabels)
+	})
+
+	t.Run("merges_and_sorts_rw1_series_labels", func(t *testing.T) {
+		httpReq := generateRW1Request([]SampleWithLabels{
+			{
+				Labels: map[string]string{"__name__": "rw1_metric_total", "job": "override-job"},
+				Value:  1.0,
+			},
+		})
+
+		compressed, err := io.ReadAll(httpReq.Body)
+		require.NoError(t, err)
+		raw, err := snappy.Decode(nil, compressed)
+		require.NoError(t, err)
+
+		var req prompb.WriteRequest
+		require.NoError(t, req.Unmarshal(raw))
+		require.Len(t, req.Timeseries, 1)
+		require.Equal(t, []prompb.Label{
+			{Name: "__name__", Value: "rw1_metric_total"},
+			{Name: "job", Value: "override-job"},
+			{Name: "location", Value: "us-central1"},
+			{Name: "project_id", Value: "test-project"},
+		}, req.Timeseries[0].Labels)
+	})
+
+	t.Run("preserves_empty_labels_for_negative_tests", func(t *testing.T) {
+		symbols := writev2.NewSymbolTable()
+		require.Nil(t, symbolizeSortedLabels(&symbols, map[string]string{}))
 	})
 }
