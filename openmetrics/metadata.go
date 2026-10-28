@@ -49,19 +49,19 @@ func metadataTests(v Version) []Test {
 							switch {
 							case strings.HasPrefix(line, "# TYPE "):
 								rest := strings.TrimPrefix(line, "# TYPE ")
-								name, _, ok := strings.Cut(rest, " ")
+								name, _, ok := cutDescriptorMetricName(rest)
 								require.True(t, ok, "Malformed # TYPE line: %q", line)
 								require.False(t, seenType[name], "Duplicate # TYPE line for %q", name)
 								seenType[name] = true
 							case strings.HasPrefix(line, "# HELP "):
 								rest := strings.TrimPrefix(line, "# HELP ")
-								name, _, ok := strings.Cut(rest, " ")
+								name, _, ok := cutDescriptorMetricName(rest)
 								require.True(t, ok, "Malformed # HELP line: %q", line)
 								require.False(t, seenHelp[name], "Duplicate # HELP line for %q", name)
 								seenHelp[name] = true
 							case strings.HasPrefix(line, "# UNIT "):
 								rest := strings.TrimPrefix(line, "# UNIT ")
-								name, _, ok := strings.Cut(rest, " ")
+								name, _, ok := cutDescriptorMetricName(rest)
 								require.True(t, ok, "Malformed # UNIT line: %q", line)
 								require.False(t, seenUnit[name], "Duplicate # UNIT line for %q", name)
 								seenUnit[name] = true
@@ -125,4 +125,37 @@ func metadataTests(v Version) []Test {
 			},
 		},
 	}
+}
+
+// cutDescriptorMetricName extracts the metric family name and remaining text from a
+// # TYPE, # HELP, or # UNIT descriptor line after the keyword prefix, supporting both
+// unquoted legacy names and quoted UTF-8 metric family names that may contain spaces.
+func cutDescriptorMetricName(rest string) (name, tail string, ok bool) {
+	if !strings.HasPrefix(rest, "\"") {
+		return strings.Cut(rest, " ")
+	}
+	var sb strings.Builder
+	for i := 1; i < len(rest); i++ {
+		switch rest[i] {
+		case '\\':
+			i++
+			if i >= len(rest) {
+				return "", "", false
+			}
+			switch rest[i] {
+			case 'n':
+				sb.WriteByte('\n')
+			default:
+				sb.WriteByte(rest[i])
+			}
+		case '"':
+			if i+1 >= len(rest) || rest[i+1] != ' ' {
+				return "", "", false
+			}
+			return sb.String(), rest[i+2:], true
+		default:
+			sb.WriteByte(rest[i])
+		}
+	}
+	return "", "", false
 }
