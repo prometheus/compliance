@@ -601,74 +601,38 @@ func histogram(sum float64, includePositive, includeNegative, includeZero, useCu
 	return hist
 }
 
-// floatHistogram creates a float writev2.Histogram with the specified parameters.
+// floatHistogram creates a float writev2.Histogram with the specified parameters
+// by converting the integer histogram from histogram() into float counts.
 func floatHistogram(sum float64, includePositive, includeNegative, includeZero, useCustomBuckets, badCount bool) writev2.Histogram {
-	var (
-		positiveSpans  []writev2.BucketSpan
-		negativeSpans  []writev2.BucketSpan
-		positiveCounts []float64
-		negativeCounts []float64
-		customValues   []float64
-		count          float64
-	)
+	hist := histogram(sum, includePositive, includeNegative, includeZero, useCustomBuckets, false)
 
-	if includePositive {
-		positiveSpans = []writev2.BucketSpan{
-			{Offset: 0, Length: 3},
-			{Offset: 2, Length: 2},
+	deltasToCounts := func(deltas []int64) []float64 {
+		if len(deltas) == 0 {
+			return nil
 		}
-		positiveCounts = []float64{1.5, 2.5, 4.0, 3.0, 2.0}
-		count += 13.0
+		counts := make([]float64, len(deltas))
+		var curr int64
+		for i, d := range deltas {
+			curr += d
+			counts[i] = float64(curr)
+		}
+		return counts
 	}
 
-	if includeNegative {
-		negativeSpans = []writev2.BucketSpan{
-			{Offset: 0, Length: 2},
-		}
-		negativeCounts = []float64{1.0, 2.0}
-		count += 3.0
-	}
+	hist.PositiveCounts = deltasToCounts(hist.PositiveDeltas)
+	hist.PositiveDeltas = nil
+	hist.NegativeCounts = deltasToCounts(hist.NegativeDeltas)
+	hist.NegativeDeltas = nil
 
 	if includeZero {
-		count += 1.0
+		hist.ZeroCount = &writev2.Histogram_ZeroCountFloat{ZeroCountFloat: float64(hist.GetZeroCountInt())}
 	}
 
-	if useCustomBuckets {
-		customValues = []float64{0.1, 0.5, 1.0, 2.5, 5.0, 10.0}
-		positiveSpans = []writev2.BucketSpan{
-			{Offset: 0, Length: 6},
-		}
-		positiveCounts = []float64{2.0, 3.0, 5.0, 8.0, 7.0, 5.0}
-		count = 30.0
-	}
-
+	count := float64(hist.GetCountInt())
 	if badCount {
 		count = -1.0
 	}
-
-	hist := writev2.Histogram{
-		Count: &writev2.Histogram_CountFloat{CountFloat: count},
-		Sum:   sum,
-	}
-
-	if includePositive || useCustomBuckets {
-		hist.PositiveSpans = positiveSpans
-		hist.PositiveCounts = positiveCounts
-	}
-
-	if includeNegative {
-		hist.NegativeSpans = negativeSpans
-		hist.NegativeCounts = negativeCounts
-	}
-
-	if includeZero {
-		hist.ZeroCount = &writev2.Histogram_ZeroCountFloat{ZeroCountFloat: 1.0}
-	}
-
-	if useCustomBuckets {
-		hist.Schema = -53
-		hist.CustomValues = customValues
-	}
+	hist.Count = &writev2.Histogram_CountFloat{CountFloat: count}
 
 	return hist
 }

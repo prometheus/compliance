@@ -26,16 +26,11 @@ import (
 	"github.com/prometheus/compliance/common"
 )
 
-const (
-	// TODO(bwplotka): Switch back to prometheusDownloadURL once a Prometheus release includes https://github.com/prometheus/prometheus/pull/20098.
-	prometheusDownloadURL = ""
-	prometheusGitRef      = "6f22682586f217ba0e1172f8111a61db47179798" // https://github.com/prometheus/prometheus/pull/20098
-	receiverConfig        = `
+const receiverConfig = `
 storage:
   exemplars:
     max_exemplars: 100000
 `
-)
 
 func isReceiverReachable(u *url.URL) bool {
 	if u == nil || u.Host == "" {
@@ -50,10 +45,10 @@ func isReceiverReachable(u *url.URL) bool {
 }
 
 // startLocalPrometheusReceiver auto-downloads or builds the Prometheus binary
-// (see prometheusDownloadURL and prometheusGitRef) and runs it with the
-// Remote-Write receiver enabled until cleanup is called.
+// (see common.GetPrometheusBinary) and runs it with the Remote-Write receiver
+// enabled until cleanup is called.
 func startLocalPrometheusReceiver(ctx context.Context) (*url.URL, func(), error) {
-	binary, err := getPrometheusBinary()
+	binary, err := common.GetPrometheusBinary()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -122,11 +117,4 @@ func startLocalPrometheusReceiver(ctx context.Context) (*url.URL, func(), error)
 
 	cleanup()
 	return nil, nil, fmt.Errorf("timed out waiting for prometheus receiver at %s to become ready", readyURL)
-}
-
-func getPrometheusBinary() (string, error) {
-	if prometheusDownloadURL != "" {
-		return common.DownloadBinary(prometheusDownloadURL, "prometheus")
-	}
-	return common.BuildPrometheusBinary(prometheusGitRef)
 }
