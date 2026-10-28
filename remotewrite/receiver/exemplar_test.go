@@ -171,25 +171,25 @@ func TestMultipleExemplars(t *testing.T) {
 }
 
 func TestExemplarTimestamps(t *testing.T) {
-	sample1 := SampleWithLabels{Labels: map[string]string{"__name__": "latency_hist"}, Value: 0.05, Offset: -1 * time.Hour}
+	sample1 := SampleWithLabels{Labels: map[string]string{"__name__": "latency_hist", "instance": "host1"}, Value: 0.05, Offset: -1 * time.Hour}
 	exemplar1 := ExemplarWithLabels{
-		Labels:         map[string]string{"__name__": "latency_hist"},
+		Labels:         map[string]string{"__name__": "latency_hist", "instance": "host1"},
 		ExemplarLabels: map[string]string{"trace_id": "old_trace"},
 		Value:          0.05,
 		Offset:         -1 * time.Hour,
 	}
 
-	sample2 := SampleWithLabels{Labels: map[string]string{"__name__": "latency_hist"}, Value: 0.15, Offset: -1 * time.Minute}
+	sample2 := SampleWithLabels{Labels: map[string]string{"__name__": "latency_hist", "instance": "host2"}, Value: 0.15, Offset: -1 * time.Minute}
 	exemplar2 := ExemplarWithLabels{
-		Labels:         map[string]string{"__name__": "latency_hist"},
+		Labels:         map[string]string{"__name__": "latency_hist", "instance": "host2"},
 		ExemplarLabels: map[string]string{"trace_id": "recent_trace"},
 		Value:          0.15,
 		Offset:         -1 * time.Minute,
 	}
 
-	sample3 := SampleWithLabels{Labels: map[string]string{"__name__": "latency_hist"}, Value: 0.08}
+	sample3 := SampleWithLabels{Labels: map[string]string{"__name__": "latency_hist", "instance": "host3"}, Value: 0.08}
 	exemplar3 := ExemplarWithLabels{
-		Labels:         map[string]string{"__name__": "latency_hist"},
+		Labels:         map[string]string{"__name__": "latency_hist", "instance": "host3"},
 		ExemplarLabels: map[string]string{"trace_id": "current_trace"},
 		Value:          0.08,
 	}

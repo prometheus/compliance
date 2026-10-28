@@ -38,7 +38,6 @@ func TestBadContentTypes(t *testing.T) {
 		t.Run(strings.ReplaceAll(contentType, "/", "_"), func(t *testing.T) {
 			request := generateRequest(RequestOpts{Samples: []SampleWithLabels{{Labels: map[string]string{"__name__": "up"}, Value: 1.0}}})
 			request.Header.Set("Content-Type", contentType)
-			request.Body = corruptRequestBody(t, request)
 
 			runRequest(t, request, requestParams{
 				exactReponseCode: http.StatusUnsupportedMediaType,

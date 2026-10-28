@@ -17,7 +17,9 @@ package main
 import (
 	"bytes"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -27,6 +29,30 @@ import (
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
+
+// WriteMode represents the Remote-Write 2.0 mode parameter in Content-Type.
+type WriteMode string
+
+const (
+	WriteModeDefault     WriteMode = ""
+	WriteModeNone        WriteMode = "none"
+	WriteModeStateless   WriteMode = "stateless"
+	WriteModeStatelessST WriteMode = "stateless-st"
+)
+
+// symbolizeSortedLabels symbolizes a label map with label names sorted in lexicographical order,
+// as required by the Remote-Write 2.0 specification.
+func symbolizeSortedLabels(symbols *writev2.SymbolsTable, lbls map[string]string) []uint32 {
+	if len(lbls) == 0 {
+		return nil
+	}
+	keys := slices.Sorted(maps.Keys(lbls))
+	refs := make([]uint32, 0, len(keys)*2)
+	for _, k := range keys {
+		refs = append(refs, symbols.Symbolize(k), symbols.Symbolize(lbls[k]))
+	}
+	return refs
+}
 
 // ticker provides a global ticker for timing-based operations in tests.
 var ticker = time.NewTicker(10 * time.Millisecond)
@@ -91,6 +117,7 @@ type requestParams struct {
 	success          bool
 	retryable        bool // Reserved for future use to indicate if the request should be retried on failure.
 	exactReponseCode int
+	validateHeaders  func(t *testing.T, header http.Header)
 }
 
 // validateResponse validates an HTTP response against expected request parameters.
@@ -135,6 +162,9 @@ func validateResponse(t *testing.T, params requestParams, resp *http.Response) {
 	default:
 		require.Fail(t, "Response code is %d but should be 200, 400, or 500", resp.StatusCode)
 	}
+	if params.validateHeaders != nil {
+		params.validateHeaders(t, resp.Header)
+	}
 }
 
 // ExemplarWithLabels represents an exemplar with its metric and exemplar labels.
@@ -160,6 +190,10 @@ type RequestOpts struct {
 	Metadata      []MetadataWithLabels
 	Histograms    []HistogramWithLabels
 	UnsafeRequest bool
+	Mode          WriteMode
+	ContentType   string
+	RawTimeseries []writev2.TimeSeries
+	RawSymbols    []string
 }
 
 // generateRequest generates an HTTP request with the given options.
@@ -253,10 +287,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 	usedExemplars := make(map[int]bool)
 
 	for i, s := range opts.Samples {
-		var labelRefs []uint32
-		for k, v := range s.Labels {
-			labelRefs = append(labelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-		}
+		labelRefs := symbolizeSortedLabels(&symbols, s.Labels)
 
 		// Check if there are any exemplars for this sample.
 		var sampleExemplars []writev2.Exemplar
@@ -272,10 +303,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 			// Match exemplar with sample by labels.
 			match := labelsMatch(mapToMetric(s.Labels), ew.Labels)
 			if match {
-				var exemplarLabelRefs []uint32
-				for k, v := range ew.ExemplarLabels {
-					exemplarLabelRefs = append(exemplarLabelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-				}
+				exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
 
 				exemplar := writev2.Exemplar{
 					LabelsRefs: exemplarLabelRefs,
@@ -325,10 +353,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 	}
 
 	for i, hw := range opts.Histograms {
-		var labelRefs []uint32
-		for k, v := range hw.Labels {
-			labelRefs = append(labelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-		}
+		labelRefs := symbolizeSortedLabels(&symbols, hw.Labels)
 
 		// Create a copy of the histogram and overwrite its timestamp.
 		hist := hw.Histogram
@@ -348,10 +373,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 			// Match exemplar with histogram by labels.
 			match := labelsMatch(mapToMetric(hw.Labels), ew.Labels)
 			if match {
-				var exemplarLabelRefs []uint32
-				for k, v := range ew.ExemplarLabels {
-					exemplarLabelRefs = append(exemplarLabelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-				}
+				exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
 
 				exemplar := writev2.Exemplar{
 					LabelsRefs: exemplarLabelRefs,
@@ -413,15 +435,8 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 
 		if !matched {
-			var labelRefs []uint32
-			for k, v := range ew.Labels {
-				labelRefs = append(labelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-			}
-
-			var exemplarLabelRefs []uint32
-			for k, v := range ew.ExemplarLabels {
-				exemplarLabelRefs = append(exemplarLabelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-			}
+			labelRefs := symbolizeSortedLabels(&symbols, ew.Labels)
+			exemplarLabelRefs := symbolizeSortedLabels(&symbols, ew.ExemplarLabels)
 
 			exemplar := writev2.Exemplar{
 				LabelsRefs: exemplarLabelRefs,
@@ -463,10 +478,7 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 
 		if !matched {
-			var labelRefs []uint32
-			for k, v := range mw.Labels {
-				labelRefs = append(labelRefs, symbols.Symbolize(k), symbols.Symbolize(v))
-			}
+			labelRefs := symbolizeSortedLabels(&symbols, mw.Labels)
 
 			ts := writev2.TimeSeries{
 				LabelsRefs: labelRefs,
@@ -480,19 +492,36 @@ func generateRequest(opts RequestOpts) *http.Request {
 		}
 	}
 
+	if len(opts.RawTimeseries) > 0 {
+		timeseries = append(timeseries, opts.RawTimeseries...)
+	}
+
+	reqSymbols := symbols.Symbols()
+	if opts.RawSymbols != nil {
+		reqSymbols = opts.RawSymbols
+	}
+
 	req := &writev2.Request{
-		Symbols:    symbols.Symbols(),
+		Symbols:    reqSymbols,
 		Timeseries: timeseries,
 	}
 
 	data, _ := req.Marshal()
 	compressed := snappy.Encode(nil, data)
 
+	contentType := opts.ContentType
+	if contentType == "" {
+		contentType = "application/x-protobuf;proto=io.prometheus.write.v2.Request"
+		if opts.Mode != WriteModeDefault {
+			contentType += ";mode=" + string(opts.Mode)
+		}
+	}
+
 	httpReq := http.Request{
 		Method: "POST",
 		Header: http.Header{
 			"Content-Encoding":                  []string{"snappy"},
-			"Content-Type":                      []string{"application/x-protobuf;proto=io.prometheus.write.v2.Request"},
+			"Content-Type":                      []string{contentType},
 			"X-Prometheus-Remote-Write-Version": []string{"2.0.0"},
 		},
 		Body: io.NopCloser(bytes.NewReader(compressed)),
