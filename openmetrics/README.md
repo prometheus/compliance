@@ -65,11 +65,11 @@ func (binaryTarget) Run(ctx context.Context, opts openmetrics.Options) error {
 
 While the `protocol` and `syntax` test categories validate any non-empty OpenMetrics exposition, the `metadata`, `escaping`, `samples`, `histograms`, and `exemplars` categories inspect specific canonical metric families when verifying SDK instrumentation features. Reference targets should expose:
 
-- `app_build_info` (`info` or `gauge` with value `1` and labels such as `version` and `goversion`)
-- `http_requests_total` (`counter` with unit `requests`, label `code`, start timestamp, and an exemplar carrying a long attribute value >= 130 UTF-8 runes to exercise OpenMetrics 1.0 128-rune truncation and OpenMetrics 2.0 extended exemplar length)
-- `http_request_size_bytes_total` (`counter` with unit `bytes` and label `method`)
-- `http.server.active_requests` (`gauge` with dots in the metric name and a UTF-8 label name `http.request.method` to exercise `escaping=allow-utf-8`, `underscores`, `dots`, and `values`)
-- `http_request_duration_seconds` (`histogram` with unit `seconds`, classic buckets `0.005`..`10`, native histogram buckets, start timestamp, and bucket exemplars)
-- `rpc_latency_seconds` (`summary` with unit `seconds`, quantiles `0.5`, `0.9`, `0.99`, and start timestamp)
+- `app_build_info` (`gauge` with value `1` and labels such as `version` and `sdk`)
+- `http_requests_total` (`counter` with no unit, labels `method="GET"` and `status="200"` with value `>= 5`, start timestamp, and an exemplar carrying `trace_id="4bf92f3577b34da6a3ce929d0e0e4736"` and `span_id="00f067aa0ba902b7"`)
+- `http_request_size_bytes_total` (`counter` with unit `bytes` and an exemplar carrying `trace_id="4bf92f3577b34da6a3ce929d0e0e4736"`, `span_id="00f067aa0ba902b7"`, and an extended attribute `attr_big` exceeding 128 total UTF-8 runes to exercise OpenMetrics 1.0 128-rune truncation and OpenMetrics 2.0 extended exemplar length)
+- `http.server.active_requests` (`gauge` with value `3`, dots in the metric name, and UTF-8 label `service.name="demo-api"` to exercise `escaping=allow-utf-8`, `underscores`, `dots`, and `values`)
+- `http_request_duration_seconds` (`histogram` with unit `seconds`, label `method="GET"`, classic buckets `0.01`..`2.5`, native histogram buckets, start timestamp, and an exemplar carrying `trace_id="4bf92f3577b34da6a3ce929d0e0e4736"`)
+- `rpc_latency_seconds` (`summary` with unit `seconds` and quantiles `0.5`, `0.9`, `0.99`)
 
 See [`client_golang_test.go`](client_golang_test.go) for the reference implementation.
