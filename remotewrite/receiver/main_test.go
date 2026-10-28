@@ -15,6 +15,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log"
 	"net/http"
@@ -68,7 +69,25 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	os.Exit(m.Run())
+	var cleanups []func()
+	for _, rw := range remoteWriteConfigs {
+		if rw.Name == "local-prometheus" && !isReceiverReachable(rw.URL.URL) {
+			log.Printf("Receiver %q is not running at %s; starting local Prometheus receiver...", rw.Name, rw.URL.URL)
+			u, cleanup, err := startLocalPrometheusReceiver(context.Background())
+			if err != nil {
+				log.Printf("failed to start local Prometheus receiver: %v", err)
+				os.Exit(1)
+			}
+			rw.URL = &cconfig.URL{URL: u}
+			cleanups = append(cleanups, cleanup)
+		}
+	}
+
+	code := m.Run()
+	for _, cleanup := range cleanups {
+		cleanup()
+	}
+	os.Exit(code)
 }
 
 // filterReceivers filters Remote-Write configs based on comma-separated receiver names.

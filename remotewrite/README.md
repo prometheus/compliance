@@ -107,12 +107,12 @@ This test suite does not verify data ingestion by reading data back from the rec
 
 ### Prerequisites
 
-You need a receiving endpoint you want to test.
+You need a receiving endpoint you want to test. By default, if `local-prometheus` is configured (as in `config_example.yml`) and no server is already listening at its configured address (`127.0.0.1:9090`), the test suite automatically downloads/builds and runs Prometheus with Remote-Write Receiver enabled as the reference implementation.
 
-For example, a Prometheus server with Remote-Write Receiver enabled could be used as a baseline:
+Alternatively, you can start your own Prometheus server with Remote-Write Receiver enabled:
 
 ```bash
-prometheus --web.enable-remote-write-receiver --enable-feature=native-histograms # Add config file.
+prometheus --web.enable-remote-write-receiver --enable-feature=st-storage,exemplar-storage,metadata-wal-records # Add config file.
 ```
 
 ### Configuration
