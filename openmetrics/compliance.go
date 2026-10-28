@@ -384,16 +384,15 @@ func executeScrape(ctx context.Context, client *http.Client, endpointURL string,
 }
 
 // buildDecodeFormat constructs the expfmt.Format for decoding the scraped payload
-// using the ABNF OpenMetrics 1.0 or 2.0 parser while honoring any negotiated escaping scheme.
+// using the ABNF OpenMetrics 1.0 or 2.0 parser for the requested test version
+// while honoring any requested or negotiated escaping scheme.
 func buildDecodeFormat(v Version, mediaParams map[string]string, reqEscaping string) expfmt.Format {
 	versionStr := string(v)
 	if versionStr == "" {
 		versionStr = expfmt.OpenMetricsVersion_1_0_0
 	}
-	if paramVer := mediaParams["version"]; paramVer == expfmt.OpenMetricsVersion_1_0_0 ||
-		paramVer == expfmt.OpenMetricsVersion_2_0_0 ||
-		paramVer == expfmt.OpenMetricsVersion_2_0_0_rc {
-		versionStr = paramVer
+	if v == Version2_0_0 && mediaParams["version"] == expfmt.OpenMetricsVersion_2_0_0_rc {
+		versionStr = expfmt.OpenMetricsVersion_2_0_0_rc
 	}
 
 	f, err := expfmt.NewOpenMetricsFormat(versionStr)
@@ -401,9 +400,9 @@ func buildDecodeFormat(v Version, mediaParams map[string]string, reqEscaping str
 		f = expfmt.FmtOpenMetrics_1_0_0
 	}
 
-	escaping := mediaParams[model.EscapingKey]
+	escaping := reqEscaping
 	if escaping == "" {
-		escaping = reqEscaping
+		escaping = mediaParams[model.EscapingKey]
 	}
 	if escaping != "" {
 		if scheme, err := model.ToEscapingScheme(escaping); err == nil {
