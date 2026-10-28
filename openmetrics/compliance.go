@@ -61,6 +61,11 @@ func complianceTestsForVersion(v Version) []Test {
 	var ret []Test
 	ret = append(ret, protocolTests(v)...)
 	ret = append(ret, syntaxTests(v)...)
+	ret = append(ret, metadataTests(v)...)
+	ret = append(ret, escapingTests(v)...)
+	ret = append(ret, samplesTests(v)...)
+	ret = append(ret, histogramsTests(v)...)
+	ret = append(ret, exemplarsTests(v)...)
 	for i := range ret {
 		if ret[i].Version == "" {
 			ret[i].Version = v
