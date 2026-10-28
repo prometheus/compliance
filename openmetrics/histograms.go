@@ -70,12 +70,20 @@ func histogramsTests(v Version) []Test {
 					Description: "Histogram series SHOULD include a valid start/created timestamp (_created line in OM 1.0, inline st@ in OM 2.0)",
 					RFCLevel:    ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "http_request_duration_seconds")
 						for _, m := range mf.Metric {
 							ct := m.GetHistogram().GetCreatedTimestamp()
 							require.NotNil(t, ct, "Histogram series SHOULD include a CreatedTimestamp")
 							require.NoError(t, ct.CheckValid())
 							require.Positive(t, ct.AsTime().UnixNano())
+						}
+						if isOM2 {
+							lines := sampleLinesForFamily(res.Body, "http_request_duration_seconds")
+							require.NotEmpty(t, lines)
+							for _, line := range lines {
+								require.Contains(t, line, " st@", "OpenMetrics 2.0 histogram SHOULD include inline st@ start timestamp")
+							}
 						}
 					},
 				},
@@ -84,16 +92,19 @@ func histogramsTests(v Version) []Test {
 					Description: "Histograms MUST use multi-line _bucket/_sum/_count in OM 1.0 and single-line composite values in OM 2.0",
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
+						mf := requireFamily(t, res, "http_request_duration_seconds")
 						lines := sampleLinesForFamily(res.Body, "http_request_duration_seconds")
 						require.NotEmpty(t, lines)
 						if isOM2 {
-							require.Len(t, lines, 1, "OpenMetrics 2.0 histogram with 1 series MUST be a single composite sample line")
-							require.Contains(t, lines[0], "{count:", "OpenMetrics 2.0 histogram MUST use composite {count:...,sum:...} format")
-							require.Contains(t, lines[0], ",sum:")
-							require.Contains(t, lines[0], ",bucket:[")
-							require.Contains(t, lines[0], " st@", "OpenMetrics 2.0 histogram SHOULD include inline st@ start timestamp")
+							require.Len(t, lines, len(mf.Metric), "OpenMetrics 2.0 histogram MUST emit one composite sample line per series")
+							for _, line := range lines {
+								require.Contains(t, line, "{count:", "OpenMetrics 2.0 histogram MUST use composite {count:...,sum:...} format")
+								require.Contains(t, line, ",sum:")
+								require.Contains(t, line, ",bucket:[")
+							}
 						} else {
-							require.Greater(t, len(lines), 3, "OpenMetrics 1.0 histogram MUST emit multiple _bucket, _sum, and _count lines")
+							require.Greater(t, len(lines), 3*len(mf.Metric), "OpenMetrics 1.0 histogram MUST emit multiple _bucket, _sum, and _count lines")
 							require.Contains(t, string(res.Body), "http_request_duration_seconds_bucket{")
 							require.Contains(t, string(res.Body), "http_request_duration_seconds_sum")
 							require.Contains(t, string(res.Body), "http_request_duration_seconds_count")
