@@ -37,12 +37,13 @@ func generateRW1Request(samples []SampleWithLabels) *http.Request {
 	var timeseries []prompb.TimeSeries
 
 	for _, s := range samples {
-		keys := slices.Sorted(maps.Keys(s.Labels))
+		lbls := mergeExternalLabels(s.Labels)
+		keys := slices.Sorted(maps.Keys(lbls))
 		labels := make([]prompb.Label, 0, len(keys))
 		for _, k := range keys {
 			labels = append(labels, prompb.Label{
 				Name:  k,
-				Value: s.Labels[k],
+				Value: lbls[k],
 			})
 		}
 

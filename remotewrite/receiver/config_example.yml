@@ -10,6 +10,14 @@
 # This example should point to a Prometheus server with Remote-Write Receiver
 # and Native Histograms enabled:
 # --web.enable-remote-write-receiver --enable-feature=native-histograms
+# Optional global external labels merged into every non-empty time series
+# sent by the compliance suite (useful for receivers that require tenant/resource
+# labels such as project_id or location).
+# global:
+#   external_labels:
+#     project_id: my-project
+#     location: us-central1
+
 remote_write:
   - name: local-prometheus
     url: http://127.0.0.1:9090/api/v1/write

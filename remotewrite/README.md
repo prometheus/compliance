@@ -117,9 +117,14 @@ prometheus --web.enable-remote-write-receiver --enable-feature=st-storage,exempl
 
 ### Configuration
 
-The main configuration file `config.yml` in the `/remotewrite/receiver/` directory controls which receiver endpoints to test. It follows the Prometheus [`remote_write`](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write) structure:
+The main configuration file `config.yml` in the `/remotewrite/receiver/` directory controls which receiver endpoints to test. It follows the Prometheus [`remote_write`](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write) structure (and supports optional `global.external_labels` to inject required tenant or resource labels into every generated time series):
 
 ```yaml
+global:
+  external_labels:
+    # Optional custom labels merged into every non-empty time series.
+    # project_id: my-project
+
 remote_write:
   - name: local-prometheus
     url: http://127.0.0.1:9090/api/v1/write
