@@ -244,7 +244,7 @@ func TestEdgeCaseCombinations(t *testing.T) {
 	}{
 		{
 			name:        "metadata_without_data",
-			description: "Metadata sent without corresponding samples or histograms",
+			description: "Metadata sent without corresponding samples, histograms, or exemplars should be rejected",
 			buildRequest: func() *http.Request {
 				metadata := MetadataWithLabels{
 					Labels: basicMetric("orphan_metric"),
@@ -257,6 +257,8 @@ func TestEdgeCaseCombinations(t *testing.T) {
 					UnsafeRequest: true,
 				})
 			},
+			// Per RW 2.0 spec, TimeSeries messages must specify at least one sample, histogram, or exemplar;
+			// standalone metadata-only TimeSeries are invalid.
 			expectedParams: requestParams{
 				success: false,
 			},
