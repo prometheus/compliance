@@ -36,7 +36,7 @@ jobs:
       - name: Run tests
         run: |
           mkdir -p "${RUNNER_TEMP}/test-reports"
-          gotestsum --junitfile "${RUNNER_TEMP}/test-reports/unit-tests.xml" -- . ./alert_generator/... ./promql/... ./promqle2e/...
+          gotestsum --junitfile "${RUNNER_TEMP}/test-reports/unit-tests.xml" -- . ./alert_generator/... ./openmetrics/... ./promql/... ./promqle2e/...
 
       - name: Upload test results
         if: always()
