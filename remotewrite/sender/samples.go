@@ -370,7 +370,9 @@ persistent_metric{env="prod"} 2
 			Version: remote.WriteV2MessageType,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.GreaterOrEqual(t, len(res.Requests), 1)
-				require.NotNil(t, res.Requests[0].RW2)
+				for i := range res.Requests {
+					require.NotNil(t, res.Requests[i].RW2)
+				}
 			},
 			ValidateCases: []ValidateCase{
 				{
@@ -378,8 +380,8 @@ persistent_metric{env="prod"} 2
 					Description: "Disappearing series MUST have a sample encoded with StaleNaN (0x7ff0000000000002).",
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						results := requireTimeseriesByMetricName(t, req, "disappearing_metric")
+						// Senders may either batch both scrapes into a single request or send them in separate requests.
+						results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "disappearing_metric")
 						ts := flattenTimeseriesResult(t, results).TimeSeries
 						require.GreaterOrEqual(t, len(ts.Samples), 2, "Expected initial sample and staleness marker for disappearing_metric")
 						require.Equal(t, 42.0, ts.Samples[0].Value)
