@@ -604,6 +604,7 @@ func TestModeValidation(t *testing.T) {
 	should(t)
 	t.Attr("description", "Test that requests violating stateless or stateless-st mode requirements are rejected with 400 status")
 
+	startTime := time.Now().Add(-30 * time.Minute)
 	testCases := []struct {
 		name        string
 		description string
@@ -640,6 +641,46 @@ func TestModeValidation(t *testing.T) {
 			},
 		},
 		{
+			name:        "stateless_classic_histogram_samples",
+			description: "Classic histogram float samples with METRIC_TYPE_HISTOGRAM in stateless mode should be rejected with 400",
+			opts: RequestOpts{
+				Mode: remote.WriteModeStateless,
+				Samples: []SampleWithLabels{
+					{
+						Labels: map[string]string{"__name__": "stateless_classic_hist_bucket", "le": "1.0"},
+						Value:  5.0,
+					},
+				},
+				Metadata: []MetadataWithLabels{
+					{
+						Labels: basicMetric("stateless_classic_hist_bucket"),
+						Type:   writev2.Metadata_METRIC_TYPE_HISTOGRAM,
+						Help:   "Classic histogram float bucket sample in stateless mode",
+					},
+				},
+			},
+		},
+		{
+			name:        "stateless_untyped_metadata",
+			description: "TimeSeries with unspecified Metadata.type in stateless mode should be rejected with 400",
+			opts: RequestOpts{
+				Mode: remote.WriteModeStateless,
+				Samples: []SampleWithLabels{
+					{
+						Labels: basicMetric("stateless_untyped_metric"),
+						Value:  1.0,
+					},
+				},
+				Metadata: []MetadataWithLabels{
+					{
+						Labels: basicMetric("stateless_untyped_metric"),
+						Type:   writev2.Metadata_METRIC_TYPE_UNSPECIFIED,
+						Help:   "Untyped metric in stateless mode",
+					},
+				},
+			},
+		},
+		{
 			name:        "stateless_st_metadata_only_timeseries",
 			description: "Metadata-only TimeSeries in stateless-st mode should be rejected with 400",
 			opts: RequestOpts{
@@ -669,13 +710,99 @@ func TestModeValidation(t *testing.T) {
 				UnsafeRequest: true,
 			},
 		},
+		{
+			name:        "stateless_st_classic_histogram_samples",
+			description: "Classic histogram float samples with METRIC_TYPE_HISTOGRAM in stateless-st mode should be rejected with 400",
+			opts: RequestOpts{
+				Mode: remote.WriteModeStatelessST,
+				Samples: []SampleWithLabels{
+					{
+						Labels:         map[string]string{"__name__": "stateless_st_classic_hist_bucket", "le": "1.0"},
+						Value:          5.0,
+						StartTimestamp: &startTime,
+					},
+				},
+				Metadata: []MetadataWithLabels{
+					{
+						Labels: basicMetric("stateless_st_classic_hist_bucket"),
+						Type:   writev2.Metadata_METRIC_TYPE_HISTOGRAM,
+						Help:   "Classic histogram float bucket sample in stateless-st mode",
+					},
+				},
+			},
+		},
+		{
+			name:        "stateless_st_untyped_metadata",
+			description: "TimeSeries with unspecified Metadata.type in stateless-st mode should be rejected with 400",
+			opts: RequestOpts{
+				Mode: remote.WriteModeStatelessST,
+				Samples: []SampleWithLabels{
+					{
+						Labels:         basicMetric("stateless_st_untyped_metric"),
+						Value:          1.0,
+						StartTimestamp: &startTime,
+					},
+				},
+				Metadata: []MetadataWithLabels{
+					{
+						Labels: basicMetric("stateless_st_untyped_metric"),
+						Type:   writev2.Metadata_METRIC_TYPE_UNSPECIFIED,
+						Help:   "Untyped metric in stateless-st mode",
+					},
+				},
+			},
+		},
+		{
+			name:        "stateless_st_counter_without_start_timestamp",
+			description: "Counter sample without start_timestamp in stateless-st mode should be rejected with 400",
+			opts: RequestOpts{
+				Mode: remote.WriteModeStatelessST,
+				Samples: []SampleWithLabels{
+					{
+						Labels: basicMetric("stateless_st_missing_st_counter_total"),
+						Value:  10.0,
+					},
+				},
+				Metadata: []MetadataWithLabels{
+					{
+						Labels: basicMetric("stateless_st_missing_st_counter_total"),
+						Type:   writev2.Metadata_METRIC_TYPE_COUNTER,
+						Help:   "Counter sample missing start_timestamp in stateless-st mode",
+					},
+				},
+			},
+		},
+		{
+			name:        "stateless_st_histogram_without_start_timestamp",
+			description: "Native histogram without start_timestamp in stateless-st mode should be rejected with 400",
+			opts: RequestOpts{
+				Mode: remote.WriteModeStatelessST,
+				Histograms: []HistogramWithLabels{
+					{
+						Labels:    basicMetric("stateless_st_missing_st_histogram_seconds"),
+						Histogram: histogram(15.0, true, false, false, false, false),
+					},
+				},
+				Metadata: []MetadataWithLabels{
+					{
+						Labels: basicMetric("stateless_st_missing_st_histogram_seconds"),
+						Type:   writev2.Metadata_METRIC_TYPE_HISTOGRAM,
+						Help:   "Native histogram missing start_timestamp in stateless-st mode",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			should(t)
 			t.Attr("description", tc.description)
 			runRequest(t, generateRequest(tc.opts), requestParams{
-				success: false,
+				samples:    len(tc.opts.Samples),
+				histograms: len(tc.opts.Histograms),
+				exemplars:  len(tc.opts.Exemplars),
+				success:    false,
 			})
 		})
 	}
