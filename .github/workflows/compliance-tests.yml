@@ -22,4 +22,7 @@ jobs:
         with:
           go-version: 1.26.x
 
-      - run: cd remotewrite && make sender
+      - run: cd remotewrite && make sender PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE="\"${SKIP_TESTS}\""
+        env:
+          # Skip stateless exemplar coalescing (https://github.com/prometheus/prometheus/pull/20070) and untyped metadata inference (https://github.com/prometheus/proposals/pull/104) until implemented in Prometheus.
+          SKIP_TESTS: "TestStateless.*Compliance/prometheus/exemplars/rw2-stateless.*/(counter_|histogram_|exemplar_)|TestStateless.*Compliance/prometheus/metadata/rw2-stateless.*/untyped_metadata_inferred"

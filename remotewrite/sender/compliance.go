@@ -39,7 +39,38 @@ import (
 
 // ComplianceTests returns official compliance sender tests.
 func ComplianceTests() (ret []Test) {
-	ret = append(ret, samplesTests()...)
+	return complianceTestsForMode(ModeNone)
+}
+
+// StatelessComplianceTests returns compliance sender tests for the "stateless"
+// Remote-Write 2.0 mode.
+//
+// See: https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/#stateless
+func StatelessComplianceTests() (ret []Test) {
+	return complianceTestsForMode(ModeStateless)
+}
+
+// StatelessSTComplianceTests returns compliance sender tests for the "stateless-st"
+// Remote-Write 2.0 mode.
+//
+// See: https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/#stateless-st
+func StatelessSTComplianceTests() (ret []Test) {
+	return complianceTestsForMode(ModeStatelessST)
+}
+
+func complianceTestsForMode(mode Mode) (ret []Test) {
+	ret = append(ret, protocolTests(mode)...)
+	ret = append(ret, symbolsTests()...)
+	ret = append(ret, labelsTests()...)
+	ret = append(ret, samplesTests(mode)...)
+	ret = append(ret, histogramsTests(mode)...)
+	ret = append(ret, exemplarsTests(mode)...)
+	ret = append(ret, metadataTests(mode)...)
+	ret = append(ret, responseTests()...)
+	ret = append(ret, retryTests()...)
+	for i := range ret {
+		ret[i].Mode = mode
+	}
 	return ret
 }
 
@@ -77,6 +108,8 @@ type ReceiverRequest struct {
 type ReceiverResult struct {
 	// RemoteWrite version that this test was configured with.
 	Version remote.WriteMessageType
+	// RemoteWrite mode that this test was configured with.
+	Mode Mode
 	// All sender requests received by the test receiver.
 	Requests []ReceiverRequest
 }
@@ -96,12 +129,13 @@ func (res ReceiverResult) RequestsProtoToString() string {
 
 // ReceiverResponse configures the response behavior of the test receiver.
 type ReceiverResponse struct {
-	StatusCode        int
-	Headers           map[string]string
-	Body              string
-	SamplesWritten    int
-	ExemplarsWritten  int
-	HistogramsWritten int
+	StatusCode         int
+	Headers            map[string]string
+	Body               string
+	SamplesWritten     int
+	ExemplarsWritten   int
+	HistogramsWritten  int
+	OmitWrittenHeaders bool
 }
 
 type ValidateFunc func(t *testing.T, res ReceiverResult)
@@ -122,8 +156,16 @@ type Test struct {
 	// that the target must use.
 	// This adds another "/rw<number>/" sub-test.
 	Version remote.WriteMessageType
+	// RemoteWrite mode to configure the target with (e.g. ModeStateless, ModeStatelessST).
+	// When set, this appends "-<mode>" to the "/rw2/" sub-test (e.g. "/rw2-stateless/").
+	Mode Mode
+	// ScrapeContentType specifies the Content-Type header served by the scrape target.
+	// If empty, defaults to OpenMetrics 1.0 text format (OM1ContentType).
+	ScrapeContentType string
 	// ScrapeData provides input scrape data to use against the tested target.
 	ScrapeData string
+	// AdditionalScrapeData provides scrape payloads served on subsequent scrapes (scrape #2, #3, etc.).
+	AdditionalScrapeData []string
 	// TestResponses controls the receiver response to respond with to a sender, sequentially.
 	// Tests finishes when there is nothing else to respond with, or timeout.
 	// By default, the case responds with a single NoContent (success) response.
@@ -163,6 +205,9 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 			protoMsgName = "rw1"
 		case remote.WriteV2MessageType:
 			protoMsgName = "rw2"
+			if tc.Mode != ModeNone {
+				protoMsgName = fmt.Sprintf("rw2-%s", tc.Mode)
+			}
 		default:
 			t.Fatalf("unsupported remote write message type: %v", tc.Version)
 		}
@@ -174,8 +219,8 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 			if len(tc.TestResponses) == 0 {
 				tc.TestResponses = []ReceiverResponse{{}} // By default assume a single successful response.
 			}
-			receiver := newSyncReceiver(tc.Version, tc.TestResponses)
-			scrapeTarget := newScrapeTarget(tc.ScrapeData)
+			receiver := newSyncReceiver(tc.Version, tc.Mode, tc.TestResponses)
+			scrapeTarget := newScrapeTarget(tc.ScrapeData, tc.AdditionalScrapeData, tc.ScrapeContentType)
 
 			// Setup subcase exists to cleanly visualise errors that happens before certain validation cases.
 			// TODO(bwplotka): This is odd for tests with 0 cases and a single validation.
@@ -201,6 +246,7 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 						ScrapeTargetHostPort:   scrapeTarget.HostPort(t),
 						RemoteWriteEndpointURL: receiver.URL(),
 						RemoteWriteMessage:     tc.Version,
+						RemoteWriteMode:        tc.Mode,
 					})
 				}, cancelGroup)
 				if err := g.Run(); err != nil {
@@ -258,6 +304,7 @@ type receiver struct {
 	server *httptest.Server
 
 	msg       remote.WriteMessageType
+	mode      Mode
 	requests  []ReceiverRequest
 	responses []ReceiverResponse
 
@@ -268,12 +315,13 @@ type receiver struct {
 // captures requests and respond with the given responses sequentially until they finish or context is done.
 //
 // NOTE: This kind of receiver will only work for non-sharded, single sender.
-func newSyncReceiver(msg remote.WriteMessageType, responses []ReceiverResponse) *receiver {
+func newSyncReceiver(msg remote.WriteMessageType, mode Mode, responses []ReceiverResponse) *receiver {
 	r := &receiver{
 		closeCh:   make(chan struct{}, 1),
 		requests:  make([]ReceiverRequest, 0, len(responses)),
 		responses: responses,
 		msg:       msg,
+		mode:      mode,
 
 		debug: os.Getenv("DEBUG") != "",
 	}
@@ -399,7 +447,7 @@ func (r *receiver) handleSyncRequest(w http.ResponseWriter, req *http.Request) {
 
 	if r.msg != remote.WriteV1MessageType {
 		// Set X-Prometheus-Remote-Write-*-Written headers if response is successful.
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 && !resp.OmitWrittenHeaders {
 			// If response counts are explicitly configured, use those. Otherwise, automatically count what we actually received.
 			samplesWritten := resp.SamplesWritten
 			exemplarsWritten := resp.ExemplarsWritten
@@ -447,20 +495,26 @@ func (r *receiver) Result() ReceiverResult {
 	defer r.mu.Unlock()
 	return ReceiverResult{
 		Version:  r.msg,
+		Mode:     r.mode,
 		Requests: append([]ReceiverRequest{}, r.requests...),
 	}
 }
 
 // scrapeTarget is an HTTP server that serves metrics in Prometheus format.
 type scrapeTarget struct {
-	server  *httptest.Server
-	mu      sync.Mutex
-	metrics string
+	server            *httptest.Server
+	mu                sync.Mutex
+	metrics           string
+	additionalMetrics []string
+	scrapeCount       int
+	contentType       string
 }
 
-func newScrapeTarget(metrics string) *scrapeTarget {
+func newScrapeTarget(metrics string, additionalMetrics []string, contentType string) *scrapeTarget {
 	st := &scrapeTarget{
-		metrics: metrics,
+		metrics:           metrics,
+		additionalMetrics: additionalMetrics,
+		contentType:       contentType,
 	}
 	st.server = httptest.NewServer(http.HandlerFunc(st.handleScrape))
 	return st
@@ -472,19 +526,31 @@ func (st *scrapeTarget) Run(ctx context.Context) {
 	st.server.Close()
 }
 
-const om1ContentType = "application/openmetrics-text; version=1.0.0; charset=utf-8"
+const (
+	OM1ContentType   = "application/openmetrics-text; version=1.0.0; charset=utf-8"
+	ProtoContentType = "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited"
+)
 
-// handleScrape serves metrics in OpenMetrics 1 exposition format.
-func (st *scrapeTarget) handleScrape(w http.ResponseWriter, r *http.Request) {
+// handleScrape serves metrics in the configured exposition format (OpenMetrics 1.0 by default).
+func (st *scrapeTarget) handleScrape(w http.ResponseWriter, _ *http.Request) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 
 	metrics := st.metrics
-	if !strings.HasSuffix(metrics, "# EOF\n") {
-		// Annoying, add it if missing.
-		metrics = metrics + "# EOF\n"
+	if st.scrapeCount > 0 && len(st.additionalMetrics) > 0 {
+		idx := min(st.scrapeCount-1, len(st.additionalMetrics)-1)
+		metrics = st.additionalMetrics[idx]
 	}
-	w.Header().Set("Content-Type", om1ContentType)
+	st.scrapeCount++
+	contentType := st.contentType
+	if contentType == "" {
+		contentType = OM1ContentType
+		if !strings.HasSuffix(metrics, "# EOF\n") {
+			// Annoying, add it if missing.
+			metrics = metrics + "# EOF\n"
+		}
+	}
+	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(metrics))
 }
