@@ -142,6 +142,7 @@ func samplesTests(v Version) []Test {
 					Description: "Summary quantiles MUST be in [0.0, 1.0], sorted in strictly increasing order, with non-negative values",
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "rpc_latency_seconds")
 						for _, m := range mf.Metric {
 							s := m.GetSummary()
@@ -167,15 +168,19 @@ func samplesTests(v Version) []Test {
 					Description: "Summaries MUST use multi-line representation in OM 1.0 and single-line composite values in OM 2.0",
 					RFCLevel:    MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
+						mf := requireFamily(t, res, "rpc_latency_seconds")
 						lines := sampleLinesForFamily(res.Body, "rpc_latency_seconds")
 						require.NotEmpty(t, lines)
 						if isOM2 {
-							require.Len(t, lines, 1, "OpenMetrics 2.0 summary with 1 series MUST be a single composite sample line")
-							require.Contains(t, lines[0], "{count:", "OpenMetrics 2.0 summary MUST use composite {count:...,sum:...,quantile:[...]} format")
-							require.Contains(t, lines[0], ",sum:")
-							require.Contains(t, lines[0], ",quantile:[")
+							require.Len(t, lines, len(mf.Metric), "OpenMetrics 2.0 summary MUST emit one composite sample line per series")
+							for _, line := range lines {
+								require.Contains(t, line, "{count:", "OpenMetrics 2.0 summary MUST use composite {count:...,sum:...,quantile:[...]} format")
+								require.Contains(t, line, ",sum:")
+								require.Contains(t, line, ",quantile:[")
+							}
 						} else {
-							require.Greater(t, len(lines), 1, "OpenMetrics 1.0 summary MUST use multiple sample lines (_sum, _count, quantile)")
+							require.Greater(t, len(lines), len(mf.Metric), "OpenMetrics 1.0 summary MUST use multiple sample lines (_sum, _count, quantile)")
 							require.Contains(t, string(res.Body), "rpc_latency_seconds_sum")
 							require.Contains(t, string(res.Body), "rpc_latency_seconds_count")
 						}
