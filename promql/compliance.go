@@ -47,16 +47,6 @@ func ComplianceTests() []*config.TestCase {
 	return cfg.TestCases
 }
 
-// RFCLevel represents the compliance requirement level of a test case.
-type RFCLevel = compliance.RFCLevel
-
-const (
-	MustLevel        = compliance.MustLevel
-	ShouldLevel      = compliance.ShouldLevel
-	MayLevel         = compliance.MayLevel
-	RecommendedLevel = compliance.RecommendedLevel
-)
-
 // RunOption customizes a RunTests execution.
 type RunOption func(*runConfig)
 
@@ -155,7 +145,7 @@ func RunTests(t *testing.T, refTarget, testTarget Target, tcs []*config.TestCase
 		t.Fatalf("failed to create test API client: %v", err)
 	}
 
-	setupOk := compliance.SafeRun(t, fmt.Sprintf("%s/_setup", testTarget.Name()), testTarget.Name(), "Ingest synthetic scrape data into reference and target", MustLevel, func(t *testing.T) {
+	setupOk := compliance.SafeRun(t, fmt.Sprintf("%s/_setup", testTarget.Name()), testTarget.Name(), "Ingest synthetic scrape data into reference and target", compliance.MustLevel, func(t *testing.T) {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer waitCancel()
 
@@ -171,7 +161,7 @@ func RunTests(t *testing.T, refTarget, testTarget Target, tcs []*config.TestCase
 	expanded := testcases.ExpandTestCases(tcs, rcfg.queryTweaks, start, end, resolution)
 
 	for _, tc := range expanded {
-		compliance.SafeRun(t, fmt.Sprintf("%s/%s", testTarget.Name(), tc.Query), testTarget.Name(), tc.Query, MustLevel, func(t *testing.T) {
+		compliance.SafeRun(t, fmt.Sprintf("%s/%s", testTarget.Name(), tc.Query), testTarget.Name(), tc.Query, compliance.MustLevel, func(t *testing.T) {
 			t.Parallel()
 			if !setupOk {
 				t.Fatal("setup failed")
