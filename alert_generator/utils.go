@@ -13,9 +13,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/sigv4"
 	"github.com/prometheus/compliance/alert_generator/config"
+	v1 "github.com/prometheus/compliance/alert_generator/v1"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
-	v1 "github.com/prometheus/prometheus/web/api/v1"
 )
 
 // TODO: add retries and set some timeouts.
@@ -162,10 +162,8 @@ func ParseAndGroupMetrics(b []byte) (map[string][]promql.Sample, error) {
 			return nil, err
 		}
 		mappedMetrics[groupName] = append(mappedMetrics[groupName], promql.Sample{
-			Point: promql.Point{
-				T: ts,
-				V: val,
-			},
+			T:      ts,
+			F:      val,
 			Metric: s.Metric,
 		})
 	}

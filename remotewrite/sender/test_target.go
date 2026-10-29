@@ -17,19 +17,13 @@ import (
 	"context"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
 )
 
 // Sender represents a test target.
 // Sender generally needs to be able to collect (scrape) data from a Prometheus metric endpoint using OpenMetrics 1.0
 // and send Prometheus metrics to the designated endpoint using Remote Write protocol.
-type Sender interface {
-	// Name returns unique sender name.
-	Name() string
-	// Run runs a test sender until the context is done.
-	// Premature stops are assumed to be failures.
-	Run(context.Context, Options) error
-}
+type Sender = compliance.Target[Options]
 
 // Options represents the sender options for a given test.
 type Options struct {
@@ -44,5 +38,5 @@ type Options struct {
 //
 // This is useful when starting process-based sender targets.
 func RunCommand(ctx context.Context, dir string, extraEnvVars []string, prog string, args ...string) error {
-	return common.RunCommand(ctx, dir, extraEnvVars, prog, args...)
+	return compliance.RunCommand(ctx, dir, extraEnvVars, prog, args...)
 }

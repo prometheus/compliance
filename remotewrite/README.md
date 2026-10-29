@@ -2,7 +2,7 @@
 
 This repository contains compliance test suites for both **senders** and **receivers** of the Prometheus Remote-Write Protocol 2.0. It validates implementation of the Remote-Write v2 specification according to the [official protocol requirements](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/) as well as some more strict Prometheus implementation aspects.
 
-Both [sender](#sender-compliance-sender) and [receiver](#receiver-compliance-receiver) test suites uses a shared [`./index.html`](./index.html) file that enables viewing compliance test results after they complete.
+Both [sender](#sender-compliance-sender) and [receiver](#receiver-compliance-receiver) test suites share [`../index.html`](../index.html) to view compliance test results after they complete.
 
 To generate and view results, add `-json` flag to `go test` command and `tee` the results to a file called `results.json`.
 
@@ -147,6 +147,18 @@ via the `PROMETHEUS_RW2_COMPLIANCE_RECEIVERS` environment variable:
 ```bash
 export PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus,mimir"
 ```
+
+### Programmatic Usage
+
+Go projects can also import `github.com/prometheus/compliance/remotewrite/receiver` directly and implement `receiver.Receiver`:
+
+```go
+func TestRemoteWriteReceiverCompliance(t *testing.T) {
+	receiver.RunTests(t, myReceiver{}, receiver.ComplianceTests())
+}
+```
+
+Use `receiver.WithExternalLabels(...)` to inject required tenant or resource labels into non-empty series, or `receiver.WithWritePath(...)` if the receiver listens on a path other than `/api/v1/write`.
 
 ### Running Tests
 

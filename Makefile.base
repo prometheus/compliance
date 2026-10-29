@@ -1,0 +1,21 @@
+# Shared Makefile rules for Prometheus compliance test suites.
+# Set the default target to 'help' so it runs when invoking 'make' with no arguments.
+.DEFAULT_GOAL := help
+
+BASE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+TIMEOUT ?= 10m
+RESULT_FILE ?= $(ROOT_DIR)results.json
+SUITE_TITLE ?= Prometheus Compliance — Test Matrix
+OPEN_CMD := $(shell command -v open 2>/dev/null || command -v xdg-open 2>/dev/null || echo true)
+
+.PHONY: help
+help: ## Show this help message
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Available commands:"
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z0-9_-]+:.*?## / {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+.PHONY: results-web
+results-web: ## Generate HTML view with ./results.json from ../index.html and open in your browser.
+	@SUITE_TITLE="$(SUITE_TITLE)" RESULT_FILE="$(RESULT_FILE)" perl -pe 'BEGIN{local $$/; open(F,"<",$$ENV{RESULT_FILE}) or die "cannot open $$ENV{RESULT_FILE}: $$!"; $$c=<F>; close F; $$c=~s/\\/\\\\/g; $$c=~s/`/\\`/g; $$c=~s/\$$/\\\$$/g; $$t=$$ENV{SUITE_TITLE}//""; $$t=~s/\\/\\\\/g; $$t=~s/`/\\`/g; $$t=~s/\$$/\\\$$/g;} s/const PRELOADED_TITLE = ``;/const PRELOADED_TITLE = `$$t`;/; s/const PRELOADED_RESULT_DATA = ``;/const PRELOADED_RESULT_DATA = `$$c`;/' "$(BASE_DIR)index.html" > index.preloaded.html
+	@$(OPEN_CMD) index.preloaded.html

@@ -18,7 +18,7 @@ limitations under the License.
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Remote-Write v2 — Test Matrix</title>
+    <title>Prometheus Compliance — Test Matrix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <meta name="color-scheme" content="light dark" />
     <style>
@@ -48,7 +48,7 @@ limitations under the License.
 <body class="bg-slate-50 text-slate-900">
 <main class="max-w-7xl mx-auto p-4 sm:p-6">
     <header class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 class="text-xl font-semibold tracking-tight">Remote-Write v2 — Test Matrix</h1>
+        <h1 id="pageTitle" class="text-xl font-semibold tracking-tight">Prometheus Compliance — Test Matrix</h1>
         <div class="flex items-center gap-2">
             <label class="cursor-pointer flex items-center gap-1.5 rounded border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-slate-50">
                 <input id="hideSuccessCheckbox" type="checkbox" class="rounded" />
@@ -128,9 +128,10 @@ limitations under the License.
 </button>
 
 <script>
-    // ---------- Optional, preloaded result data ----------
-    // This variable allows preloading results.json content. Useful when opening results on-demand,
-    // when CORS block the local file loading.
+    // ---------- Optional, preloaded metadata & result data ----------
+    // These variables allow preloading a suite title and results.json content (see Makefile.base)
+    // when opening results on-demand where browser CORS blocks local file fetches.
+    const PRELOADED_TITLE = ``;
     const PRELOADED_RESULT_DATA = ``;
 
     // ---------- Utilities ----------
@@ -138,6 +139,13 @@ limitations under the License.
     const STATUS = { PASS: 'pass', FAIL: 'fail', SKIP: 'skip' };
     // byAlpha provides alphanumeric comparison for sorting.
     const byAlpha = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    // escapeHtml escapes text for safe interpolation into HTML templates.
+    const escapeHtml = (s) => String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 
     // toLinesOrArray parses JSON or NDJSON text into an array of event objects.
     function toLinesOrArray(text) {
@@ -236,7 +244,7 @@ limitations under the License.
         let label = '—';
         if (status === STATUS.PASS) { cls = 'bg-green-100 text-green-800'; label = 'PASS'; }
         else if (status === STATUS.FAIL) {
-            if (lvl === 'SHOULD' || lvl === 'MAY') { cls = 'bg-gray-300 text-gray-800'; label = 'FAIL'; }
+            if (lvl === 'SHOULD' || lvl === 'MAY' || lvl === 'RECOMMENDED') { cls = 'bg-gray-300 text-gray-800'; label = 'FAIL'; }
             else { cls = 'bg-red-100 text-red-800'; label = 'FAIL'; }
         } else if (status === STATUS.SKIP) { cls = 'bg-yellow-100 text-yellow-900'; label = 'SKIP'; }
 
@@ -270,15 +278,16 @@ limitations under the License.
             }
         }
 
-        const rows = new Map(); // key -> { testName, rfcLevel, rfcAttrLen, resultsByRw: { rw -> status } }
+        const rows = new Map(); // key -> { testName, description, descAttrLen, rfcLevel, rfcAttrLen, resultsByRw: { rw -> status } }
         const allRws = new Set();
-        const testDetails = new Map(); // key -> { testName, rw, status, rfcLevel, duration, output }
+        const testDetails = new Map(); // key -> { testName, description, rw, status, rfcLevel, duration, output }
 
         for (const ev of endEvents) {
             const test = ev.Test;
             const rwAttr = getAttrFor(test, 'rw', attrs);
             const rfcAttr = getAttrFor(test, 'rfcLevel', attrs);
             if (!rwAttr || !rfcAttr) continue; // ignore tests without both attrs (direct or inherited)
+            const descAttr = getAttrFor(test, 'description', attrs);
 
             const rw = rwAttr.value;
             allRws.add(rw);
@@ -293,6 +302,7 @@ limitations under the License.
             const detailKey = `${test}#${rw}`;
             testDetails.set(detailKey, {
                 testName: test,
+                description: descAttr ? descAttr.value : '',
                 rw: rw,
                 status: ev.Action,
                 rfcLevel: rfcAttr.value,
@@ -307,6 +317,8 @@ limitations under the License.
             if (!rows.has(baseTest)) {
                 rows.set(baseTest, {
                     testName: baseTest,
+                    description: descAttr ? descAttr.value : '',
+                    descAttrLen: descAttr ? descAttr.pathLen : -1,
                     rfcLevel: rfcAttr.value,
                     rfcAttrLen: rfcAttr.pathLen,
                     resultsByRw: Object.create(null),
@@ -315,10 +327,14 @@ limitations under the License.
 
             const row = rows.get(baseTest);
 
-            // Prefer the most specific rfcLevel (longest attr path)
+            // Prefer the most specific rfcLevel and description (longest attr path)
             if (rfcAttr.pathLen > row.rfcAttrLen) {
                 row.rfcLevel = rfcAttr.value;
                 row.rfcAttrLen = rfcAttr.pathLen;
+            }
+            if (descAttr && descAttr.value && descAttr.pathLen > row.descAttrLen) {
+                row.description = descAttr.value;
+                row.descAttrLen = descAttr.pathLen;
             }
 
             // Store status (if multiple results for same pair, prioritize FAIL > SKIP > PASS)
@@ -444,18 +460,19 @@ limitations under the License.
                 testDiv.innerHTML = `
             <div class="flex items-start justify-between mb-2">
               <div>
-                <h4 class="font-mono text-sm font-medium text-slate-900">${test.testName}</h4>
+                <h4 class="font-mono text-sm font-medium text-slate-900">${escapeHtml(test.testName)}</h4>
+                ${test.description && !test.testName.endsWith('/' + test.description) ? `<p class="text-xs text-slate-600 mt-0.5">${escapeHtml(test.description)}</p>` : ''}
                 <div class="flex items-center gap-2 mt-1">
                   ${statusBadge(test.status, test.rfcLevel)}
-                  <span class="text-xs text-slate-500">RFC Level: ${test.rfcLevel}</span>
-                  <span class="text-xs text-slate-500 ${statusClass} font-medium">${test.status.toUpperCase()}${durationText}</span>
+                  <span class="text-xs text-slate-500">RFC Level: ${escapeHtml(test.rfcLevel)}</span>
+                  <span class="text-xs text-slate-500 ${statusClass} font-medium">${escapeHtml(test.status.toUpperCase())}${durationText}</span>
                 </div>
               </div>
             </div>
             ${test.output ? `
               <div class="mt-3">
                 <h5 class="text-xs font-medium text-slate-700 mb-1">Output:</h5>
-                <pre class="text-xs bg-slate-50 p-2 rounded border overflow-x-auto text-slate-700">${test.output.trim()}</pre>
+                <pre class="text-xs bg-slate-50 p-2 rounded border overflow-x-auto text-slate-700">${escapeHtml(test.output.trim())}</pre>
               </div>
             ` : ''}
             ${crossRefSection}
@@ -489,8 +506,17 @@ limitations under the License.
 
             // Test name (sticky first col on wide screens).
             const tdName = document.createElement('td');
-            tdName.className = 'sticky left-0 z-[1] bg-white px-4 py-2 font-mono text-[13px]';
-            tdName.textContent = row.testName;
+            tdName.className = 'sticky left-0 z-[1] bg-white px-4 py-2';
+            const nameLine = document.createElement('div');
+            nameLine.className = 'font-mono text-[13px]';
+            nameLine.textContent = row.testName;
+            tdName.appendChild(nameLine);
+            if (row.description && row.description !== row.testName && !row.testName.endsWith('/' + row.description)) {
+                const descLine = document.createElement('div');
+                descLine.className = 'text-xs text-slate-500 mt-0.5 max-w-xl whitespace-normal';
+                descLine.textContent = row.description;
+                tdName.appendChild(descLine);
+            }
             tr.appendChild(tdName);
 
             // rfcLevel.
@@ -696,6 +722,13 @@ limitations under the License.
     // ---------- Boot ----------
     // boot initializes the application on page load.
     (function boot() {
+        const preloadedTitle = PRELOADED_TITLE.trim();
+        if (preloadedTitle) {
+            document.title = preloadedTitle;
+            const titleEl = document.getElementById('pageTitle');
+            if (titleEl) titleEl.textContent = preloadedTitle;
+        }
+
         // Initialize back to top button.
         initBackToTop();
 
@@ -740,7 +773,7 @@ limitations under the License.
 
         // Try auto fetch; if it fails, leave UI ready for manual load.
         // Check for injected preloaded data first.
-        // NOTE: Remember to update Makefile, when updating this flow.
+        // NOTE: Remember to update Makefile.base, when updating this flow.
         const preloaded = PRELOADED_RESULT_DATA.trim();
         if (preloaded) {
             // Case 1: Preloaded data found.

@@ -22,7 +22,7 @@ import (
 	"text/template"
 
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
 	"github.com/prometheus/compliance/promql"
 )
 
@@ -68,7 +68,7 @@ func (p prometheus) Run(ctx context.Context, opts promql.Options) error {
 	binary := os.Getenv("PROMETHEUS_COMPLIANCE_PROMQL_BINARY")
 	if binary == "" {
 		var err error
-		binary, err = common.DownloadBinary(prometheusDownloadURL, "prometheus")
+		binary, err = compliance.DownloadBinary(prometheusDownloadURL, "prometheus")
 		if err != nil {
 			return err
 		}

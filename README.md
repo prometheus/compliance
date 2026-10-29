@@ -24,9 +24,9 @@ The [promqle2e](promqle2e/README.md) directory contains a Go Module for performi
 compliance tests for PromQL correctness. It's designed for smaller in-place quick unit tests, e.g. on per-PR basis, using docker based test framework. Useful as an acceptance tests
 for vendors or those who wish to maintain high Prometheus compatibility over time.
 
-## Remote Write: Sender
+## Remote Write
 
-The [remotewrite/sender](remotewrite/sender/README.md) directory contains code to test compliance with the [Prometheus Remote Write specification](https://prometheus.io/docs/specs/remote_write_spec/) as a sender.
+The [remotewrite](remotewrite/README.md) directory contains compliance test suites for both senders and receivers of the [Prometheus Remote-Write 2.0 specification](https://prometheus.io/docs/specs/prw/remote_write_spec_2_0/).
 
 ## Credits
 

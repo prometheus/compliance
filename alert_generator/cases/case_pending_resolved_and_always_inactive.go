@@ -6,13 +6,12 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
+	v1 "github.com/prometheus/compliance/alert_generator/v1"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/web/api/v1"
-	"gopkg.in/yaml.v3"
 )
 
 // PendingAndResolved_AlwaysInactive tests the following cases:
@@ -60,34 +59,20 @@ func (tc *pendingAndResolved) Describe() (title string, description string) {
 }
 
 func (tc *pendingAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
-	var pendingAlert, inactiveAlert yaml.Node
-	if err := pendingAlert.Encode(tc.pendingAlertName); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	if err := inactiveAlert.Encode(tc.inactiveAlertName); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	var pendingExpr, inactiveExpr yaml.Node
-	if err := pendingExpr.Encode(tc.pendingQuery); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	if err := inactiveExpr.Encode(tc.inactiveQuery); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
 	return rulefmt.RuleGroup{
 		Name:     tc.groupName,
 		Interval: model.Duration(tc.groupInterval),
-		Rules: []rulefmt.RuleNode{
+		Rules: []rulefmt.Rule{
 			{ // inactive -> pending -> inactive.
-				Alert:       pendingAlert,
-				Expr:        pendingExpr,
+				Alert:       tc.pendingAlertName,
+				Expr:        tc.pendingQuery,
 				For:         tc.forDuration,
 				Labels:      map[string]string{"foo": "bar", "rulegroup": tc.groupName},
 				Annotations: map[string]string{"description": "SimpleAlert is firing"},
 			},
 			{ // Always inactive.
-				Alert:       inactiveAlert,
-				Expr:        inactiveExpr,
+				Alert:       tc.inactiveAlertName,
+				Expr:        tc.inactiveQuery,
 				For:         tc.forDuration,
 				Labels:      map[string]string{"ba_dum": "tss", "rulegroup": tc.groupName},
 				Annotations: map[string]string{"description": "This should never fire"},
@@ -241,7 +226,8 @@ func (tc *pendingAndResolved) expMetrics(ts int64) (expSamples [][]promql.Sample
 	if canBePending {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.pendingAlertName, "foo", "bar", "rulegroup", tc.groupName),
 			},
 		})

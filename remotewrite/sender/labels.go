@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +33,7 @@ func labelsTests() []Test {
 		{
 			Name:        "labels",
 			Description: "Senders MUST send complete, valid, and lexicographically sorted label sets",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			ScrapeData: `# TYPE test_ordering gauge
 test_ordering{zzz="3",aaa="1",bbb="2"} 42
 # TYPE valid_metric:subsystem_total gauge
@@ -45,11 +46,11 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				require.NotEmpty(t, res.Requests, "Should receive at least 1 request")
 				require.NotEmpty(t, res.Requests[0].RW2.Timeseries, "Request must contain timeseries")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "labels_refs_present_and_even",
 					Description: "labels_refs MUST be provided and its length MUST be a multiple of two",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
 							require.NotEmpty(t, ts.LabelsRefs, "labels_refs MUST be provided on every TimeSeries")
@@ -60,7 +61,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "metric_name_present",
 					Description: "Label set SHOULD contain a __name__ label",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
 							labels := extractLabels(&ts, res.Requests[0].RW2.Symbols)
@@ -71,7 +72,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "no_duplicate_label_names",
 					Description: "Label set MUST NOT contain repeated label names",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
 							labels := extractLabels(&ts, res.Requests[0].RW2.Symbols)
@@ -82,7 +83,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "lexicographically_sorted",
 					Description: "Label set MUST have label names sorted in lexicographical order",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
 							require.True(t, isSorted(res.Requests[0].RW2.Symbols, ts.LabelsRefs),
@@ -93,7 +94,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "no_empty_names_or_values",
 					Description: "Label set MUST NOT contain any empty label names or values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						symbols := res.Requests[0].RW2.Symbols
 						for _, ts := range res.Requests[0].RW2.Timeseries {
@@ -112,7 +113,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "utf8_and_special_chars",
 					Description: "Metric names, label names, and label values MUST support UTF-8 characters",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "unicode_metric")
 						lbls := results[0].Labels
@@ -124,7 +125,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "metric_name_format",
 					Description: "Metric names SHOULD adhere to [a-zA-Z_:]([a-zA-Z0-9_:]*",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						requireTimeseriesByMetricName(t, res.Requests[0].RW2, "valid_metric:subsystem_total")
 						for _, ts := range res.Requests[0].RW2.Timeseries {
@@ -137,7 +138,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "label_name_format",
 					Description: "Label names SHOULD adhere to [a-zA-Z_]([a-zA-Z0-9_])*",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
 							labels := extractLabels(&ts, res.Requests[0].RW2.Symbols)
@@ -150,7 +151,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "no_reserved_label_prefix",
 					Description: "Label names beginning with __ are RESERVED for system usage and SHOULD NOT be used",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
 							labels := extractLabels(&ts, res.Requests[0].RW2.Symbols)
@@ -166,7 +167,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "target_labels_present",
 					Description: "Scraped series should include job and instance target labels",
-					RFCLevel:    RecommendedLevel,
+					RFCLevel:    compliance.RecommendedLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_ordering")
 						require.NotEmpty(t, results[0].Labels["job"], "Scraped series should include job label")
@@ -176,7 +177,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				{
 					Name:        "multiple_series_batched",
 					Description: "Senders SHOULD use Remote-Write to send samples for multiple series in a single request",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						require.GreaterOrEqual(t, len(res.Requests[0].RW2.Timeseries), 3,
 							"Sender SHOULD batch multiple scraped series into a single request")

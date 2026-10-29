@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,16 +30,16 @@ import (
 var snappyFramedHeader = []byte{0xff, 0x06, 0x00, 0x00, 0x73, 0x4e, 0x61, 0x50, 0x50, 0x59}
 
 func protocolTests(mode remote.WriteMode) []Test {
-	protoParamLevel := ShouldLevel
+	protoParamLevel := compliance.ShouldLevel
 	if mode != remote.WriteModeNone {
-		protoParamLevel = MustLevel
+		protoParamLevel = compliance.MustLevel
 	}
 
-	validateCases := []ValidateCase{
+	validateCases := []compliance.ValidateCase[ReceiverResult]{
 		{
 			Name:        "http_method_post",
 			Description: "Senders MUST send Protobuf message in the body of an HTTP POST request",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					require.Equal(t, http.MethodPost, req.Method, "HTTP method MUST be POST")
@@ -48,7 +49,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 		{
 			Name:        "content_encoding_snappy",
 			Description: "Senders MUST use the snappy value for Content-Encoding header",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					require.Equal(t, "snappy", req.Headers.Get("Content-Encoding"), "Content-Encoding header MUST be snappy")
@@ -58,7 +59,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 		{
 			Name:        "snappy_block_format",
 			Description: "Snappy block format MUST be used and framed format MUST NOT be used",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					require.NotEmpty(t, req.Body, "Request body must not be empty")
@@ -71,7 +72,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 		{
 			Name:        "content_type_protobuf",
 			Description: "Senders MUST use application/x-protobuf as the media type with valid parameters",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					ct := req.Headers.Get("Content-Type")
@@ -110,10 +111,10 @@ func protocolTests(mode remote.WriteMode) []Test {
 	}
 
 	if mode != remote.WriteModeNone {
-		validateCases = append(validateCases, ValidateCase{
+		validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 			Name:        "content_type_mode_param",
 			Description: fmt.Sprintf("Senders MUST use Content-Type with mode=%s in %s mode", mode, mode),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					_, params, err := mime.ParseMediaType(req.Headers.Get("Content-Type"))
@@ -126,10 +127,10 @@ func protocolTests(mode remote.WriteMode) []Test {
 	}
 
 	validateCases = append(validateCases,
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "version_header_present",
 			Description: "Senders MUST send X-Prometheus-Remote-Write-Version header",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					require.NotEmpty(t, req.Headers.Get("X-Prometheus-Remote-Write-Version"),
@@ -137,10 +138,10 @@ func protocolTests(mode remote.WriteMode) []Test {
 				}
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "version_header_value",
 			Description: "Senders SHOULD use X-Prometheus-Remote-Write-Version: 2.0.0 when sending RW 2.0",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					version := req.Headers.Get("X-Prometheus-Remote-Write-Version")
@@ -149,10 +150,10 @@ func protocolTests(mode remote.WriteMode) []Test {
 				}
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "user_agent_present",
 			Description: "Senders MUST include a User-Agent header",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					require.NotEmpty(t, req.Headers.Get("User-Agent"), "User-Agent header MUST be present")
@@ -165,7 +166,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 		{
 			Name:        "protocol",
 			Description: "Senders MUST send a Snappy block-compressed Protobuf message via HTTP POST with required headers",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			ScrapeData:  "# TYPE test_metric gauge\ntest_metric 42\n",
 			Version:     remote.WriteV2MessageType,
 			Validate: func(t *testing.T, res ReceiverResult) {
@@ -179,17 +180,17 @@ func protocolTests(mode remote.WriteMode) []Test {
 		tests = append(tests, Test{
 			Name:        "rw1_compatibility",
 			Description: "Senders MAY support 1.x Receivers using prometheus.WriteRequest",
-			RFCLevel:    MayLevel,
+			RFCLevel:    compliance.MayLevel,
 			ScrapeData:  "# TYPE test_metric gauge\ntest_metric{z=\"1\",a=\"2\"} 42\n",
 			Version:     remote.WriteV1MessageType,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.NotEmpty(t, res.Requests, "Should receive at least 1 request")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "content_type",
 					Description: "When talking to 1.x Receivers, Senders SHOULD use Content-Type: application/x-protobuf",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, req := range res.Requests {
 							mediaType, params, err := mime.ParseMediaType(req.Headers.Get("Content-Type"))
@@ -204,7 +205,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "version_header",
 					Description: "When talking to 1.x Receivers, Senders MUST use X-Prometheus-Remote-Write-Version: 0.1.0",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, req := range res.Requests {
 							require.Equal(t, "0.1.0", req.Headers.Get("X-Prometheus-Remote-Write-Version"),
@@ -215,7 +216,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "payload_valid",
 					Description: "When talking to 1.x Receivers, Senders MUST encode valid prometheus.WriteRequest with sorted labels",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW1
 						require.NotNil(t, req, "RW 1.0 request must be decoded")

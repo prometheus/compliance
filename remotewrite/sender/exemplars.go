@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/prometheus/prometheus/model/timestamp"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
@@ -29,17 +30,17 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 	explicitExemplarTime := timeNow.Add(-5 * time.Second)
 	explicitExemplarTS := timestamp.FromTime(explicitExemplarTime)
 
-	exemplarLevel := MustLevel
+	exemplarLevel := compliance.MustLevel
 	if mode != remote.WriteModeNone {
-		exemplarLevel = ShouldLevel
+		exemplarLevel = compliance.ShouldLevel
 	}
 
-	validateCases := make([]ValidateCase, 0, 6)
+	validateCases := make([]compliance.ValidateCase[ReceiverResult], 0, 6)
 	if mode != remote.WriteModeNone {
-		validateCases = append(validateCases, ValidateCase{
+		validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 			Name:        "no_exemplar_only_timeseries",
 			Description: "Every TimeSeries MUST have at least one sample or histogram; exemplar-only TimeSeries MUST NOT be sent in stateless modes.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				for _, ts := range req.Timeseries {
@@ -51,7 +52,7 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 	}
 
 	validateCases = append(validateCases,
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "counter_exemplar_value_and_timestamp",
 			Description: "Exemplars on counters MUST preserve value and explicit timestamp.",
 			RFCLevel:    exemplarLevel,
@@ -64,7 +65,7 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 				require.Equal(t, explicitExemplarTS, ex.Timestamp)
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "histogram_bucket_exemplars",
 			Description: "Exemplars on classic histogram buckets (or converted NHCB) MUST preserve value and timestamp.",
 			RFCLevel:    exemplarLevel,
@@ -101,7 +102,7 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 				require.GreaterOrEqual(t, len(series.TimeSeries.Exemplars), 2, "NHCB histogram series must include bucket exemplars")
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "exemplar_labels_valid_and_sorted",
 			Description: "Exemplar labels_refs MUST have even length, valid symbol indices, non-empty keys/values, and lexicographically sorted label names.",
 			RFCLevel:    exemplarLevel,
@@ -123,10 +124,10 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 				require.True(t, foundExemplar, "At least one exemplar must be present in the request")
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "exemplar_trace_id_present",
 			Description: "Exemplars SHOULD contain trace_id label at minimum.",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				series := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "test_counter_total"))
@@ -135,10 +136,10 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 				require.Equal(t, "abc123def456", lbls["trace_id"])
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "exemplar_additional_labels",
 			Description: "Exemplars MAY contain span_id and additional custom labels.",
-			RFCLevel:    MayLevel,
+			RFCLevel:    compliance.MayLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				series := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "test_counter_total"))
@@ -154,7 +155,7 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 		{
 			Name:        "exemplars",
 			Description: "Senders MUST send valid exemplars with sorted labels, values, and timestamps.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     remote.WriteV2MessageType,
 			ScrapeData: fmt.Sprintf(`# HELP test_counter Counter with exemplar.
 # TYPE test_counter counter

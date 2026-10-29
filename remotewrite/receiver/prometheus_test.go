@@ -11,19 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package receiver_test
 
 import (
 	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
+	"github.com/prometheus/compliance/remotewrite/receiver"
 )
 
 const receiverConfig = `
@@ -31,6 +31,49 @@ storage:
   exemplars:
     max_exemplars: 100000
 `
+
+type prometheus struct {
+	name string
+}
+
+func (p prometheus) Name() string {
+	if p.name != "" {
+		return p.name
+	}
+	return "prometheus"
+}
+
+// Run runs a Prometheus process with the Remote-Write receiver enabled until ctx is done.
+//
+// It auto-downloads or builds the Prometheus binary (see compliance.GetPrometheusBinary).
+func (p prometheus) Run(ctx context.Context, opts receiver.Options) error {
+	binary, err := compliance.GetPrometheusBinary()
+	if err != nil {
+		return err
+	}
+
+	dir, err := os.MkdirTemp("", "test-receiver-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+
+	configFile := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(receiverConfig), 0o600); err != nil {
+		return err
+	}
+
+	return receiver.RunCommand(ctx, ".", nil,
+		binary,
+		fmt.Sprintf("--web.listen-address=%s", opts.ReceiveHostPort),
+		"--web.enable-remote-write-receiver",
+		fmt.Sprintf("--storage.tsdb.path=%v", dir),
+		fmt.Sprintf("--config.file=%s", configFile),
+		"--enable-feature=st-storage,exemplar-storage,metadata-wal-records",
+	)
+}
+
+var _ receiver.Receiver = prometheus{}
 
 func isReceiverReachable(u *url.URL) bool {
 	if u == nil || u.Host == "" {
@@ -42,79 +85,4 @@ func isReceiverReachable(u *url.URL) bool {
 	}
 	_ = conn.Close()
 	return true
-}
-
-// startLocalPrometheusReceiver auto-downloads or builds the Prometheus binary
-// (see common.GetPrometheusBinary) and runs it with the Remote-Write receiver
-// enabled until cleanup is called.
-func startLocalPrometheusReceiver(ctx context.Context) (*url.URL, func(), error) {
-	binary, err := common.GetPrometheusBinary()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to find free port: %w", err)
-	}
-	addr := l.Addr().String()
-	_ = l.Close()
-
-	dir, err := os.MkdirTemp("", "test-receiver-*")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	configFile := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configFile, []byte(receiverConfig), 0o600); err != nil {
-		_ = os.RemoveAll(dir)
-		return nil, nil, err
-	}
-
-	runCtx, cancel := context.WithCancel(ctx)
-	done := make(chan error, 1)
-	go func() {
-		done <- common.RunCommand(runCtx, ".", nil,
-			binary,
-			fmt.Sprintf("--web.listen-address=%s", addr),
-			"--web.enable-remote-write-receiver",
-			fmt.Sprintf("--storage.tsdb.path=%v", dir),
-			fmt.Sprintf("--config.file=%s", configFile),
-			"--enable-feature=st-storage,exemplar-storage,metadata-wal-records",
-		)
-	}()
-
-	cleanup := func() {
-		cancel()
-		<-done
-		_ = os.RemoveAll(dir)
-	}
-
-	readyURL := fmt.Sprintf("http://%s/-/ready", addr)
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		select {
-		case runErr := <-done:
-			_ = os.RemoveAll(dir)
-			return nil, nil, fmt.Errorf("prometheus exited prematurely: %w", runErr)
-		default:
-		}
-
-		resp, reqErr := http.Get(readyURL)
-		if reqErr == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				u, parseErr := url.Parse(fmt.Sprintf("http://%s/api/v1/write", addr))
-				if parseErr != nil {
-					cleanup()
-					return nil, nil, parseErr
-				}
-				return u, cleanup, nil
-			}
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	cleanup()
-	return nil, nil, fmt.Errorf("timed out waiting for prometheus receiver at %s to become ready", readyURL)
 }

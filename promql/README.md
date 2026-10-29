@@ -2,7 +2,7 @@
 
 This directory contains the compliance test suite for PromQL implementations. It validates query results from a tested target against a reference Prometheus server over a deterministic 70-minute synthetic dataset replayed via fast timestamped scrapes.
 
-The test suite shares [`../remotewrite/index.html`](../remotewrite/index.html) to view compliance test results in the browser after a test run completes.
+The test suite shares [`../index.html`](../index.html) to view compliance test results in the browser after a test run completes.
 
 ## How It Works
 

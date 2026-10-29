@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +27,7 @@ func retryTests() []Test {
 		{
 			Name:        "retry_on_5xx",
 			Description: "Senders MUST retry requests on HTTP 5xx responses using a backoff algorithm.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     remote.WriteV2MessageType,
 			ScrapeData: `# TYPE retry_5xx_metric gauge
 retry_5xx_metric 100
@@ -50,11 +51,11 @@ retry_5xx_metric 100
 					require.NotNil(t, res.Requests[i].RW2)
 				}
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "retries_preserve_samples",
 					Description: "Sender MUST retry the failed batch on 503 and 500 without losing samples.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						res0 := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "retry_5xx_metric")
 						ts0 := flattenTimeseriesResult(t, res0).TimeSeries
@@ -72,7 +73,7 @@ retry_5xx_metric 100
 				{
 					Name:        "backoff_between_retries",
 					Description: "Sender MUST delay between retry attempts using a backoff algorithm.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						delay1 := res.Requests[1].Received.Sub(res.Requests[0].Received)
 						delay2 := res.Requests[2].Received.Sub(res.Requests[1].Received)
@@ -85,7 +86,7 @@ retry_5xx_metric 100
 		{
 			Name:        "no_retry_on_4xx",
 			Description: "Senders MUST NOT retry requests on HTTP 4xx responses (other than 429).",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     remote.WriteV2MessageType,
 			ScrapeData: `# TYPE no_retry_4xx_metric gauge
 no_retry_4xx_metric 50
@@ -104,11 +105,11 @@ no_retry_4xx_metric 50
 				require.NotNil(t, res.Requests[0].RW2)
 				require.NotNil(t, res.Requests[1].RW2)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "drops_batch_on_400",
 					Description: "Sender MUST NOT retry a batch rejected with 400 Bad Request and MUST proceed to subsequent batches.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						res0 := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "no_retry_4xx_metric")
 						ts0 := flattenTimeseriesResult(t, res0).TimeSeries
@@ -128,7 +129,7 @@ no_retry_4xx_metric 50
 		{
 			Name:        "retry_on_429",
 			Description: "Senders MAY retry requests on HTTP 429 Too Many Requests responses when configured.",
-			RFCLevel:    MayLevel,
+			RFCLevel:    compliance.MayLevel,
 			Version:     remote.WriteV2MessageType,
 			ScrapeData: `# TYPE retry_429_metric gauge
 retry_429_metric 75
@@ -147,11 +148,11 @@ retry_429_metric 75
 				require.NotNil(t, res.Requests[0].RW2)
 				require.NotNil(t, res.Requests[1].RW2)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "retries_429_when_configured",
 					Description: "Sender MAY retry the batch on 429 Too Many Requests.",
-					RFCLevel:    MayLevel,
+					RFCLevel:    compliance.MayLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						res0 := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "retry_429_metric")
 						ts0 := flattenTimeseriesResult(t, res0).TimeSeries

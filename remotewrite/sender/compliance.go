@@ -19,9 +19,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,6 +29,7 @@ import (
 	"github.com/golang/snappy"
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 
 	writev1 "github.com/prometheus/prometheus/prompb"
@@ -72,23 +71,6 @@ func complianceTestsForMode(mode remote.WriteMode) (ret []Test) {
 		ret[i].Mode = mode
 	}
 	return ret
-}
-
-type RFCLevel string
-
-const (
-	MustLevel        RFCLevel = "MUST"
-	ShouldLevel      RFCLevel = "SHOULD"
-	MayLevel         RFCLevel = "MAY"
-	RecommendedLevel RFCLevel = "RECOMMENDED"
-)
-
-func (r RFCLevel) annotate(t *testing.T) {
-	t.Attr("rfcLevel", string(r))
-}
-
-func descAnnotate(t *testing.T, desc string) {
-	t.Attr("description", desc)
 }
 
 // ReceiverRequest represents a captured HTTP request from a sender.
@@ -138,20 +120,17 @@ type ReceiverResponse struct {
 	OmitWrittenHeaders bool
 }
 
-type ValidateFunc func(t *testing.T, res ReceiverResult)
-
 // Test defines a test scenario to run against a single sender.
 type Test struct {
 	// Name is a unique name for a test case.
 	// This adds "/<name>/" sub-test.
 	Name string
 	// Description is a description for a test case.
-	// TODO(bwplotka): Fix index.html to actually render it.
 	Description string
 	// RFCLevel is the requirement level for a test to pass.
 	// This includes all the errors in the '__setup' stage, including Validate
 	// ValidateCases can have different semantics.
-	RFCLevel RFCLevel
+	RFCLevel compliance.RFCLevel
 	// RemoteWrite version to configure the target with. This indicates version of Remote Write protocol,
 	// that the target must use.
 	// This adds another "/rw<number>/" sub-test.
@@ -160,7 +139,7 @@ type Test struct {
 	// When set, this appends "-<mode>" to the "/rw2/" sub-test (e.g. "/rw2-stateless/").
 	Mode remote.WriteMode
 	// ScrapeContentType specifies the Content-Type header served by the scrape target.
-	// If empty, defaults to OpenMetrics 1.0 text format (OM1ContentType).
+	// If empty, defaults to OpenMetrics 1.0 text format (compliance.OM1ContentType).
 	ScrapeContentType string
 	// ScrapeData provides input scrape data to use against the tested target.
 	ScrapeData string
@@ -171,24 +150,10 @@ type Test struct {
 	// By default, the case responds with one NoContent (success) response per configured scrape payload.
 	TestResponses []ReceiverResponse
 	// Validate allows validating requests that were sent after test.
-	Validate ValidateFunc
+	Validate compliance.ValidateFunc[ReceiverResult]
 	// ValidateCase configures sub-cases for the validation. This is useful
 	// when the same input case can be shared across multiple tests/RFC levels.
-	ValidateCases []ValidateCase
-}
-
-type ValidateCase struct {
-	// Name is  unique name for a test case.
-	// This adds "/<name>/" sub-test.
-	Name string
-	// Description is a description for a validate test case.
-	// TODO(bwplotka): Fix index.html to actually render it.
-	Description string
-	// RFCLevel is the requirement level for a test to pass.
-	// This includes all the errors in the tests, including Validate
-	RFCLevel RFCLevel
-	// Validate allows validating requests that were sent after test.
-	Validate ValidateFunc
+	ValidateCases []compliance.ValidateCase[ReceiverResult]
 }
 
 // RunTests runs a test scenario(s) for each configured sender target.
@@ -221,13 +186,13 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 				tc.TestResponses = make([]ReceiverResponse, 1+len(tc.AdditionalScrapeData))
 			}
 			receiver := newSyncReceiver(tc.Version, tc.Mode, tc.TestResponses)
-			scrapeTarget := newScrapeTarget(tc.ScrapeData, tc.AdditionalScrapeData, tc.ScrapeContentType)
+			scrapeTarget := compliance.NewTextScrapeServer(tc.ScrapeData, tc.AdditionalScrapeData, tc.ScrapeContentType)
 
 			// Setup subcase exists to cleanly visualise errors that happens before certain validation cases.
 			// TODO(bwplotka): This is odd for tests with 0 cases and a single validation.
 			// Consider reshaping a bit or not allowing 0 cases tests.
 			// Notably for non-0 cases you have extra MUST calculated etc.
-			setupOk := safeRun(t, "_setup", sender.Name(), tc.Description, tc.RFCLevel, func(t *testing.T) {
+			setupOk := compliance.SafeRun(t, "_setup", sender.Name(), tc.Description, tc.RFCLevel, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
 				t.Cleanup(cancel)
 
@@ -265,36 +230,9 @@ func RunTests(t *testing.T, sender Sender, tcs []Test) {
 				}
 			})
 
-			// Run sub-cases even if setup failed so the overview is clear.
-			res := receiver.Result()
-			for _, vc := range tc.ValidateCases {
-				safeRun(t, vc.Name, sender.Name(), vc.Description, vc.RFCLevel, func(t *testing.T) {
-					if !setupOk {
-						t.Fatal("setup failed")
-					}
-					vc.Validate(t, res)
-				})
-			}
+			compliance.RunValidateCases(t, sender.Name(), setupOk, receiver.Result(), tc.ValidateCases)
 		})
 	}
-}
-
-func safeRun(t *testing.T, name, target, desc string, rfc RFCLevel, f func(t *testing.T)) bool {
-	return t.Run(name, func(t *testing.T) {
-		t.Attr("rw", target)
-		rfc.annotate(t)
-		descAnnotate(t, desc)
-
-		if os.Getenv("DEBUG") == "" {
-			// Only capture panics on non-debug. When debugging, it's useful to know the exact trace.
-			defer func() {
-				if val := recover(); val != nil {
-					t.Fatalf("test panicked: %v\n%s", val, debug.Stack())
-				}
-			}()
-		}
-		f(t)
-	})
 }
 
 type receiver struct {
@@ -499,75 +437,4 @@ func (r *receiver) Result() ReceiverResult {
 		Mode:     r.mode,
 		Requests: append([]ReceiverRequest{}, r.requests...),
 	}
-}
-
-// scrapeTarget is an HTTP server that serves metrics in Prometheus format.
-type scrapeTarget struct {
-	server            *httptest.Server
-	mu                sync.Mutex
-	metrics           string
-	additionalMetrics []string
-	scrapeCount       int
-	contentType       string
-}
-
-func newScrapeTarget(metrics string, additionalMetrics []string, contentType string) *scrapeTarget {
-	st := &scrapeTarget{
-		metrics:           metrics,
-		additionalMetrics: additionalMetrics,
-		contentType:       contentType,
-	}
-	st.server = httptest.NewServer(http.HandlerFunc(st.handleScrape))
-	return st
-}
-
-// Run runs scrapeTarget until context is done.
-func (st *scrapeTarget) Run(ctx context.Context) {
-	<-ctx.Done()
-	st.server.Close()
-}
-
-const (
-	OM1ContentType   = "application/openmetrics-text; version=1.0.0; charset=utf-8"
-	ProtoContentType = "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited"
-)
-
-// handleScrape serves metrics in the configured exposition format (OpenMetrics 1.0 by default).
-func (st *scrapeTarget) handleScrape(w http.ResponseWriter, _ *http.Request) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-
-	metrics := st.metrics
-	if st.scrapeCount > 0 && len(st.additionalMetrics) > 0 {
-		idx := min(st.scrapeCount-1, len(st.additionalMetrics)-1)
-		metrics = st.additionalMetrics[idx]
-	}
-	st.scrapeCount++
-	contentType := st.contentType
-	if contentType == "" {
-		contentType = OM1ContentType
-		if !strings.HasSuffix(metrics, "# EOF\n") {
-			// Annoying, add it if missing.
-			metrics = metrics + "# EOF\n"
-		}
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(metrics))
-}
-
-// HostPort returns the host:port of the mock scrape target.
-func (st *scrapeTarget) HostPort(t *testing.T) string {
-	u, err := url.Parse(st.server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return u.Host // host:port
-}
-
-// UpdateMetrics updates the metrics served by the scrape target.
-func (st *scrapeTarget) UpdateMetrics(metrics string) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	st.metrics = metrics
 }

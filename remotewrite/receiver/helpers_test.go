@@ -11,724 +11,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package main provides compliance testing helpers for Prometheus remote write v2 receivers.
-package main
+package receiver
 
 import (
-	"bytes"
+	"context"
 	"io"
-	"maps"
+	"net"
 	"net/http"
 	"slices"
-	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang/snappy"
-	"github.com/prometheus/client_golang/exp/api/remote"
-	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/prompb"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
 
-// mergeExternalLabels merges the configured global external_labels into lbls
-// without overwriting keys already present in lbls. Empty label maps are returned
-// unchanged so negative tests for empty label sets remain intact.
-func mergeExternalLabels(lbls map[string]string) map[string]string {
-	if len(lbls) == 0 || len(externalLabels) == 0 {
-		return lbls
-	}
-	merged := make(map[string]string, len(externalLabels)+len(lbls))
-	maps.Copy(merged, externalLabels)
-	maps.Copy(merged, lbls)
-	return merged
-}
-
-// symbolizeSortedLabels symbolizes a series label map with global external_labels merged
-// and label names sorted in lexicographical order, as required by the Remote-Write 2.0 specification.
-func symbolizeSortedLabels(symbols *writev2.SymbolsTable, lbls map[string]string) []uint32 {
-	return symbolizeSortedRawLabels(symbols, mergeExternalLabels(lbls))
-}
-
-// symbolizeSortedRawLabels symbolizes a label map without merging external_labels,
-// with label names sorted in lexicographical order. Used for exemplar attachment labels.
-func symbolizeSortedRawLabels(symbols *writev2.SymbolsTable, lbls map[string]string) []uint32 {
-	if len(lbls) == 0 {
-		return nil
-	}
-	keys := slices.Sorted(maps.Keys(lbls))
-	refs := make([]uint32, 0, len(keys)*2)
-	for _, k := range keys {
-		refs = append(refs, symbols.Symbolize(k), symbols.Symbolize(lbls[k]))
-	}
-	return refs
-}
-
-// ticker provides a global ticker for timing-based operations in tests.
-var ticker = time.NewTicker(10 * time.Millisecond)
-
-// labelsMatch checks if two label maps have the same key-value pairs.
-func labelsMatch(metric model.Metric, labels map[string]string) bool {
-	if len(metric) != len(labels) {
-		return false
-	}
-	for k, v := range labels {
-		if metricVal, exists := metric[model.LabelName(k)]; !exists || string(metricVal) != v {
-			return false
-		}
-	}
-	return true
-}
-
-// mapToMetric converts a map[string]string to model.Metric.
-func mapToMetric(labels map[string]string) model.Metric {
-	metric := make(model.Metric)
-	for k, v := range labels {
-		metric[model.LabelName(k)] = model.LabelValue(v)
-	}
-	return metric
-}
-
-type HistogramWithLabels struct {
-	Labels         map[string]string
-	Histogram      writev2.Histogram
-	Offset         time.Duration
-	StartTimestamp *time.Time
-}
-
-type SampleWithLabels struct {
-	Labels         map[string]string
-	Value          float64
-	Offset         time.Duration
-	StartTimestamp *time.Time
-}
-
-// getHeaderValue extracts and parses the X-Prometheus-Remote-Write header value for a given key.
-func getHeaderValue(t *testing.T, header http.Header, key string) int {
-	fullHeaderName := "X-Prometheus-Remote-Write-" + key + "-Written"
-	v := header.Get(fullHeaderName)
-	if v == "" {
-		// Senders CAN assume that any missing X-Prometheus-Remote-Write-*-Written
-		// response header means no element from this category (e.g. Sample)
-		// was written by the Receiver (count of 0).
-		return 0
-	}
-	i, err := strconv.Atoi(v)
-	require.NoError(t, err)
-	return i
-}
-
-// requestParams holds the expected parameters for request validation.
-type requestParams struct {
-	samples          int
-	exemplars        int
-	histograms       int
-	strict           bool
-	success          bool
-	retryable        bool // Reserved for future use to indicate if the request should be retried on failure.
-	exactReponseCode int
-	allowAny4xx      bool
-	validateHeaders  func(t *testing.T, header http.Header)
-}
-
-// validateResponse validates an HTTP response against expected request parameters.
-func validateResponse(t *testing.T, params requestParams, resp *http.Response) {
-	t.Helper()
-	var (
-		samplesWritten    = getHeaderValue(t, resp.Header, "Samples")
-		exemplarsWritten  = getHeaderValue(t, resp.Header, "Exemplars")
-		histogramsWritten = getHeaderValue(t, resp.Header, "Histograms")
-	)
-	if params.exactReponseCode != 0 {
-		require.Equal(t, params.exactReponseCode, resp.StatusCode, "Response code should be exactly %d", params.exactReponseCode)
-	}
-	switch resp.StatusCode / 100 {
-	case 2:
-		// HTTP 2xx.
-		require.True(t, params.success, "Response code is %d but success is false", resp.StatusCode)
-		require.Equal(t, params.samples, samplesWritten, "%d samples written", samplesWritten)
-		require.Equal(t, params.exemplars, exemplarsWritten, "%d exemplars written", exemplarsWritten)
-		require.Equal(t, params.histograms, histogramsWritten, "%d histograms written", histogramsWritten)
-		if params.strict {
-			require.Equal(t, http.StatusNoContent, resp.StatusCode, "Response code is %d", resp.StatusCode)
-		}
-	case 4:
-		// HTTP 4xx.
-		require.False(t, params.retryable, "Response code is %d but retryable is true", resp.StatusCode)
-		if params.exactReponseCode == 0 && !params.allowAny4xx {
-			require.Equal(t, http.StatusBadRequest, resp.StatusCode, "Response code should be exactly %d", http.StatusBadRequest)
-		}
-		require.GreaterOrEqual(t, params.samples, samplesWritten, "%d samples written", samplesWritten)
-		require.GreaterOrEqual(t, params.exemplars, exemplarsWritten, "%d exemplars written", exemplarsWritten)
-		require.GreaterOrEqual(t, params.histograms, histogramsWritten, "%d histograms written", histogramsWritten)
-		require.GreaterOrEqual(t, params.samples+params.exemplars+params.histograms, samplesWritten+exemplarsWritten+histogramsWritten, "Total written")
-	case 5:
-		// HTTP 5xx.
-		require.False(t, params.success, "Response code is %d but success is true", resp.StatusCode)
-		require.True(t, params.retryable, "Response code is %d but retryable is false", resp.StatusCode)
-		require.GreaterOrEqual(t, params.samples, samplesWritten, "%d samples written", samplesWritten)
-		require.GreaterOrEqual(t, params.exemplars, exemplarsWritten, "%d exemplars written", exemplarsWritten)
-		require.GreaterOrEqual(t, params.histograms, histogramsWritten, "%d histograms written", histogramsWritten)
-		require.GreaterOrEqual(t, params.samples+params.exemplars+params.histograms, samplesWritten+exemplarsWritten+histogramsWritten, "Total written")
-	default:
-		require.Fail(t, "Response code is %d but should be 200, 400, or 500", resp.StatusCode)
-	}
-	if params.validateHeaders != nil {
-		params.validateHeaders(t, resp.Header)
-	}
-}
-
-// ExemplarWithLabels represents an exemplar with its metric and exemplar labels.
-type ExemplarWithLabels struct {
-	Labels         map[string]string
-	ExemplarLabels map[string]string
-	Value          float64
-	Offset         time.Duration
-}
-
-// MetadataWithLabels represents metric metadata with its associated labels.
-type MetadataWithLabels struct {
-	Labels map[string]string
-	Type   writev2.Metadata_MetricType
-	Help   string
-	Unit   string
-}
-
-// RequestOpts contains all data required for generating a remote write request.
-type RequestOpts struct {
-	Samples       []SampleWithLabels
-	Exemplars     []ExemplarWithLabels
-	Metadata      []MetadataWithLabels
-	Histograms    []HistogramWithLabels
-	UnsafeRequest bool
-	Mode          remote.WriteMode
-	ContentType   string
-	RawTimeseries []writev2.TimeSeries
-	RawSymbols    []string
-}
-
-// generateRequest generates an HTTP request with the given options.
-func generateRequest(opts RequestOpts) *http.Request {
-	<-ticker.C
-	now := time.Now()
-
-	// Perform safety checks unless UnsafeRequest is true.
-	if !opts.UnsafeRequest {
-		// Check: No Samples and Histograms in the same request.
-		if len(opts.Samples) > 0 && len(opts.Histograms) > 0 {
-			panic("cannot have both Samples and Histograms in the same request")
-		}
-
-		// Check: All exemplars are attached to samples or histograms (have same label set).
-		for _, exemplar := range opts.Exemplars {
-			found := false
-			// Check against samples.
-			for _, sample := range opts.Samples {
-				if labelsMatch(mapToMetric(sample.Labels), exemplar.Labels) {
-					found = true
-					break
-				}
-			}
-			// Check against histograms if not found in samples.
-			if !found {
-				for _, histogram := range opts.Histograms {
-					if labelsMatch(mapToMetric(histogram.Labels), exemplar.Labels) {
-						found = true
-						break
-					}
-				}
-			}
-			if !found {
-				panic("exemplar has no matching sample or histogram with same label set")
-			}
-		}
-
-		// Check: All metadata are attached to samples or histograms (have same metric name).
-		for _, metadata := range opts.Metadata {
-			metadataName := metadata.Labels["__name__"]
-			found := false
-			// Check against samples.
-			for _, sample := range opts.Samples {
-				if sample.Labels["__name__"] == metadataName {
-					found = true
-					break
-				}
-			}
-			// Check against histograms if not found in samples.
-			if !found {
-				for _, histogram := range opts.Histograms {
-					if histogram.Labels["__name__"] == metadataName {
-						found = true
-						break
-					}
-				}
-			}
-			if !found {
-				panic("metadata has no matching sample or histogram with same metric name")
-			}
-		}
-	}
-
-	symbols := writev2.NewSymbolTable()
-
-	var timeseries []writev2.TimeSeries
-
-	// Build metadata lookup by metric name for fast access.
-	// When UnsafeRequest is true, also include metadata with empty __name__ to allow testing invalid cases.
-	metadataByName := make(map[string]writev2.Metadata)
-	for _, mw := range opts.Metadata {
-		metricName := mw.Labels["__name__"]
-		if metricName != "" || opts.UnsafeRequest {
-			metadataByName[metricName] = writev2.Metadata{
-				Type:    mw.Type,
-				HelpRef: symbols.Symbolize(mw.Help),
-				UnitRef: symbols.Symbolize(mw.Unit),
-			}
-		}
-	}
-
-	// Pre-process samples to identify the last sample for each series.
-	seriesLastSample := make(map[string]int) // series key -> last sample index.
-	for i, s := range opts.Samples {
-		key := mapToMetric(s.Labels).String()
-		seriesLastSample[key] = i // This will end up with the highest index for each series.
-	}
-
-	// Track which exemplars have been used to avoid duplication.
-	usedExemplars := make(map[int]bool)
-
-	for i, s := range opts.Samples {
-		labelRefs := symbolizeSortedLabels(&symbols, s.Labels)
-
-		// Check if there are any exemplars for this sample.
-		var sampleExemplars []writev2.Exemplar
-		seriesKey := mapToMetric(s.Labels).String()
-		isLastSampleForSeries := (seriesLastSample[seriesKey] == i)
-
-		for ei, ew := range opts.Exemplars {
-			// Skip if exemplar already used.
-			if usedExemplars[ei] {
-				continue
-			}
-
-			// Match exemplar with sample by labels.
-			match := labelsMatch(mapToMetric(s.Labels), ew.Labels)
-			if match {
-				exemplarLabelRefs := symbolizeSortedRawLabels(&symbols, ew.ExemplarLabels)
-
-				exemplar := writev2.Exemplar{
-					LabelsRefs: exemplarLabelRefs,
-					Value:      ew.Value,
-					Timestamp:  now.Add(ew.Offset).UnixMilli(),
-				}
-				sampleExemplars = append(sampleExemplars, exemplar)
-				usedExemplars[ei] = true
-
-				// If this is not the last sample for this series, only attach one exemplar.
-				if !isLastSampleForSeries {
-					break
-				}
-				// If this is the last sample for this series, continue to attach all remaining matching exemplars.
-			}
-		}
-
-		ts := writev2.TimeSeries{
-			LabelsRefs: labelRefs,
-			Samples: []writev2.Sample{
-				{
-					Timestamp: now.Add(s.Offset).UnixMilli(),
-					Value:     s.Value,
-				},
-			},
-			Exemplars: sampleExemplars,
-		}
-
-		if s.StartTimestamp != nil {
-			if s.StartTimestamp.IsZero() {
-				ts.Samples[0].StartTimestamp = ts.Samples[0].Timestamp
-			} else {
-				ts.Samples[0].StartTimestamp = s.StartTimestamp.UnixMilli()
-			}
-		}
-
-		if metricName := s.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
-			if metadata, found := metadataByName[metricName]; found {
-				ts.Metadata = metadata
-			}
-		}
-
-		timeseries = append(timeseries, ts)
-	}
-
-	// Pre-process histograms to identify the last histogram for each series (similar to samples).
-	histogramSeriesLastSample := make(map[string]int) // series key -> last histogram index.
-	for i, hw := range opts.Histograms {
-		key := mapToMetric(hw.Labels).String()
-		histogramSeriesLastSample[key] = i
-	}
-
-	for i, hw := range opts.Histograms {
-		labelRefs := symbolizeSortedLabels(&symbols, hw.Labels)
-
-		// Create a copy of the histogram and overwrite its timestamp.
-		hist := hw.Histogram
-		hist.Timestamp = now.Add(hw.Offset).UnixMilli()
-
-		// Check for exemplars for this histogram.
-		var histogramExemplars []writev2.Exemplar
-		seriesKey := mapToMetric(hw.Labels).String()
-		isLastHistogramForSeries := (histogramSeriesLastSample[seriesKey] == i)
-
-		for ei, ew := range opts.Exemplars {
-			// Skip if exemplar already used.
-			if usedExemplars[ei] {
-				continue
-			}
-
-			// Match exemplar with histogram by labels.
-			match := labelsMatch(mapToMetric(hw.Labels), ew.Labels)
-			if match {
-				exemplarLabelRefs := symbolizeSortedRawLabels(&symbols, ew.ExemplarLabels)
-
-				exemplar := writev2.Exemplar{
-					LabelsRefs: exemplarLabelRefs,
-					Value:      ew.Value,
-					Timestamp:  now.Add(ew.Offset).UnixMilli(),
-				}
-				histogramExemplars = append(histogramExemplars, exemplar)
-				usedExemplars[ei] = true
-
-				// If this is not the last histogram for this series, only attach one exemplar.
-				if !isLastHistogramForSeries {
-					break
-				}
-				// If this is the last histogram for this series, continue to attach all remaining matching exemplars.
-			}
-		}
-
-		ts := writev2.TimeSeries{
-			LabelsRefs: labelRefs,
-			Histograms: []writev2.Histogram{hist},
-			Exemplars:  histogramExemplars,
-		}
-
-		if hw.StartTimestamp != nil {
-			if hw.StartTimestamp.IsZero() {
-				ts.Histograms[0].StartTimestamp = ts.Histograms[0].Timestamp
-			} else {
-				ts.Histograms[0].StartTimestamp = hw.StartTimestamp.UnixMilli()
-			}
-		}
-
-		if metricName := hw.Labels["__name__"]; metricName != "" || opts.UnsafeRequest {
-			if metadata, found := metadataByName[metricName]; found {
-				ts.Metadata = metadata
-			}
-		}
-
-		timeseries = append(timeseries, ts)
-	}
-
-	// Add any remaining exemplars that didn't match existing samples as separate timeseries.
-	for i, ew := range opts.Exemplars {
-		// Skip exemplars that were already distributed to samples or histograms.
-		if usedExemplars[i] {
-			continue
-		}
-
-		matched := false
-		for _, s := range opts.Samples {
-			if labelsMatch(mapToMetric(s.Labels), ew.Labels) {
-				matched = true
-				break
-			}
-		}
-
-		if !matched {
-			for _, h := range opts.Histograms {
-				if labelsMatch(mapToMetric(h.Labels), ew.Labels) {
-					matched = true
-					break
-				}
-			}
-		}
-
-		if !matched {
-			labelRefs := symbolizeSortedLabels(&symbols, ew.Labels)
-			exemplarLabelRefs := symbolizeSortedRawLabels(&symbols, ew.ExemplarLabels)
-
-			exemplar := writev2.Exemplar{
-				LabelsRefs: exemplarLabelRefs,
-				Value:      ew.Value,
-				Timestamp:  now.Add(ew.Offset).UnixMilli(),
-			}
-
-			ts := writev2.TimeSeries{
-				LabelsRefs: labelRefs,
-				Exemplars:  []writev2.Exemplar{exemplar},
-			}
-			timeseries = append(timeseries, ts)
-		}
-	}
-
-	// Add any remaining metadata that wasn't attached to samples or histograms as separate timeseries.
-	for _, mw := range opts.Metadata {
-		metricName := mw.Labels["__name__"]
-		if metricName == "" {
-			continue // Skip metadata without __name__.
-		}
-
-		// Check if this metadata was already attached to a sample or histogram.
-		matched := false
-		for _, s := range opts.Samples {
-			if s.Labels["__name__"] == metricName {
-				matched = true
-				break
-			}
-		}
-
-		if !matched {
-			for _, h := range opts.Histograms {
-				if h.Labels["__name__"] == metricName {
-					matched = true
-					break
-				}
-			}
-		}
-
-		if !matched {
-			labelRefs := symbolizeSortedLabels(&symbols, mw.Labels)
-
-			ts := writev2.TimeSeries{
-				LabelsRefs: labelRefs,
-				Metadata: writev2.Metadata{
-					Type:    mw.Type,
-					HelpRef: symbols.Symbolize(mw.Help),
-					UnitRef: symbols.Symbolize(mw.Unit),
-				},
-			}
-			timeseries = append(timeseries, ts)
-		}
-	}
-
-	if len(opts.RawTimeseries) > 0 {
-		timeseries = append(timeseries, opts.RawTimeseries...)
-	}
-
-	reqSymbols := symbols.Symbols()
-	if opts.RawSymbols != nil {
-		reqSymbols = opts.RawSymbols
-	}
-
-	req := &writev2.Request{
-		Symbols:    reqSymbols,
-		Timeseries: timeseries,
-	}
-
-	data, _ := req.Marshal()
-	compressed := snappy.Encode(nil, data)
-
-	contentType := opts.ContentType
-	if contentType == "" {
-		contentType = remote.ContentTypeHeader(remote.WriteV2MessageType, opts.Mode)
-	}
-
-	httpReq := http.Request{
-		Method: "POST",
-		Header: http.Header{
-			"Content-Encoding":                  []string{"snappy"},
-			"Content-Type":                      []string{contentType},
-			"X-Prometheus-Remote-Write-Version": []string{"2.0.0"},
-		},
-		Body: io.NopCloser(bytes.NewReader(compressed)),
-	}
-	return &httpReq
-}
-
-// histogram creates a writev2.Histogram with the specified parameters.
-func histogram(sum float64, includePositive, includeNegative, includeZero, useCustomBuckets, badCount bool) writev2.Histogram {
-	// Generate spans programmatically based on boolean parameters.
-	var positiveSpans []writev2.BucketSpan
-	var negativeSpans []writev2.BucketSpan
-	var positiveDeltas []int64
-	var negativeDeltas []int64
-	var customValues []float64
-	count := uint64(0)
-
-	if includePositive {
-		positiveSpans = []writev2.BucketSpan{
-			{Offset: 0, Length: 3},
-			{Offset: 2, Length: 2},
-		}
-		positiveDeltas = []int64{1, 2, 1, 3, 1}
-		// Deltas decode to: [1, 3, 4, 7, 8] which sum to 23
-		count += 23
-	}
-
-	if includeNegative {
-		negativeSpans = []writev2.BucketSpan{
-			{Offset: 0, Length: 2},
-		}
-		negativeDeltas = []int64{1, 1}
-		// Deltas decode to: [1, 2] which sum to 3
-		count += 3
-	}
-
-	if includeZero {
-		count += 1
-	}
-
-	if useCustomBuckets {
-		customValues = []float64{0.1, 0.5, 1.0, 2.5, 5.0, 10.0}
-		// For custom buckets, we need actual bucket counts that sum to the total.
-		// Override any previous spans/deltas since custom buckets use positive spans.
-		positiveSpans = []writev2.BucketSpan{
-			{Offset: 0, Length: 6}, // 6 custom buckets
-		}
-		positiveDeltas = []int64{2, 1, 2, 3, -1, -2} // Delta-encoded bucket counts that decode to [2,3,5,8,7,5] and sum to 30.
-		count = 30                                   // Total observations across all custom buckets.
-	}
-
-	if badCount {
-		count = 99
-	}
-
-	hist := writev2.Histogram{
-		Count: &writev2.Histogram_CountInt{CountInt: count},
-		Sum:   sum,
-	}
-
-	if includePositive || useCustomBuckets {
-		hist.PositiveSpans = positiveSpans
-		hist.PositiveDeltas = positiveDeltas
-	}
-
-	if includeNegative {
-		hist.NegativeSpans = negativeSpans
-		hist.NegativeDeltas = negativeDeltas
-	}
-
-	if includeZero {
-		hist.ZeroCount = &writev2.Histogram_ZeroCountInt{ZeroCountInt: 1}
-	}
-
-	if useCustomBuckets {
-		hist.Schema = -53
-		hist.CustomValues = customValues
-	}
-
-	return hist
-}
-
-// floatHistogram creates a float writev2.Histogram with the specified parameters
-// by converting the integer histogram from histogram() into float counts.
-func floatHistogram(sum float64, includePositive, includeNegative, includeZero, useCustomBuckets, badCount bool) writev2.Histogram {
-	hist := histogram(sum, includePositive, includeNegative, includeZero, useCustomBuckets, false)
-
-	deltasToCounts := func(deltas []int64) []float64 {
-		if len(deltas) == 0 {
-			return nil
-		}
-		counts := make([]float64, len(deltas))
-		var curr int64
-		for i, d := range deltas {
-			curr += d
-			counts[i] = float64(curr)
-		}
-		return counts
-	}
-
-	hist.PositiveCounts = deltasToCounts(hist.PositiveDeltas)
-	hist.PositiveDeltas = nil
-	hist.NegativeCounts = deltasToCounts(hist.NegativeDeltas)
-	hist.NegativeDeltas = nil
-
-	if includeZero {
-		hist.ZeroCount = &writev2.Histogram_ZeroCountFloat{ZeroCountFloat: float64(hist.GetZeroCountInt())}
-	}
-
-	count := float64(hist.GetCountInt())
-	if badCount {
-		count = -1.0
-	}
-	hist.Count = &writev2.Histogram_CountFloat{CountFloat: count}
-
-	return hist
-}
-
-// should marks a test as having a "SHOULD" RFC compliance level.
-func should(t *testing.T) {
-	t.Attr("rfcLevel", "SHOULD")
-}
-
-// must marks a test as having a "MUST" RFC compliance level.
-func must(t *testing.T) {
-	t.Attr("rfcLevel", "MUST")
-}
-
-// may marks a test as having a "MAY" RFC compliance level.
-func may(t *testing.T) {
-	t.Attr("rfcLevel", "MAY")
-}
-
-// testJobInstanceLabels returns the commonly used test job instance labels.
-func testJobInstanceLabels() map[string]string {
-	return map[string]string{"__name__": "up", "job": "testjob", "instance": "localhost:9090"}
-}
-
-// basicMetric returns basic metric labels with just the metric name.
-func basicMetric(name string) map[string]string {
-	return map[string]string{"__name__": name}
-}
-
-// traceExemplar returns common exemplar labels with a trace ID.
-func traceExemplar(traceId string) map[string]string {
-	return map[string]string{"trace_id": traceId}
-}
-
-// runComplianceTest runs a test case with both MUST and SHOULD RFC compliance levels.
-// This function eliminates code duplication between the two variants by automatically
-// generating both strict (SHOULD) and basic (MUST) compliance tests for successful cases.
-func runComplianceTest(t *testing.T, name string, description string, opts RequestOpts, params requestParams, expectSuccess bool) {
-	t.Helper()
-
-	// Run SHOULD test (strict compliance) only for expected successful cases.
-	if expectSuccess {
-		t.Run(name+" returns 204", func(t *testing.T) {
-			should(t)
-			t.Attr("description", description)
-
-			// Copy params to avoid mutation.
-			shouldParams := params
-			shouldParams.success = true
-			shouldParams.strict = true
-
-			runRequest(t, generateRequest(opts), shouldParams)
-		})
-	}
-
-	// Run MUST test (basic compliance) for all cases.
-	t.Run(name, func(t *testing.T) {
-		must(t)
-		t.Attr("description", description)
-
-		// Copy params to avoid mutation.
-		mustParams := params
-		mustParams.success = expectSuccess
-		mustParams.strict = false
-
-		runRequest(t, generateRequest(opts), mustParams)
-	})
-}
-
 func TestExternalLabelsInjection(t *testing.T) {
-	origExternalLabels := externalLabels
-	t.Cleanup(func() {
-		externalLabels = origExternalLabels
-	})
-
 	_, err := config.LoadFile("config_example.yml", false, nil)
 	require.NoError(t, err)
 
@@ -743,10 +46,10 @@ remote_write:
     url: http://127.0.0.1:9090/api/v1/write
 `, nil)
 	require.NoError(t, err)
-	externalLabels = promCfg.GlobalConfig.ExternalLabels.Map()
+	externalLabels := promCfg.GlobalConfig.ExternalLabels.Map()
 
 	t.Run("merges_and_sorts_series_labels_without_affecting_exemplar_labels", func(t *testing.T) {
-		httpReq := generateRequest(RequestOpts{
+		httpReq, err := generateRequest(RequestOpts{
 			Samples: []SampleWithLabels{
 				{
 					Labels: map[string]string{"__name__": "test_metric_total", "job": "override-job"},
@@ -760,7 +63,8 @@ remote_write:
 					Value:          1.0,
 				},
 			},
-		})
+		}, externalLabels)
+		require.NoError(t, err)
 
 		compressed, err := io.ReadAll(httpReq.Body)
 		require.NoError(t, err)
@@ -794,12 +98,13 @@ remote_write:
 	})
 
 	t.Run("merges_and_sorts_rw1_series_labels", func(t *testing.T) {
-		httpReq := generateRW1Request([]SampleWithLabels{
+		httpReq, err := generateRW1Request([]SampleWithLabels{
 			{
 				Labels: map[string]string{"__name__": "rw1_metric_total", "job": "override-job"},
 				Value:  1.0,
 			},
-		})
+		}, externalLabels)
+		require.NoError(t, err)
 
 		compressed, err := io.ReadAll(httpReq.Body)
 		require.NoError(t, err)
@@ -819,6 +124,92 @@ remote_write:
 
 	t.Run("preserves_empty_labels_for_negative_tests", func(t *testing.T) {
 		symbols := writev2.NewSymbolTable()
-		require.Nil(t, symbolizeSortedLabels(&symbols, map[string]string{}))
+		require.Nil(t, symbolizeSortedLabels(&symbols, map[string]string{}, externalLabels))
 	})
 }
+
+func TestFilterAndRemoteWriteConfigReceiver(t *testing.T) {
+	promCfg, err := config.Load(`
+remote_write:
+  - name: alpha
+    url: http://127.0.0.1:9091/api/v1/write
+    headers:
+      X-Scope-OrgID: tenant-a
+  - name: beta
+    url: http://127.0.0.1:9092/api/v1/write
+`, nil)
+	require.NoError(t, err)
+
+	filtered := FilterRemoteWriteConfigs(promCfg.RemoteWriteConfigs, " beta , missing ")
+	require.Len(t, filtered, 1)
+	require.Equal(t, "beta", filtered[0].Name)
+
+	rec, err := NewRemoteWriteConfigReceiver(promCfg.RemoteWriteConfigs[0])
+	require.NoError(t, err)
+	require.Equal(t, "alpha", rec.Name())
+
+	_, err = NewRemoteWriteConfigReceiver(nil)
+	require.Error(t, err)
+}
+
+func TestNextRequestTimeConcurrent(t *testing.T) {
+	const workers = 6
+	var (
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		times = make([]time.Time, 0, workers)
+	)
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			ts := nextRequestTime()
+			mu.Lock()
+			times = append(times, ts)
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	slices.SortFunc(times, func(a, b time.Time) int { return a.Compare(b) })
+	for i := 1; i < len(times); i++ {
+		require.Greater(t, times[i].UnixMilli(), times[i-1].UnixMilli(), "concurrent calls must produce strictly increasing millisecond timestamps")
+	}
+}
+
+type mockReceiver struct {
+	name    string
+	stopped atomic.Bool
+}
+
+func (m *mockReceiver) Name() string { return m.name }
+
+func (m *mockReceiver) Run(ctx context.Context, opts Options) error {
+	defer m.stopped.Store(true)
+	ln, err := net.Listen("tcp", opts.ReceiveHostPort)
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-Prometheus-Remote-Write-Samples-Written", "1")
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	}
+	go func() { _ = srv.Serve(ln) }()
+	<-ctx.Done()
+	return srv.Close()
+}
+
+func TestRunTestsStopsReceiverBeforeReturning(t *testing.T) {
+	tcs := ComplianceTests()[:1]
+
+	rec1 := &mockReceiver{name: "rec1"}
+	RunTests(t, rec1, tcs)
+	require.True(t, rec1.stopped.Load(), "rec1 must be stopped before RunTests returns")
+
+	rec2 := &mockReceiver{name: "rec2"}
+	RunTests(t, rec2, tcs)
+	require.True(t, rec2.stopped.Load(), "rec2 must be stopped before RunTests returns")
+}
+

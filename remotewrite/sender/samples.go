@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
@@ -47,9 +48,9 @@ func samplesTests(mode remote.WriteMode) []Test {
 	// historical, while staying below Prometheus's 10m maxAheadTime when adding +15s/+30s offsets.
 	explicitTS := timeNow.Add(9 * time.Minute)
 
-	stLevel := ShouldLevel
+	stLevel := compliance.ShouldLevel
 	if mode == remote.WriteModeStatelessST {
-		stLevel = MustLevel
+		stLevel = compliance.MustLevel
 	}
 
 	return []Test{
@@ -57,7 +58,7 @@ func samplesTests(mode remote.WriteMode) []Test {
 			// TODO(bwplotka): Fix 2.0 spec - MUST value and timestamp are not mentioned (only in proto).
 			Name:        "samples",
 			Description: "Senders MUST send valid samples",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			ScrapeData: fmt.Sprintf(`# TYPE test_counter counter
 test_counter_total 101.13
 test_counter_created %v
@@ -85,11 +86,11 @@ test_gauge_with_ts 2 %v
 				require.GreaterOrEqual(t, len(res.Requests), 1, "Should receive at least 1 request")
 				require.GreaterOrEqual(t, len(res.Requests[0].RW2.Timeseries), 6, "Request must contain at least 6 timeseries")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "value",
 					Description: "Sample MUST have value",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_counter_total")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_counter_total")
@@ -103,7 +104,7 @@ test_gauge_with_ts 2 %v
 				{
 					Name:        "timestamp",
 					Description: "Sample MUST have timestamp",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
 							if len(ts.Histograms) > 0 {
@@ -167,7 +168,7 @@ test_gauge_with_ts 2 %v
 				{
 					Name:        "start_timestamp before timestamp",
 					Description: "Start timestamp is SHOULD be 0 or before or equal to timestamp",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, ts := range res.Requests[0].RW2.Timeseries {
 							for _, sample := range ts.Samples {
@@ -183,7 +184,7 @@ test_gauge_with_ts 2 %v
 		{
 			Name:        "samples sorted",
 			Description: "Sender MUST send samples in a sorted order",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			ScrapeData: fmt.Sprintf(`# TYPE test_counter counter
 test_counter_total 101.13 %v
 test_counter_total 102.13 %v
@@ -209,7 +210,7 @@ test_counter_created %v
 		{
 			Name:        "encoding_cases",
 			Description: "Sender MUST correctly encode various value types and special cases",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			ScrapeData: `# TYPE test_float gauge
 test_float 123.45
 # TYPE test_integer gauge
@@ -237,11 +238,11 @@ test_precision 0.123456789012345
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.GreaterOrEqual(t, len(res.Requests), 1, "Should receive at least 1 request")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "float_value_encoding",
 					Description: "Sender MUST correctly encode regular float values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_float")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_float")
@@ -251,7 +252,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "integer_value_encoding",
 					Description: "Sender MUST correctly encode integer values as floats",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_integer")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_integer")
@@ -261,7 +262,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "zero_value_encoding",
 					Description: "Sender MUST correctly encode zero values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_zero")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_zero")
@@ -271,7 +272,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "negative_value_encoding",
 					Description: "Sender MUST correctly encode negative values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_negative")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_negative")
@@ -281,7 +282,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "positive_infinity_encoding",
 					Description: "Sender MUST correctly encode +Inf values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_pos_inf")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_pos_inf")
@@ -291,7 +292,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "negative_infinity_encoding",
 					Description: "Sender MUST correctly encode -Inf values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_neg_inf")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_neg_inf")
@@ -301,7 +302,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "nan_encoding",
 					Description: "Sender MUST correctly encode NaN values and not use the reserved StaleNaN bit pattern",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_nan")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_nan")
@@ -312,7 +313,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "large_float_values",
 					Description: "Sender MUST handle very large float values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_large")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_large")
@@ -322,7 +323,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "small_float_values",
 					Description: "Sender MUST handle very small float values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_small")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_small")
@@ -333,7 +334,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "scientific_notation",
 					Description: "Sender MUST handle values in scientific notation",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_scientific")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_scientific")
@@ -343,7 +344,7 @@ test_precision 0.123456789012345
 				{
 					Name:        "precision_preservation",
 					Description: "Sender SHOULD preserve float precision",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						results := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "test_precision")
 						require.GreaterOrEqual(t, len(results), 1, "Should receive at least one timeseries for test_precision")
@@ -356,7 +357,7 @@ test_precision 0.123456789012345
 		{
 			Name:        "stale_markers",
 			Description: "Stale markers MUST be signalled by the special NaN value 0x7ff0000000000002 when a series disappears",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			ScrapeData: `# TYPE disappearing_metric gauge
 disappearing_metric{env="prod"} 42
 # TYPE persistent_metric gauge
@@ -374,11 +375,11 @@ persistent_metric{env="prod"} 2
 					require.NotNil(t, res.Requests[i].RW2)
 				}
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "stale_nan_sent_on_disappearance",
 					Description: "Disappearing series MUST have a sample encoded with StaleNaN (0x7ff0000000000002).",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						// Senders may either batch both scrapes into a single request or send them in separate requests.
 						results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "disappearing_metric")

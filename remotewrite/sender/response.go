@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +27,7 @@ func responseTests() []Test {
 		{
 			Name:        "response_handling",
 			Description: "Senders MUST accept 2xx responses, ignore response bodies, and not assume 0 written when written headers are omitted.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     remote.WriteV2MessageType,
 			ScrapeData: `# TYPE response_test_metric gauge
 response_test_metric 10
@@ -46,11 +47,11 @@ response_test_metric 10
 				require.NotNil(t, res.Requests[0].RW2)
 				require.NotNil(t, res.Requests[1].RW2)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "accept_200_and_ignore_body_and_missing_headers",
 					Description: "Sender MUST treat 200 OK with body and omitted X-Prometheus-Remote-Write-*-Written headers as success and advance to the next batch.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						res0 := requireTimeseriesByMetricName(t, res.Requests[0].RW2, "response_test_metric")
 						ts0 := flattenTimeseriesResult(t, res0).TimeSeries
