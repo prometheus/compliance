@@ -1,3 +1,12 @@
+// Package v1 replicates the /api/v1 response structs from github.com/prometheus/prometheus/web/api/v1.
+//
+// NOTE(bwplotka): We cannot import github.com/prometheus/prometheus/web/api/v1 directly because it
+// transitively imports github.com/prometheus/prometheus/storage/remote, which fails to compile against
+// the newer github.com/prometheus/client_golang/exp version required by the remotewrite compliance tests
+// (writeStorage.Store gained a remoteapi.WriteMode argument). We also cannot drop-in replace it with
+// github.com/prometheus/client_golang/api/prometheus/v1 without rewriting all test cases, as that package
+// uses model.LabelSet instead of labels.Labels and omits fields like KeepFiringFor and RuleGroup.EvaluationTime.
+// TODO(bwplotka): Switch back to github.com/prometheus/prometheus/web/api/v1 once prometheus updates client_golang/exp.
 package v1
 
 import (
