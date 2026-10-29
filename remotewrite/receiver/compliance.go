@@ -154,10 +154,10 @@ func RunTests(t *testing.T, rec Receiver, tcs []Test, opts ...RunOption) {
 
 		ctx, cancel := context.WithCancel(t.Context())
 		var wg sync.WaitGroup
-		t.Cleanup(func() {
+		defer func() {
 			cancel()
 			wg.Wait()
-		})
+		}()
 
 		errCh := make(chan error, 1)
 		wg.Add(1)

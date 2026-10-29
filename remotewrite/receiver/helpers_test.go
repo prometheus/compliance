@@ -14,9 +14,13 @@
 package receiver
 
 import (
+	"context"
 	"io"
+	"net"
+	"net/http"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -171,5 +175,41 @@ func TestNextRequestTimeConcurrent(t *testing.T) {
 	for i := 1; i < len(times); i++ {
 		require.Greater(t, times[i].UnixMilli(), times[i-1].UnixMilli(), "concurrent calls must produce strictly increasing millisecond timestamps")
 	}
+}
+
+type mockReceiver struct {
+	name    string
+	stopped atomic.Bool
+}
+
+func (m *mockReceiver) Name() string { return m.name }
+
+func (m *mockReceiver) Run(ctx context.Context, opts Options) error {
+	defer m.stopped.Store(true)
+	ln, err := net.Listen("tcp", opts.ReceiveHostPort)
+	if err != nil {
+		return err
+	}
+	srv := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("X-Prometheus-Remote-Write-Samples-Written", "1")
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	}
+	go func() { _ = srv.Serve(ln) }()
+	<-ctx.Done()
+	return srv.Close()
+}
+
+func TestRunTestsStopsReceiverBeforeReturning(t *testing.T) {
+	tcs := ComplianceTests()[:1]
+
+	rec1 := &mockReceiver{name: "rec1"}
+	RunTests(t, rec1, tcs)
+	require.True(t, rec1.stopped.Load(), "rec1 must be stopped before RunTests returns")
+
+	rec2 := &mockReceiver{name: "rec2"}
+	RunTests(t, rec2, tcs)
+	require.True(t, rec2.stopped.Load(), "rec2 must be stopped before RunTests returns")
 }
 
