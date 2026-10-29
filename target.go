@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,8 +32,74 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"testing"
 	"text/template"
+	"time"
 )
+
+// Target represents a compliance target under test parameterized by suite-specific options O.
+type Target[O any] interface {
+	// Name returns a unique name identifying this target in test names and reports.
+	Name() string
+	// Run starts the target with opts and blocks until ctx is cancelled.
+	// Returning before ctx is done is treated as a premature target failure.
+	Run(ctx context.Context, opts O) error
+}
+
+// AllocateFreeLocalHostPort allocates an ephemeral TCP port on 127.0.0.1 and returns "127.0.0.1:<port>".
+func AllocateFreeLocalHostPort() (string, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", fmt.Errorf("failed to allocate local port: %w", err)
+	}
+	addr := l.Addr().String()
+	_ = l.Close()
+	return addr, nil
+}
+
+// FreeLocalHostPort allocates an ephemeral TCP port on 127.0.0.1, failing tb on error.
+func FreeLocalHostPort(tb testing.TB) string {
+	tb.Helper()
+	addr, err := AllocateFreeLocalHostPort()
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return addr
+}
+
+// WaitForHTTPReady polls readyURL until it returns HTTP 200 OK, ctx is cancelled,
+// or errCh yields a premature target exit error (errCh may be nil).
+func WaitForHTTPReady(ctx context.Context, readyURL string, errCh <-chan error, name string) error {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	var lastErr error
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, readyURL, nil)
+		if err != nil {
+			return err
+		}
+		resp, reqErr := client.Do(req)
+		if reqErr == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+			lastErr = fmt.Errorf("unexpected status %d", resp.StatusCode)
+		} else {
+			lastErr = reqErr
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timed out waiting for %s at %s to become ready (last err: %v): %w", name, readyURL, lastErr, ctx.Err())
+		case runErr := <-errCh:
+			return fmt.Errorf("%s exited prematurely before becoming ready: %w", name, runErr)
+		case <-ticker.C:
+		}
+	}
+}
 
 // RunCommand runs the given command with the given args until context is done.
 //

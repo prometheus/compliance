@@ -19,6 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - directory: .
           - directory: alert_generator
           - directory: promql
           - directory: promqle2e
@@ -44,7 +45,7 @@ jobs:
         working-directory: ${{ matrix.directory }}
         run: |
           mkdir -p "${RUNNER_TEMP}/test-reports/${{ matrix.directory }}"
-          gotestsum --junitfile "${RUNNER_TEMP}/test-reports/${{ matrix.directory }}/unit-tests.xml"
+          gotestsum --junitfile "${RUNNER_TEMP}/test-reports/${{ matrix.directory }}/unit-tests.xml" -- $([ "${{ matrix.directory }}" = "." ] && echo "." || echo "./...")
 
       - name: Upload test results
         if: always()
