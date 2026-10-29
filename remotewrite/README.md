@@ -148,6 +148,18 @@ via the `PROMETHEUS_RW2_COMPLIANCE_RECEIVERS` environment variable:
 export PROMETHEUS_RW2_COMPLIANCE_RECEIVERS="local-prometheus,mimir"
 ```
 
+### Programmatic Usage
+
+Go projects can also import `github.com/prometheus/compliance/remotewrite/receiver` directly and implement `receiver.Receiver`:
+
+```go
+func TestRemoteWriteReceiverCompliance(t *testing.T) {
+	receiver.RunTests(t, myReceiver{}, receiver.ComplianceTests())
+}
+```
+
+Use `receiver.WithExternalLabels(...)` to inject required tenant or resource labels into non-empty series, or `receiver.WithWritePath(...)` if the receiver listens on a path other than `/api/v1/write`.
+
 ### Running Tests
 
 ```bash
