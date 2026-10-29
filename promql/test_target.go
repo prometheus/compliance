@@ -23,13 +23,7 @@ import (
 // Target represents a PromQL-compatible backend under test.
 // Target needs to collect (scrape) metrics from Options.ScrapeTargetHostPort
 // and expose a Prometheus HTTP query API at Options.QueryHostPort.
-type Target interface {
-	// Name returns a unique target name.
-	Name() string
-	// Run starts the test target until the context is done.
-	// Premature stops are assumed to be failures.
-	Run(ctx context.Context, opts Options) error
-}
+type Target = compliance.Target[Options]
 
 // Options represents the target configuration for a PromQL compliance test run.
 type Options struct {

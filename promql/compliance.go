@@ -18,15 +18,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"io"
 	"math"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"runtime/debug"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -36,6 +28,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/compliance"
 	"github.com/prometheus/compliance/promql/comparer"
 	"github.com/prometheus/compliance/promql/config"
 	"github.com/prometheus/compliance/promql/testcases"
@@ -55,22 +48,14 @@ func ComplianceTests() []*config.TestCase {
 }
 
 // RFCLevel represents the compliance requirement level of a test case.
-type RFCLevel string
+type RFCLevel = compliance.RFCLevel
 
 const (
-	MustLevel        RFCLevel = "MUST"
-	ShouldLevel      RFCLevel = "SHOULD"
-	MayLevel         RFCLevel = "MAY"
-	RecommendedLevel RFCLevel = "RECOMMENDED"
+	MustLevel        = compliance.MustLevel
+	ShouldLevel      = compliance.ShouldLevel
+	MayLevel         = compliance.MayLevel
+	RecommendedLevel = compliance.RecommendedLevel
 )
-
-func (r RFCLevel) annotate(t *testing.T) {
-	t.Attr("rfcLevel", string(r))
-}
-
-func descAnnotate(t *testing.T, desc string) {
-	t.Attr("description", desc)
-}
 
 // RunOption customizes a RunTests execution.
 type RunOption func(*runConfig)
@@ -123,11 +108,11 @@ func RunTests(t *testing.T, refTarget, testTarget Target, tcs []*config.TestCase
 	resolution := 10 * time.Second
 
 	snapshots := generateDemoSnapshots(end)
-	refReplayer := newScrapeReplayer(snapshots)
-	testReplayer := newScrapeReplayer(snapshots)
+	refReplayer := compliance.NewScrapeServer(compliance.ScrapeServerOpts{Payloads: snapshots})
+	testReplayer := compliance.NewScrapeServer(compliance.ScrapeServerOpts{Payloads: snapshots})
 
-	refQueryHostPort := freeLocalHostPort(t)
-	testQueryHostPort := freeLocalHostPort(t)
+	refQueryHostPort := compliance.FreeLocalHostPort(t)
+	testQueryHostPort := compliance.FreeLocalHostPort(t)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	var wg sync.WaitGroup
@@ -170,7 +155,7 @@ func RunTests(t *testing.T, refTarget, testTarget Target, tcs []*config.TestCase
 		t.Fatalf("failed to create test API client: %v", err)
 	}
 
-	setupOk := safeRun(t, fmt.Sprintf("%s/_setup", testTarget.Name()), testTarget.Name(), "Ingest synthetic scrape data into reference and target", MustLevel, func(t *testing.T) {
+	setupOk := compliance.SafeRun(t, fmt.Sprintf("%s/_setup", testTarget.Name()), testTarget.Name(), "Ingest synthetic scrape data into reference and target", MustLevel, func(t *testing.T) {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer waitCancel()
 
@@ -186,7 +171,7 @@ func RunTests(t *testing.T, refTarget, testTarget Target, tcs []*config.TestCase
 	expanded := testcases.ExpandTestCases(tcs, rcfg.queryTweaks, start, end, resolution)
 
 	for _, tc := range expanded {
-		safeRun(t, fmt.Sprintf("%s/%s", testTarget.Name(), tc.Query), testTarget.Name(), tc.Query, MustLevel, func(t *testing.T) {
+		compliance.SafeRun(t, fmt.Sprintf("%s/%s", testTarget.Name(), tc.Query), testTarget.Name(), tc.Query, MustLevel, func(t *testing.T) {
 			t.Parallel()
 			if !setupOk {
 				t.Fatal("setup failed")
@@ -215,23 +200,6 @@ func RunTests(t *testing.T, refTarget, testTarget Target, tcs []*config.TestCase
 	}
 }
 
-func safeRun(t *testing.T, name, target, desc string, rfc RFCLevel, f func(t *testing.T)) bool {
-	return t.Run(name, func(t *testing.T) {
-		t.Attr("rw", target)
-		rfc.annotate(t)
-		descAnnotate(t, desc)
-
-		if os.Getenv("DEBUG") == "" {
-			defer func() {
-				if val := recover(); val != nil {
-					t.Fatalf("test panicked: %v\n%s", val, debug.Stack())
-				}
-			}()
-		}
-		f(t)
-	})
-}
-
 func newPromAPI(queryURL string) (v1.API, error) {
 	cl, err := api.NewClient(api.Config{Address: queryURL})
 	if err != nil {
@@ -240,21 +208,10 @@ func newPromAPI(queryURL string) (v1.API, error) {
 	return v1.NewAPI(cl), nil
 }
 
-func freeLocalHostPort(t *testing.T) string {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to allocate local port: %v", err)
-	}
-	addr := l.Addr().String()
-	_ = l.Close()
-	return addr
-}
-
-func waitReplayerAndTarget(ctx context.Context, replayer *scrapeReplayer, promAPI v1.API, end time.Time, errCh <-chan error, name string) error {
+func waitReplayerAndTarget(ctx context.Context, replayer *compliance.ScrapeServer, promAPI v1.API, end time.Time, errCh <-chan error, name string) error {
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("timed out waiting for %s to scrape %d snapshots (scraped %d): %w", name, len(replayer.snapshots), replayer.ScrapedCount(), ctx.Err())
+		return fmt.Errorf("timed out waiting for %s to scrape %d snapshots (scraped %d): %w", name, replayer.PayloadCount(), replayer.ScrapedCount(), ctx.Err())
 	case err := <-errCh:
 		return fmt.Errorf("target %s exited prematurely while scraping: %w", name, err)
 	case <-replayer.Done():
@@ -280,97 +237,13 @@ func waitReplayerAndTarget(ctx context.Context, replayer *scrapeReplayer, promAP
 	}
 }
 
-const (
-	om1ContentType   = "application/openmetrics-text; version=1.0.0; charset=utf-8"
-	protoContentType = "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited"
-)
-
-type scrapeSnapshot struct {
-	proto  []byte
-	omText string
-}
-
-// scrapeReplayer serves a sequence of pre-computed PrometheusProto and OpenMetrics 1.0
-// snapshots, advancing by one snapshot on each HTTP scrape until all snapshots have been served.
-type scrapeReplayer struct {
-	server    *httptest.Server
-	mu        sync.Mutex
-	snapshots []scrapeSnapshot
-	idx       int
-	doneOnce  sync.Once
-	doneCh    chan struct{}
-}
-
-func newScrapeReplayer(snapshots []scrapeSnapshot) *scrapeReplayer {
-	r := &scrapeReplayer{
-		snapshots: snapshots,
-		doneCh:    make(chan struct{}),
-	}
-	r.server = httptest.NewServer(http.HandlerFunc(r.handleScrape))
-	return r
-}
-
-func (r *scrapeReplayer) handleScrape(w http.ResponseWriter, req *http.Request) {
-	r.mu.Lock()
-	var snap scrapeSnapshot
-	hasSnap := r.idx < len(r.snapshots)
-	if hasSnap {
-		snap = r.snapshots[r.idx]
-		r.idx++
-		if r.idx == len(r.snapshots) {
-			r.doneOnce.Do(func() { close(r.doneCh) })
-		}
-	}
-	r.mu.Unlock()
-
-	if strings.Contains(req.Header.Get("Accept"), expfmt.ProtoType) {
-		w.Header().Set("Content-Type", protoContentType)
-		w.WriteHeader(http.StatusOK)
-		if hasSnap {
-			_, _ = w.Write(snap.proto)
-		}
-		return
-	}
-
-	w.Header().Set("Content-Type", om1ContentType)
-	w.WriteHeader(http.StatusOK)
-	if hasSnap {
-		_, _ = io.WriteString(w, snap.omText)
-	} else {
-		_, _ = io.WriteString(w, "# EOF\n")
-	}
-}
-
-func (r *scrapeReplayer) HostPort(t *testing.T) string {
-	t.Helper()
-	u, err := url.Parse(r.server.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return u.Host
-}
-
-func (r *scrapeReplayer) Done() <-chan struct{} {
-	return r.doneCh
-}
-
-func (r *scrapeReplayer) ScrapedCount() int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.idx
-}
-
-func (r *scrapeReplayer) Close() {
-	r.server.Close()
-}
-
 func labelPair(name, value string) *dto.LabelPair {
 	return &dto.LabelPair{Name: proto.String(name), Value: proto.String(value)}
 }
 
 // generateDemoSnapshots builds deterministic PrometheusProto and OpenMetrics 1.0 scrape
 // payloads covering [end-70m, end] for the demo_* metrics used by promql-test-queries.yml.
-func generateDemoSnapshots(end time.Time) []scrapeSnapshot {
+func generateDemoSnapshots(end time.Time) []compliance.ScrapePayload {
 	var timestamps []time.Time
 	// Coarse 2m steps over [end-70m, end-12m) to populate 1h range lookups and 10m offsets.
 	for ts := end.Add(-70 * time.Minute); ts.Before(end.Add(-12 * time.Minute)); ts = ts.Add(2 * time.Minute) {
@@ -394,7 +267,7 @@ func generateDemoSnapshots(end time.Time) []scrapeSnapshot {
 	resetTime := end.Add(-4 * time.Minute)
 	baseTime := timestamps[0]
 
-	snapshots := make([]scrapeSnapshot, 0, len(timestamps))
+	snapshots := make([]compliance.ScrapePayload, 0, len(timestamps))
 	var protoBuf, omBuf bytes.Buffer
 	stepsSinceReset := 0
 
@@ -583,9 +456,9 @@ func generateDemoSnapshots(end time.Time) []scrapeSnapshot {
 			panic(err)
 		}
 
-		snapshots = append(snapshots, scrapeSnapshot{
-			proto:  bytes.Clone(protoBuf.Bytes()),
-			omText: omBuf.String(),
+		snapshots = append(snapshots, compliance.ScrapePayload{
+			Proto: bytes.Clone(protoBuf.Bytes()),
+			Text:  omBuf.String(),
 		})
 	}
 

@@ -23,13 +23,7 @@ import (
 // Sender represents a test target.
 // Sender generally needs to be able to collect (scrape) data from a Prometheus metric endpoint using OpenMetrics 1.0
 // and send Prometheus metrics to the designated endpoint using Remote Write protocol.
-type Sender interface {
-	// Name returns unique sender name.
-	Name() string
-	// Run runs a test sender until the context is done.
-	// Premature stops are assumed to be failures.
-	Run(context.Context, Options) error
-}
+type Sender = compliance.Target[Options]
 
 // Options represents the sender options for a given test.
 type Options struct {
