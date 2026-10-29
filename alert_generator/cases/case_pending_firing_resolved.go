@@ -6,14 +6,13 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
+	v1 "github.com/prometheus/compliance/alert_generator/v1"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/web/api/v1"
-	"gopkg.in/yaml.v3"
 )
 
 // PendingAndFiringAndResolved tests the following cases:
@@ -63,21 +62,13 @@ func (tc *pendingAndFiringAndResolved) Describe() (title string, description str
 }
 
 func (tc *pendingAndFiringAndResolved) RuleGroup() (rulefmt.RuleGroup, error) {
-	var alert yaml.Node
-	var expr yaml.Node
-	if err := alert.Encode(tc.alertName); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	if err := expr.Encode(tc.query); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
 	return rulefmt.RuleGroup{
 		Name:     tc.groupName,
 		Interval: model.Duration(tc.groupInterval),
-		Rules: []rulefmt.RuleNode{
+		Rules: []rulefmt.Rule{
 			{
-				Alert:  alert,
-				Expr:   expr,
+				Alert:  tc.alertName,
+				Expr:   tc.query,
 				For:    tc.forDuration,
 				Labels: map[string]string{"foo": "bar", "rulegroup": tc.groupName},
 				Annotations: map[string]string{
@@ -315,7 +306,8 @@ func (tc *pendingAndFiringAndResolved) expMetrics(ts int64) (expSamples [][]prom
 	if canBePending1 || canBePending2 || pendingAgain {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
 			},
 		})
@@ -323,7 +315,8 @@ func (tc *pendingAndFiringAndResolved) expMetrics(ts int64) (expSamples [][]prom
 	if canBeFiring1 || canBeFiring2 || firingAgain {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.alertName, "foo", "bar", "rulegroup", tc.groupName),
 			},
 		})

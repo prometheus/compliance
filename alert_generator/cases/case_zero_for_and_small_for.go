@@ -6,14 +6,13 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
+	v1 "github.com/prometheus/compliance/alert_generator/v1"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/web/api/v1"
-	"gopkg.in/yaml.v3"
 )
 
 // ZeroFor_SmallFor tests the following cases:
@@ -65,27 +64,13 @@ func (tc *zeroAndSmallFor) Describe() (title string, description string) {
 }
 
 func (tc *zeroAndSmallFor) RuleGroup() (rulefmt.RuleGroup, error) {
-	var zfAlert, sfAlert yaml.Node
-	if err := zfAlert.Encode(tc.zfAlertName); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	if err := sfAlert.Encode(tc.sfAlertName); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	var zfExpr, sfExpr yaml.Node
-	if err := zfExpr.Encode(tc.zfQuery); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	if err := sfExpr.Encode(tc.sfQuery); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
 	return rulefmt.RuleGroup{
 		Name:     tc.groupName,
 		Interval: model.Duration(tc.groupInterval),
-		Rules: []rulefmt.RuleNode{
+		Rules: []rulefmt.Rule{
 			{ // Zero for.
-				Alert:  zfAlert,
-				Expr:   zfExpr,
+				Alert:  tc.zfAlertName,
+				Expr:   tc.zfQuery,
 				Labels: map[string]string{"foo": "bar", "rulegroup": tc.groupName},
 				Annotations: map[string]string{
 					"description":   "This should immediately fire",
@@ -96,8 +81,8 @@ func (tc *zeroAndSmallFor) RuleGroup() (rulefmt.RuleGroup, error) {
 				},
 			},
 			{ // Small for.
-				Alert:  sfAlert,
-				Expr:   sfExpr,
+				Alert:  tc.sfAlertName,
+				Expr:   tc.sfQuery,
 				For:    tc.forDuration,
 				Labels: map[string]string{"ba_dum": "tss", "rulegroup": tc.groupName},
 				Annotations: map[string]string{
@@ -394,11 +379,13 @@ func (tc *zeroAndSmallFor) expMetrics(ts int64) (expSamples [][]promql.Sample) {
 	if zfFiring && sfPending {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
 			},
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.sfAlertName, "ba_dum", "tss", "rulegroup", tc.groupName),
 			},
 		})
@@ -406,11 +393,13 @@ func (tc *zeroAndSmallFor) expMetrics(ts int64) (expSamples [][]promql.Sample) {
 	if zfFiring && sfFiring {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
 			},
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.sfAlertName, "ba_dum", "tss", "rulegroup", tc.groupName),
 			},
 		})
@@ -418,7 +407,8 @@ func (tc *zeroAndSmallFor) expMetrics(ts int64) (expSamples [][]promql.Sample) {
 	if zfFiringAgain {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.zfAlertName, "foo", "bar", "rulegroup", tc.groupName),
 			},
 		})

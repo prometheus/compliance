@@ -2,19 +2,17 @@ package cases
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/model"
+	v1 "github.com/prometheus/compliance/alert_generator/v1"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/web/api/v1"
-	"gopkg.in/yaml.v3"
 )
 
 // NewAlerts_OrderCheck tests the following cases:
@@ -63,34 +61,20 @@ func (tc *newAlertsAndOrderCheck) Describe() (title string, description string) 
 }
 
 func (tc *newAlertsAndOrderCheck) RuleGroup() (rulefmt.RuleGroup, error) {
-	var r1Alert, r2Alert yaml.Node
-	if err := r1Alert.Encode(tc.r1AlertName); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	if err := r2Alert.Encode(tc.r2AlertName); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	var r1Expr, r2Expr yaml.Node
-	if err := r1Expr.Encode(tc.r1Query); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
-	if err := r2Expr.Encode(tc.r2Query); err != nil {
-		return rulefmt.RuleGroup{}, err
-	}
 	return rulefmt.RuleGroup{
 		Name:     tc.groupName,
 		Interval: model.Duration(tc.groupInterval),
-		Rules: []rulefmt.RuleNode{
+		Rules: []rulefmt.Rule{
 			{ // New alerts.
-				Alert:       r1Alert,
-				Expr:        r1Expr,
+				Alert:       tc.r1AlertName,
+				Expr:        tc.r1Query,
 				For:         tc.forDuration,
 				Labels:      map[string]string{"foo": "bar", "rulegroup": tc.groupName},
 				Annotations: map[string]string{"description": "This should produce more alerts later"},
 			},
 			{ // ALERTS{} based.
-				Alert:  r2Alert,
-				Expr:   r2Expr,
+				Alert:  tc.r2AlertName,
+				Expr:   tc.r2Query,
 				Labels: map[string]string{"foo": "baz", "ba_dum": "tss", "rulegroup": tc.groupName},
 				// The expression also has alertname. So this template variable should result in r1AlertName.
 				Annotations: map[string]string{"description": "Based on ALERTS. Old alertname was {{$labels.alertname}}. foo was {{.Labels.foo}}."},
@@ -100,8 +84,7 @@ func (tc *newAlertsAndOrderCheck) RuleGroup() (rulefmt.RuleGroup, error) {
 }
 
 func (tc *newAlertsAndOrderCheck) SamplesToRemoteWrite() []prompb.TimeSeries {
-	series1 := append(tc.r1MetricLabels.Copy(), labels.Label{Name: "variant", Value: "one"})
-	sort.Sort(series1)
+	series1 := labels.NewBuilder(tc.r1MetricLabels).Set("variant", "one").Labels()
 	samples1 := sampleSlice(tc.rwInterval,
 		// All comment times is assuming 15s interval.
 		"1", "0x7", // 2m of inactive.
@@ -112,8 +95,7 @@ func (tc *newAlertsAndOrderCheck) SamplesToRemoteWrite() []prompb.TimeSeries {
 		"9", "0x20",
 	)
 
-	series2 := append(tc.r1MetricLabels.Copy(), labels.Label{Name: "variant", Value: "two"})
-	sort.Sort(series2)
+	series2 := labels.NewBuilder(tc.r1MetricLabels).Set("variant", "two").Labels()
 	samples2 := sampleSlice(tc.rwInterval,
 		// All comment times is assuming 15s interval.
 		"1", "0x31", // 8m of inactive.
@@ -398,7 +380,8 @@ func (tc *newAlertsAndOrderCheck) expMetrics(ts int64) (expSamples [][]promql.Sa
 	if r11Pending && r12Inactive {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.r1AlertName, "foo", "bar", "rulegroup", tc.groupName, "variant", "one"),
 			},
 		})
@@ -407,7 +390,8 @@ func (tc *newAlertsAndOrderCheck) expMetrics(ts int64) (expSamples [][]promql.Sa
 	if r11Firing && r12Inactive {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.r1AlertName, "foo", "bar", "rulegroup", tc.groupName, "variant", "one"),
 			},
 		})
@@ -416,11 +400,13 @@ func (tc *newAlertsAndOrderCheck) expMetrics(ts int64) (expSamples [][]promql.Sa
 	if r11Firing && r12Pending {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.r1AlertName, "foo", "bar", "rulegroup", tc.groupName, "variant", "one"),
 			},
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "pending", "alertname", tc.r1AlertName, "foo", "bar", "rulegroup", tc.groupName, "variant", "two"),
 			},
 		})
@@ -429,15 +415,18 @@ func (tc *newAlertsAndOrderCheck) expMetrics(ts int64) (expSamples [][]promql.Sa
 	if r11Firing && r12Firing {
 		expSamples = append(expSamples, []promql.Sample{
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.r1AlertName, "foo", "bar", "rulegroup", tc.groupName, "variant", "one"),
 			},
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.r1AlertName, "foo", "bar", "rulegroup", tc.groupName, "variant", "two"),
 			},
 			{
-				Point:  promql.Point{T: ts / 1000, V: 1},
+				T:      ts / 1000,
+				F:      1,
 				Metric: labels.FromStrings("__name__", "ALERTS", "alertstate", "firing", "alertname", tc.r2AlertName, "foo", "baz", "ba_dum", "tss", "rulegroup", tc.groupName),
 			},
 		})

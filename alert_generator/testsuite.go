@@ -151,23 +151,23 @@ func validateOpts(opts TestSuiteOptions) error {
 
 		merr := NewMulti()
 		for i, r := range rg.Rules {
-			if r.Alert.Value == "" {
+			if r.Alert == "" {
 				return fmt.Errorf("alert name cannot be empty, %q group has one empty", rg.Name)
 			}
-			if seenAlertNames[r.Alert.Value] {
-				return fmt.Errorf("alert name cannot repeat to make testing easy, %q has been used more than once", r.Alert.Value)
+			if seenAlertNames[r.Alert] {
+				return fmt.Errorf("alert name cannot repeat to make testing easy, %q has been used more than once", r.Alert)
 			}
-			seenAlertNames[r.Alert.Value] = true
+			seenAlertNames[r.Alert] = true
 
 			if r.Labels["rulegroup"] != rg.Name {
-				return fmt.Errorf(`alerting rule (with alert name %q) does not have rulegroup="<groupName>" label`, r.Alert.Value)
+				return fmt.Errorf(`alerting rule (with alert name %q) does not have rulegroup="<groupName>" label`, r.Alert)
 			}
 
-			for _, node := range rg.Rules[i].Validate() {
+			for _, node := range rg.Rules[i].Validate(rulefmt.RuleNode{}, model.UTF8Validation) {
 				merr.Add(&rulefmt.Error{
 					Group:    rg.Name,
 					Rule:     i + 1,
-					RuleName: r.Alert.Value,
+					RuleName: r.Alert,
 					Err:      node,
 				})
 			}

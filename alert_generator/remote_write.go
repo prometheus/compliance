@@ -1,7 +1,11 @@
 package testsuite
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"sort"
 	"sync"
@@ -12,10 +16,9 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/config"
-	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/sigv4"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/prompb"
-	"github.com/prometheus/prometheus/storage/remote"
 	"go.uber.org/atomic"
 
 	agconfig "github.com/prometheus/compliance/alert_generator/config"
@@ -34,20 +37,28 @@ func NewRemoteWriter(cfg agconfig.Config, logger log.Logger) (*RemoteWriter, err
 			Password: config.Secret(cfg.Auth.RemoteWrite.BasicAuthPass),
 		}
 	}
-	client, err := remote.NewWriteClient("alert-generator-test-suite", &remote.ClientConfig{
-		URL:              &config.URL{URL: u},
-		Timeout:          model.Duration(4 * time.Second),
-		RetryOnRateLimit: true,
-		HTTPClientConfig: config.HTTPClientConfig{
-			BasicAuth: baseAuth,
-		},
-		SigV4Config: cfg.Auth.RemoteWrite.SigV4Config,
-	})
+	httpClient, err := config.NewClientFromConfig(config.HTTPClientConfig{
+		BasicAuth: baseAuth,
+	}, "alert-generator-test-suite")
 	if err != nil {
 		return nil, err
 	}
+	if cfg.Auth.RemoteWrite.SigV4Config != nil {
+		rt := httpClient.Transport
+		if rt == nil {
+			rt = http.DefaultTransport
+		}
+		rt, err = sigv4.NewSigV4RoundTripper(cfg.Auth.RemoteWrite.SigV4Config, rt)
+		if err != nil {
+			return nil, err
+		}
+		httpClient.Transport = rt
+	}
+	httpClient.Timeout = 4 * time.Second
+
 	return &RemoteWriter{
-		client: client,
+		url:    u.String(),
+		client: httpClient,
 		stopc:  make(chan struct{}),
 		errc:   make(chan error, 1),
 		log:    log.With(logger, "component", "remote_write"),
@@ -57,7 +68,8 @@ func NewRemoteWriter(cfg agconfig.Config, logger log.Logger) (*RemoteWriter, err
 // RemoteWriter remote writes the time series provided AddTimeSeries()
 // in sorted fashion w.r.t. the timestamps.
 type RemoteWriter struct {
-	client remote.WriteClient
+	url    string
+	client *http.Client
 
 	timeSeries   []prompb.TimeSeries
 	allSamples   []sample // Flattened samples from timeSeries.
@@ -174,14 +186,39 @@ func (rw *RemoteWriter) Start() time.Time {
 }
 
 func (rw *RemoteWriter) remoteWrite(ctx context.Context, buf []byte) error {
-	err := rw.client.Store(ctx, buf)
+	err := rw.store(ctx, buf)
 	tries := 1
 	for err != nil && tries < 3 {
 		<-time.After(1 * time.Second)
 		tries++
-		err = rw.client.Store(ctx, buf)
+		err = rw.store(ctx, buf)
 	}
 	return err
+}
+
+func (rw *RemoteWriter) store(ctx context.Context, req []byte) error {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, rw.url, bytes.NewReader(req))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Add("Content-Encoding", "snappy")
+	httpReq.Header.Set("Content-Type", "application/x-protobuf")
+	httpReq.Header.Set("X-Prometheus-Remote-Write-Version", "0.1.0")
+
+	resp, err := rw.client.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode/100 != 2 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server returned HTTP status %s: %s", resp.Status, string(body))
+	}
+	return nil
 }
 
 func (rw *RemoteWriter) Error() error {

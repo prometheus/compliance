@@ -38,25 +38,19 @@ func TestParseAndGroupMetrics(t *testing.T) {
 			expMetrics: map[string][]promql.Sample{
 				"PendingAndFiringAndResolved": {
 					{
-						Point: promql.Point{
-							T: 1640145082,
-							V: 1,
-						},
+						T:      1640145082,
+						F:      1,
 						Metric: labels.FromStrings("__name__", "ALERTS", "alertname", "PendingAndFiringAndResolved_SimpleAlert", "alertstate", "pending", "foo", "bar", "rulegroup", "PendingAndFiringAndResolved"),
 					}, {
-						Point: promql.Point{
-							T: 1640145085,
-							V: 1,
-						},
+						T:      1640145085,
+						F:      1,
 						Metric: labels.FromStrings("__name__", "ALERTS", "alertname", "PendingAndFiringAndResolved_SimpleAlert2", "alertstate", "firing", "foo", "bar", "rulegroup", "PendingAndFiringAndResolved"),
 					},
 				},
 				"AnotherGroup": {
 					{
-						Point: promql.Point{
-							T: 1640145083,
-							V: 1,
-						},
+						T:      1640145083,
+						F:      1,
 						Metric: labels.FromStrings("__name__", "ALERTS", "alertname", "AnotherGroup_SimpleAlert", "alertstate", "firing", "foo", "bar", "rulegroup", "AnotherGroup"),
 					},
 				},

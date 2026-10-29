@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	v1 "github.com/prometheus/compliance/alert_generator/v1"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
-	"github.com/prometheus/prometheus/web/api/v1"
 )
 
 const (
@@ -29,13 +29,13 @@ func metricLabels(groupName, alertName string) labels.Labels {
 }
 
 func toProtoLabels(lbls labels.Labels) []prompb.Label {
-	res := make([]prompb.Label, 0, len(lbls))
-	for _, l := range lbls {
+	res := make([]prompb.Label, 0, lbls.Len())
+	lbls.Range(func(l labels.Label) {
 		res = append(res, prompb.Label{
 			Name:  l.Name,
 			Value: l.Value,
 		})
-	}
+	})
 	return res
 }
 
@@ -381,7 +381,7 @@ func areSamplesEqual(exp, act []promql.Sample) error {
 	for i := range exp {
 		e, a := exp[i], act[i]
 		ok := labels.Compare(e.Metric, a.Metric) == 0 &&
-			e.T == a.T && e.V == a.V
+			e.T == a.T && e.F == a.F
 		if !ok {
 			return errors.Errorf("metrics mismatch - expected: %v, actual: %v", e, a)
 		}
