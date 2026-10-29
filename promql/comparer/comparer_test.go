@@ -31,12 +31,12 @@ type stubPromAPI struct {
 
 var _ PromAPI = (*stubPromAPI)(nil)
 
-func (s *stubPromAPI) Query(context.Context, string, time.Time, ...v1.Option) (model.Value, v1.Warnings, error) {
-	return s.val, nil, s.err
+func (s *stubPromAPI) Query(context.Context, string, time.Time, ...v1.Option) (model.Value, v1.Warnings, v1.Infos, error) {
+	return s.val, nil, nil, s.err
 }
 
-func (s *stubPromAPI) QueryRange(context.Context, string, v1.Range, ...v1.Option) (model.Value, v1.Warnings, error) {
-	return s.val, nil, s.err
+func (s *stubPromAPI) QueryRange(context.Context, string, v1.Range, ...v1.Option) (model.Value, v1.Warnings, v1.Infos, error) {
+	return s.val, nil, nil, s.err
 }
 
 func TestCompare_NativeHistograms(t *testing.T) {
