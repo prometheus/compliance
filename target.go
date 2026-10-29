@@ -148,7 +148,7 @@ var downloadMtx sync.Mutex
 const (
 	// TODO(bwplotka): Switch back to DefaultPrometheusDownloadURL once a Prometheus release includes https://github.com/prometheus/prometheus/pull/20098.
 	DefaultPrometheusDownloadURL = ""
-	DefaultPrometheusGitRef      = "6f22682586f217ba0e1172f8111a61db47179798" // https://github.com/prometheus/prometheus/pull/20098
+	DefaultPrometheusGitRef      = "ad035834ee700af425e9c9c8407defae8242ccc2" // https://github.com/prometheus/prometheus/pull/20098
 )
 
 // GetPrometheusBinary downloads or builds the default Prometheus binary (see
