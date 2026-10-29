@@ -120,12 +120,6 @@ type ReceiverResponse struct {
 	OmitWrittenHeaders bool
 }
 
-// ValidateFunc validates a captured ReceiverResult.
-type ValidateFunc = compliance.ValidateFunc[ReceiverResult]
-
-// ValidateCase defines a validation subtest for a captured ReceiverResult.
-type ValidateCase = compliance.ValidateCase[ReceiverResult]
-
 // Test defines a test scenario to run against a single sender.
 type Test struct {
 	// Name is a unique name for a test case.
@@ -156,10 +150,10 @@ type Test struct {
 	// By default, the case responds with one NoContent (success) response per configured scrape payload.
 	TestResponses []ReceiverResponse
 	// Validate allows validating requests that were sent after test.
-	Validate ValidateFunc
+	Validate compliance.ValidateFunc[ReceiverResult]
 	// ValidateCase configures sub-cases for the validation. This is useful
 	// when the same input case can be shared across multiple tests/RFC levels.
-	ValidateCases []ValidateCase
+	ValidateCases []compliance.ValidateCase[ReceiverResult]
 }
 
 // RunTests runs a test scenario(s) for each configured sender target.

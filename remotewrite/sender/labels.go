@@ -46,7 +46,7 @@ unicode_metric{emoji="🚀",chinese="测试",path="/api/v1/users?foo=bar&baz=qux
 				require.NotEmpty(t, res.Requests, "Should receive at least 1 request")
 				require.NotEmpty(t, res.Requests[0].RW2.Timeseries, "Request must contain timeseries")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "labels_refs_present_and_even",
 					Description: "labels_refs MUST be provided and its length MUST be a multiple of two",

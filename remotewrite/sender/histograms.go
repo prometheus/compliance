@@ -174,7 +174,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				require.NotNil(t, res.Requests[0].RW2)
 				require.NotEmpty(t, res.Requests[0].RW2.Timeseries)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "structure_count_and_sum",
 					Description: "Tests that native histograms encode count, sum, and valid schema.",
@@ -355,7 +355,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				require.Len(t, res.Requests, 2)
 				require.NotNil(t, res.Requests[1].RW2)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "histograms_sorted",
 					Description: "Tests that histograms within a TimeSeries are ordered by timestamp from oldest to newest.",
@@ -406,7 +406,7 @@ http_request_duration_seconds_created 1500.0
 				require.NotNil(t, res.Requests[0].RW2)
 				require.NotEmpty(t, res.Requests[0].RW2.Timeseries)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "classic_histogram_series",
 					Description: "Tests that classic histograms are sent as _bucket, _sum, and _count series (or as a Histogram message in stateless modes).",

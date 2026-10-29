@@ -47,7 +47,7 @@ response_test_metric 10
 				require.NotNil(t, res.Requests[0].RW2)
 				require.NotNil(t, res.Requests[1].RW2)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "accept_200_and_ignore_body_and_missing_headers",
 					Description: "Sender MUST treat 200 OK with body and omitted X-Prometheus-Remote-Write-*-Written headers as success and advance to the next batch.",

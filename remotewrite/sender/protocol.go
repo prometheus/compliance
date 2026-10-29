@@ -35,7 +35,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 		protoParamLevel = compliance.MustLevel
 	}
 
-	validateCases := []ValidateCase{
+	validateCases := []compliance.ValidateCase[ReceiverResult]{
 		{
 			Name:        "http_method_post",
 			Description: "Senders MUST send Protobuf message in the body of an HTTP POST request",
@@ -111,7 +111,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 	}
 
 	if mode != remote.WriteModeNone {
-		validateCases = append(validateCases, ValidateCase{
+		validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 			Name:        "content_type_mode_param",
 			Description: fmt.Sprintf("Senders MUST use Content-Type with mode=%s in %s mode", mode, mode),
 			RFCLevel:    compliance.MustLevel,
@@ -127,7 +127,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 	}
 
 	validateCases = append(validateCases,
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "version_header_present",
 			Description: "Senders MUST send X-Prometheus-Remote-Write-Version header",
 			RFCLevel:    compliance.MustLevel,
@@ -138,7 +138,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 				}
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "version_header_value",
 			Description: "Senders SHOULD use X-Prometheus-Remote-Write-Version: 2.0.0 when sending RW 2.0",
 			RFCLevel:    compliance.ShouldLevel,
@@ -150,7 +150,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 				}
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "user_agent_present",
 			Description: "Senders MUST include a User-Agent header",
 			RFCLevel:    compliance.MustLevel,
@@ -186,7 +186,7 @@ func protocolTests(mode remote.WriteMode) []Test {
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.NotEmpty(t, res.Requests, "Should receive at least 1 request")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "content_type",
 					Description: "When talking to 1.x Receivers, Senders SHOULD use Content-Type: application/x-protobuf",

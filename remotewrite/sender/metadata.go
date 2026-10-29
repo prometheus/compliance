@@ -28,7 +28,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 		typeLevel = compliance.MustLevel
 	}
 
-	validateCases := []ValidateCase{
+	validateCases := []compliance.ValidateCase[ReceiverResult]{
 		{
 			Name:        "metadata_valid_references",
 			Description: "Metadata HelpRef and UnitRef MUST point to valid symbol table indices.",
@@ -44,7 +44,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 	}
 
 	if mode != remote.WriteModeNone {
-		validateCases = append(validateCases, ValidateCase{
+		validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 			Name:        "no_unspecified_metadata_type",
 			Description: "Metadata.Type MUST be specified and MUST NOT be METRIC_TYPE_UNSPECIFIED (0) in stateless modes.",
 			RFCLevel:    compliance.MustLevel,
@@ -59,7 +59,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 	}
 
 	validateCases = append(validateCases,
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "type_counter",
 			Description: "Counter series SHOULD include METRIC_TYPE_COUNTER and help text reference (type is MUST in stateless modes).",
 			RFCLevel:    typeLevel,
@@ -77,7 +77,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 				}
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "type_gauge_and_unit",
 			Description: "Gauge series with unit SHOULD include METRIC_TYPE_GAUGE, help text reference, and unit reference (type is MUST in stateless modes).",
 			RFCLevel:    typeLevel,
@@ -96,7 +96,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 				}
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "type_histogram",
 			Description: "Histogram series SHOULD include METRIC_TYPE_HISTOGRAM, help text reference, and unit reference (type is MUST in stateless modes).",
 			RFCLevel:    typeLevel,
@@ -118,7 +118,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 				}
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "type_summary",
 			Description: "Summary series SHOULD include METRIC_TYPE_SUMMARY and help text reference (type is MUST in stateless modes).",
 			RFCLevel:    typeLevel,
@@ -135,7 +135,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 				}
 			},
 		},
-		ValidateCase{
+		compliance.ValidateCase[ReceiverResult]{
 			Name:        "type_info_and_stateset",
 			Description: "Info and StateSet series SHOULD include METRIC_TYPE_INFO and METRIC_TYPE_STATESET (MUST in stateless modes).",
 			RFCLevel:    typeLevel,
@@ -161,7 +161,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 	)
 
 	if mode == remote.WriteModeNone {
-		validateCases = append(validateCases, ValidateCase{
+		validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 			Name:        "untyped_metadata",
 			Description: "Series without TYPE/HELP/UNIT metadata MUST use METRIC_TYPE_UNSPECIFIED and zero references.",
 			RFCLevel:    compliance.MustLevel,
@@ -176,7 +176,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 			},
 		})
 	} else {
-		validateCases = append(validateCases, ValidateCase{
+		validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 			Name:        "untyped_metadata_inferred",
 			Description: "In stateless modes, series with unknown metric type SHOULD assume METRIC_TYPE_GAUGE (or METRIC_TYPE_COUNTER for _total) and set help to '(type inferred from untyped)'.",
 			RFCLevel:    compliance.ShouldLevel,
@@ -192,7 +192,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 		})
 	}
 
-	validateCases = append(validateCases, ValidateCase{
+	validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 		Name:        "consistent_family_metadata",
 		Description: "Multiple series of the same metric family SHOULD carry identical metadata.",
 		RFCLevel:    compliance.ShouldLevel,

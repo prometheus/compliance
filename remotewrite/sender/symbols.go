@@ -44,7 +44,7 @@ http_errors_created{method="GET",status="500",handler="/api/v1"} 1000.0
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.NotEmpty(t, res.Requests, "Should receive at least 1 request")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "empty_string_at_index_zero",
 					Description: "The first element of the symbols table MUST be an empty string",

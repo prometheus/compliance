@@ -51,7 +51,7 @@ retry_5xx_metric 100
 					require.NotNil(t, res.Requests[i].RW2)
 				}
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "retries_preserve_samples",
 					Description: "Sender MUST retry the failed batch on 503 and 500 without losing samples.",
@@ -105,7 +105,7 @@ no_retry_4xx_metric 50
 				require.NotNil(t, res.Requests[0].RW2)
 				require.NotNil(t, res.Requests[1].RW2)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "drops_batch_on_400",
 					Description: "Sender MUST NOT retry a batch rejected with 400 Bad Request and MUST proceed to subsequent batches.",
@@ -148,7 +148,7 @@ retry_429_metric 75
 				require.NotNil(t, res.Requests[0].RW2)
 				require.NotNil(t, res.Requests[1].RW2)
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "retries_429_when_configured",
 					Description: "Sender MAY retry the batch on 429 Too Many Requests.",

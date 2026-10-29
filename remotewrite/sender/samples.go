@@ -86,7 +86,7 @@ test_gauge_with_ts 2 %v
 				require.GreaterOrEqual(t, len(res.Requests), 1, "Should receive at least 1 request")
 				require.GreaterOrEqual(t, len(res.Requests[0].RW2.Timeseries), 6, "Request must contain at least 6 timeseries")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "value",
 					Description: "Sample MUST have value",
@@ -238,7 +238,7 @@ test_precision 0.123456789012345
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.GreaterOrEqual(t, len(res.Requests), 1, "Should receive at least 1 request")
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "float_value_encoding",
 					Description: "Sender MUST correctly encode regular float values",
@@ -375,7 +375,7 @@ persistent_metric{env="prod"} 2
 					require.NotNil(t, res.Requests[i].RW2)
 				}
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
 					Name:        "stale_nan_sent_on_disappearance",
 					Description: "Disappearing series MUST have a sample encoded with StaleNaN (0x7ff0000000000002).",
