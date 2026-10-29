@@ -22,9 +22,9 @@ const (
 // PromAPI allows running instant and range queries against a Prometheus-compatible API.
 type PromAPI interface {
 	// Query performs a query for the given time.
-	Query(ctx context.Context, query string, ts time.Time, opts ...v1.Option) (model.Value, v1.Warnings, error)
+	Query(ctx context.Context, query string, ts time.Time, opts ...v1.Option) (model.Value, v1.Warnings, v1.Infos, error)
 	// QueryRange performs a query for the given range.
-	QueryRange(ctx context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, error)
+	QueryRange(ctx context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, v1.Infos, error)
 }
 
 // TestCase represents a fully expanded query to be tested.
@@ -84,9 +84,9 @@ func (c *Comparer) Compare(tc *TestCase) (*Result, error) {
 		Step:  tc.Resolution,
 	}
 
-	// TODO: Handle warnings (second, ignored return value).
-	refResult, _, refErr := c.refAPI.QueryRange(ctx, tc.Query, r)
-	testResult, _, testErr := c.testAPI.QueryRange(ctx, tc.Query, r)
+	// TODO: Handle warnings and infos (second and third ignored return values).
+	refResult, _, _, refErr := c.refAPI.QueryRange(ctx, tc.Query, r)
+	testResult, _, _, testErr := c.testAPI.QueryRange(ctx, tc.Query, r)
 
 	if (refErr != nil) != tc.ShouldFail {
 		if refErr != nil {

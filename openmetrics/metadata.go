@@ -1,0 +1,179 @@
+// Copyright The Prometheus Authors
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package openmetrics
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/prometheus/compliance"
+	"github.com/stretchr/testify/require"
+)
+
+func metadataTests(v Version) []Test {
+	unitSuffixLevel := compliance.MustLevel
+	if v == Version2_0_0 || v == Version2_0_0RC {
+		unitSuffixLevel = compliance.ShouldLevel
+	}
+
+	return []Test{
+		{
+			Name:        "metadata",
+			Description: fmt.Sprintf("Exporters MUST emit valid # TYPE, # HELP, and # UNIT descriptors before samples in OpenMetrics %s", v),
+			RFCLevel:    compliance.MustLevel,
+			Version:     v,
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
+				{
+					Name:        "descriptors_before_samples_and_unique",
+					Description: "Descriptor lines (# TYPE, # HELP, # UNIT) MUST appear before any samples for a metric family and at most once per family",
+					RFCLevel:    compliance.MustLevel,
+					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr, "ABNF and descriptor ordering validation MUST succeed")
+						require.NotEmpty(t, res.OrderedFamilies)
+
+						seenType := make(map[string]bool)
+						seenHelp := make(map[string]bool)
+						seenUnit := make(map[string]bool)
+						for line := range strings.SplitSeq(string(res.Body), "\n") {
+							switch {
+							case strings.HasPrefix(line, "# TYPE "):
+								rest := strings.TrimPrefix(line, "# TYPE ")
+								name, _, ok := cutDescriptorMetricName(rest)
+								require.True(t, ok, "Malformed # TYPE line: %q", line)
+								require.False(t, seenType[name], "Duplicate # TYPE line for %q", name)
+								seenType[name] = true
+							case strings.HasPrefix(line, "# HELP "):
+								rest := strings.TrimPrefix(line, "# HELP ")
+								name, _, ok := cutDescriptorMetricName(rest)
+								require.True(t, ok, "Malformed # HELP line: %q", line)
+								require.False(t, seenHelp[name], "Duplicate # HELP line for %q", name)
+								seenHelp[name] = true
+							case strings.HasPrefix(line, "# UNIT "):
+								rest := strings.TrimPrefix(line, "# UNIT ")
+								name, _, ok := cutDescriptorMetricName(rest)
+								require.True(t, ok, "Malformed # UNIT line: %q", line)
+								require.False(t, seenUnit[name], "Duplicate # UNIT line for %q", name)
+								seenUnit[name] = true
+							}
+						}
+					},
+				},
+				{
+					Name:        "type_descriptor_present",
+					Description: "Metric families SHOULD include a # TYPE descriptor",
+					RFCLevel:    compliance.ShouldLevel,
+					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
+						require.NotEmpty(t, res.OrderedFamilies)
+						seenType := make(map[string]bool)
+						for line := range strings.SplitSeq(string(res.Body), "\n") {
+							if rest, ok := strings.CutPrefix(line, "# TYPE "); ok {
+								if name, _, ok := cutDescriptorMetricName(rest); ok {
+									seenType[name] = true
+								}
+							}
+						}
+						for _, mf := range res.OrderedFamilies {
+							name := mf.GetName()
+							baseName := strings.TrimSuffix(name, "_total")
+							require.Truef(t, seenType[name] || seenType[baseName],
+								"MetricFamily %q SHOULD include a # TYPE descriptor", name)
+						}
+					},
+				},
+				{
+					Name:        "help_descriptor_present",
+					Description: "Metric families SHOULD include a non-empty # HELP descriptor",
+					RFCLevel:    compliance.ShouldLevel,
+					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
+						require.NotEmpty(t, res.OrderedFamilies)
+						for _, mf := range res.OrderedFamilies {
+							require.NotEmptyf(t, mf.GetHelp(), "MetricFamily %q SHOULD include a non-empty # HELP descriptor", mf.GetName())
+						}
+					},
+				},
+				{
+					Name:        "unit_descriptor_present",
+					Description: "Metric families with units SHOULD include a # UNIT descriptor",
+					RFCLevel:    compliance.ShouldLevel,
+					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
+						require.NotEmpty(t, res.OrderedFamilies)
+						foundUnit := false
+						for _, mf := range res.OrderedFamilies {
+							if mf.GetUnit() != "" {
+								foundUnit = true
+								break
+							}
+						}
+						require.True(t, foundUnit, "Exposition SHOULD include at least one metric family with a # UNIT descriptor")
+					},
+				},
+				{
+					Name:        "unit_suffix_matches_unit_descriptor",
+					Description: "When # UNIT is specified, the metric family name MUST end with _<unit> in OpenMetrics 1.0 (SHOULD in OpenMetrics 2.0)",
+					RFCLevel:    unitSuffixLevel,
+					Validate: func(t *testing.T, res ScrapeResult) {
+						require.NoError(t, res.ParseErr)
+						require.NotEmpty(t, res.OrderedFamilies)
+						for _, mf := range res.OrderedFamilies {
+							unit := mf.GetUnit()
+							if unit == "" {
+								continue
+							}
+							baseName := strings.TrimSuffix(mf.GetName(), "_total")
+							require.Truef(t, strings.HasSuffix(baseName, "_"+unit),
+								"MetricFamily %q with unit %q must have base name ending with _%s", mf.GetName(), unit, unit)
+						}
+					},
+				},
+			},
+		},
+	}
+}
+
+// cutDescriptorMetricName extracts the metric family name and remaining text from a
+// # TYPE, # HELP, or # UNIT descriptor line after the keyword prefix, supporting both
+// unquoted legacy names and quoted UTF-8 metric family names that may contain spaces.
+func cutDescriptorMetricName(rest string) (name, tail string, ok bool) {
+	if !strings.HasPrefix(rest, "\"") {
+		return strings.Cut(rest, " ")
+	}
+	var sb strings.Builder
+	for i := 1; i < len(rest); i++ {
+		switch rest[i] {
+		case '\\':
+			i++
+			if i >= len(rest) {
+				return "", "", false
+			}
+			switch rest[i] {
+			case 'n':
+				sb.WriteByte('\n')
+			default:
+				sb.WriteByte(rest[i])
+			}
+		case '"':
+			if i+1 >= len(rest) || rest[i+1] != ' ' {
+				return "", "", false
+			}
+			return sb.String(), rest[i+2:], true
+		default:
+			sb.WriteByte(rest[i])
+		}
+	}
+	return "", "", false
+}

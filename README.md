@@ -12,7 +12,7 @@ The [alert_generator](alert_generator/README.md) directory contains a shim at th
 
 ## OpenMetrics
 
-The [openmetrics](openmetrics/README.md) directory contains a reference to the [OpenMetrics](https://github.com/prometheus/OpenMetrics/blob/v1.0.0/specification/OpenMetrics.md) test suite.
+The [openmetrics](openmetrics/README.md) directory contains a programmatic Go compliance test suite for [OpenMetrics 1.0](https://prometheus.io/docs/specs/om/open_metrics_spec/) and [OpenMetrics 2.0](https://prometheus.io/docs/specs/om/open_metrics_2_0_spec/) metric producers (SDKs and `/metrics` endpoints).
 
 ## PromQL
 

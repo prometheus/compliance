@@ -324,7 +324,7 @@ func (t *ScrapeStyleTest) fatalOnUnexpectedPromQLResults(ctx context.Context, tt
 		got           model.Matrix
 	)
 	if err := runutil.RetryWithLog(log.NewJSONLogger(os.Stderr), 10*time.Second, ctx.Done(), func() error {
-		value, warns, err := b.API().Query(ctx, query, t.maxTime)
+		value, warns, _, err := b.API().Query(ctx, query, t.maxTime)
 		if err != nil {
 			return fmt.Errorf("instant query %s at %v: %w", query, t.maxTime, err)
 		}
