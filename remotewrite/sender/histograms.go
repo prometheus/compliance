@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	dto "github.com/prometheus/prometheus/prompb/io/prometheus/client"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
@@ -38,9 +39,9 @@ func histogramsTests(mode remote.WriteMode) []Test {
 	startTime := now.Add(-time.Minute)
 	startMs := startTime.UnixMilli()
 
-	stLevel := ShouldLevel
+	stLevel := compliance.ShouldLevel
 	if mode == remote.WriteModeStatelessST {
-		stLevel = MustLevel
+		stLevel = compliance.MustLevel
 	}
 
 	nativeHistogramFamilies := []dto.MetricFamily{
@@ -164,9 +165,9 @@ func histogramsTests(mode remote.WriteMode) []Test {
 		{
 			Name:              "native_histograms",
 			Description:       "Tests native histogram encoding, bucket spans/deltas, schemas, zero buckets, float histograms, and timestamps.",
-			RFCLevel:          MustLevel,
+			RFCLevel:          compliance.MustLevel,
 			Version:           remote.WriteV2MessageType,
-			ScrapeContentType: ProtoContentType,
+			ScrapeContentType: compliance.ProtoContentType,
 			ScrapeData:        metricFamiliesToProtobuf(nativeHistogramFamilies),
 			Validate: func(t *testing.T, res ReceiverResult) {
 				require.Len(t, res.Requests, 1)
@@ -177,7 +178,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "structure_count_and_sum",
 					Description: "Tests that native histograms encode count, sum, and valid schema.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, basicHistMetric)
@@ -191,7 +192,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "positive_spans_and_deltas",
 					Description: "Tests that positive bucket spans and delta-encoded counts are preserved.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, basicHistMetric)
@@ -209,7 +210,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "negative_spans_and_deltas",
 					Description: "Tests that negative bucket spans and delta-encoded counts are preserved alongside positive buckets.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, negBucketsHistMetric)
@@ -230,7 +231,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "zero_bucket",
 					Description: "Tests that zero_threshold and zero_count are preserved.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, zeroBucketHistMetric)
@@ -245,7 +246,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "float_histogram",
 					Description: "Tests that float histograms encode float count, zero_count_float, and positive_counts.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, floatHistMetric)
@@ -259,7 +260,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "timestamp",
 					Description: "Tests that native histograms include a valid millisecond timestamp.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, basicHistMetric)
@@ -284,7 +285,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "empty_histogram",
 					Description: "Tests that empty native histograms with 0 observations are encoded with count 0 and sum 0.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, emptyHistMetric)
@@ -296,7 +297,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "large_counts",
 					Description: "Tests that native histograms preserve large bucket counts without overflow.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						hist := findHistogramData(req, largeCountHistMetric)
@@ -308,7 +309,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "no_mixed_samples_and_histograms",
 					Description: "Tests that a TimeSeries containing native histograms does not mix float samples for the same metric.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						for _, ts := range req.Timeseries {
@@ -323,9 +324,9 @@ func histogramsTests(mode remote.WriteMode) []Test {
 		{
 			Name:              "native_histograms_ordering",
 			Description:       "Tests that multiple native histograms for the same series are sent in increasing timestamp order.",
-			RFCLevel:          MustLevel,
+			RFCLevel:          compliance.MustLevel,
 			Version:           remote.WriteV2MessageType,
-			ScrapeContentType: ProtoContentType,
+			ScrapeContentType: compliance.ProtoContentType,
 			ScrapeData: metricFamiliesToProtobuf([]dto.MetricFamily{
 				{
 					Name: basicHistMetric,
@@ -358,7 +359,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 				{
 					Name:        "histograms_sorted",
 					Description: "Tests that histograms within a TimeSeries are ordered by timestamp from oldest to newest.",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						var allHistograms []writev2.Histogram
 						for _, r := range res.Requests {
@@ -388,7 +389,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 		{
 			Name:        "classic_histograms",
 			Description: "Tests classic histogram encoding (_bucket, _sum, _count series or NHCB conversion).",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     remote.WriteV2MessageType,
 			ScrapeData: `# HELP http_request_duration_seconds Classic HTTP request duration histogram.
 # TYPE http_request_duration_seconds histogram
@@ -409,7 +410,7 @@ http_request_duration_seconds_created 1500.0
 				{
 					Name:        "classic_histogram_series",
 					Description: "Tests that classic histograms are sent as _bucket, _sum, and _count series (or as a Histogram message in stateless modes).",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						req := res.Requests[0].RW2
 						if mode != remote.WriteModeNone {

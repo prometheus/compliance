@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +26,7 @@ func symbolsTests() []Test {
 		{
 			Name:        "symbols",
 			Description: "Senders MUST provide a valid, deduplicated symbol table starting with an empty string",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			ScrapeData: `# HELP http_requests Total HTTP requests
 # TYPE http_requests counter
 http_requests_total{method="GET",status="200",handler="/api/v1"} 100 # {trace_id="abc123"} 1 1234567890.0
@@ -47,7 +48,7 @@ http_errors_created{method="GET",status="500",handler="/api/v1"} 1000.0
 				{
 					Name:        "empty_string_at_index_zero",
 					Description: "The first element of the symbols table MUST be an empty string",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, req := range res.Requests {
 							require.NotEmpty(t, req.RW2.Symbols, "Symbols table MUST NOT be empty")
@@ -58,7 +59,7 @@ http_errors_created{method="GET",status="500",handler="/api/v1"} 1000.0
 				{
 					Name:        "deduplicated_strings",
 					Description: "The symbols table MUST contain deduplicated strings",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, req := range res.Requests {
 							seen := make(map[string]int, len(req.RW2.Symbols))
@@ -74,7 +75,7 @@ http_errors_created{method="GET",status="500",handler="/api/v1"} 1000.0
 				{
 					Name:        "valid_references",
 					Description: "All symbol references MUST point to an existing index in the symbols array",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
 						for _, req := range res.Requests {
 							symLen := uint32(len(req.RW2.Symbols))

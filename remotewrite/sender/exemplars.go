@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	"github.com/prometheus/prometheus/model/timestamp"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
@@ -29,9 +30,9 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 	explicitExemplarTime := timeNow.Add(-5 * time.Second)
 	explicitExemplarTS := timestamp.FromTime(explicitExemplarTime)
 
-	exemplarLevel := MustLevel
+	exemplarLevel := compliance.MustLevel
 	if mode != remote.WriteModeNone {
-		exemplarLevel = ShouldLevel
+		exemplarLevel = compliance.ShouldLevel
 	}
 
 	validateCases := make([]ValidateCase, 0, 6)
@@ -39,7 +40,7 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "no_exemplar_only_timeseries",
 			Description: "Every TimeSeries MUST have at least one sample or histogram; exemplar-only TimeSeries MUST NOT be sent in stateless modes.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				for _, ts := range req.Timeseries {
@@ -126,7 +127,7 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 		ValidateCase{
 			Name:        "exemplar_trace_id_present",
 			Description: "Exemplars SHOULD contain trace_id label at minimum.",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				series := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "test_counter_total"))
@@ -138,7 +139,7 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 		ValidateCase{
 			Name:        "exemplar_additional_labels",
 			Description: "Exemplars MAY contain span_id and additional custom labels.",
-			RFCLevel:    MayLevel,
+			RFCLevel:    compliance.MayLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				series := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "test_counter_total"))
@@ -154,7 +155,7 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 		{
 			Name:        "exemplars",
 			Description: "Senders MUST send valid exemplars with sorted labels, values, and timestamps.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     remote.WriteV2MessageType,
 			ScrapeData: fmt.Sprintf(`# HELP test_counter Counter with exemplar.
 # TYPE test_counter counter

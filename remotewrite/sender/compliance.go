@@ -73,19 +73,6 @@ func complianceTestsForMode(mode remote.WriteMode) (ret []Test) {
 	return ret
 }
 
-// RFCLevel represents the compliance requirement level of a test case.
-type RFCLevel = compliance.RFCLevel
-
-const (
-	MustLevel        = compliance.MustLevel
-	ShouldLevel      = compliance.ShouldLevel
-	MayLevel         = compliance.MayLevel
-	RecommendedLevel = compliance.RecommendedLevel
-
-	OM1ContentType   = compliance.OM1ContentType
-	ProtoContentType = compliance.ProtoContentType
-)
-
 // ReceiverRequest represents a captured HTTP request from a sender.
 type ReceiverRequest struct {
 	Method  string
@@ -149,7 +136,7 @@ type Test struct {
 	// RFCLevel is the requirement level for a test to pass.
 	// This includes all the errors in the '__setup' stage, including Validate
 	// ValidateCases can have different semantics.
-	RFCLevel RFCLevel
+	RFCLevel compliance.RFCLevel
 	// RemoteWrite version to configure the target with. This indicates version of Remote Write protocol,
 	// that the target must use.
 	// This adds another "/rw<number>/" sub-test.
@@ -158,7 +145,7 @@ type Test struct {
 	// When set, this appends "-<mode>" to the "/rw2/" sub-test (e.g. "/rw2-stateless/").
 	Mode remote.WriteMode
 	// ScrapeContentType specifies the Content-Type header served by the scrape target.
-	// If empty, defaults to OpenMetrics 1.0 text format (OM1ContentType).
+	// If empty, defaults to OpenMetrics 1.0 text format (compliance.OM1ContentType).
 	ScrapeContentType string
 	// ScrapeData provides input scrape data to use against the tested target.
 	ScrapeData string

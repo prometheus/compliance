@@ -17,21 +17,22 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
+	"github.com/prometheus/compliance"
 	writev2 "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2"
 	"github.com/stretchr/testify/require"
 )
 
 func metadataTests(mode remote.WriteMode) []Test {
-	typeLevel := ShouldLevel
+	typeLevel := compliance.ShouldLevel
 	if mode != remote.WriteModeNone {
-		typeLevel = MustLevel
+		typeLevel = compliance.MustLevel
 	}
 
 	validateCases := []ValidateCase{
 		{
 			Name:        "metadata_valid_references",
 			Description: "Metadata HelpRef and UnitRef MUST point to valid symbol table indices.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				for _, ts := range req.Timeseries {
@@ -46,7 +47,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "no_unspecified_metadata_type",
 			Description: "Metadata.Type MUST be specified and MUST NOT be METRIC_TYPE_UNSPECIFIED (0) in stateless modes.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				for _, ts := range req.Timeseries {
@@ -163,7 +164,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "untyped_metadata",
 			Description: "Series without TYPE/HELP/UNIT metadata MUST use METRIC_TYPE_UNSPECIFIED and zero references.",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				results := requireTimeseriesByMetricName(t, req, "untyped_metric_no_meta")
@@ -178,7 +179,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 		validateCases = append(validateCases, ValidateCase{
 			Name:        "untyped_metadata_inferred",
 			Description: "In stateless modes, series with unknown metric type SHOULD assume METRIC_TYPE_GAUGE (or METRIC_TYPE_COUNTER for _total) and set help to '(type inferred from untyped)'.",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				req := res.Requests[0].RW2
 				results := requireTimeseriesByMetricName(t, req, "untyped_metric_no_meta")
@@ -194,7 +195,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 	validateCases = append(validateCases, ValidateCase{
 		Name:        "consistent_family_metadata",
 		Description: "Multiple series of the same metric family SHOULD carry identical metadata.",
-		RFCLevel:    ShouldLevel,
+		RFCLevel:    compliance.ShouldLevel,
 		Validate: func(t *testing.T, res ReceiverResult) {
 			req := res.Requests[0].RW2
 			results := requireTimeseriesByMetricName(t, req, "http_requests_total")
