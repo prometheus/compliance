@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
 	"github.com/prometheus/compliance/remotewrite/sender"
 )
 
@@ -65,11 +65,11 @@ func (p prometheus) Name() string { return "prometheus" }
 
 // Run runs a Prometheus process for a test target options, until ctx is done.
 //
-// It auto-downloads or builds the Prometheus binary (see common.GetPrometheusBinary).
+// It auto-downloads or builds the Prometheus binary (see compliance.GetPrometheusBinary).
 // TODO(bwplotka): Process based runners are prone to leaking processes; add docker runner and/or figure out cleanup.
 // Manually this could be done with 'killall -m "prometheus-3." -kill'.
 func (p prometheus) Run(ctx context.Context, opts sender.Options) error {
-	binary, err := common.GetPrometheusBinary()
+	binary, err := compliance.GetPrometheusBinary()
 	if err != nil {
 		return err
 	}

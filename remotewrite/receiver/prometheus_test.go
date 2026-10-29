@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
 )
 
 const receiverConfig = `
@@ -45,10 +45,10 @@ func isReceiverReachable(u *url.URL) bool {
 }
 
 // startLocalPrometheusReceiver auto-downloads or builds the Prometheus binary
-// (see common.GetPrometheusBinary) and runs it with the Remote-Write receiver
+// (see compliance.GetPrometheusBinary) and runs it with the Remote-Write receiver
 // enabled until cleanup is called.
 func startLocalPrometheusReceiver(ctx context.Context) (*url.URL, func(), error) {
-	binary, err := common.GetPrometheusBinary()
+	binary, err := compliance.GetPrometheusBinary()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -74,7 +74,7 @@ func startLocalPrometheusReceiver(ctx context.Context) (*url.URL, func(), error)
 	runCtx, cancel := context.WithCancel(ctx)
 	done := make(chan error, 1)
 	go func() {
-		done <- common.RunCommand(runCtx, ".", nil,
+		done <- compliance.RunCommand(runCtx, ".", nil,
 			binary,
 			fmt.Sprintf("--web.listen-address=%s", addr),
 			"--web.enable-remote-write-receiver",

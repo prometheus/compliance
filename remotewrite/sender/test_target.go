@@ -17,7 +17,7 @@ import (
 	"context"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
 )
 
 // Sender represents a test target.
@@ -44,5 +44,5 @@ type Options struct {
 //
 // This is useful when starting process-based sender targets.
 func RunCommand(ctx context.Context, dir string, extraEnvVars []string, prog string, args ...string) error {
-	return common.RunCommand(ctx, dir, extraEnvVars, prog, args...)
+	return compliance.RunCommand(ctx, dir, extraEnvVars, prog, args...)
 }

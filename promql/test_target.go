@@ -17,7 +17,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
 )
 
 // Target represents a PromQL-compatible backend under test.
@@ -43,5 +43,5 @@ type Options struct {
 //
 // This is useful when starting process-based PromQL targets.
 func RunCommand(ctx context.Context, dir string, extraEnvVars []string, prog string, args ...string) error {
-	return common.RunCommand(ctx, dir, extraEnvVars, prog, args...)
+	return compliance.RunCommand(ctx, dir, extraEnvVars, prog, args...)
 }

@@ -16,7 +16,7 @@ package sender_test
 import (
 	"testing"
 
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
 	"github.com/prometheus/compliance/remotewrite/sender"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +24,7 @@ import (
 // TestCompliance runs all baseline compliance tests in this suite against prometheus{}.
 func TestCompliance(t *testing.T) {
 	t.Parallel()
-	_, err := common.GetPrometheusBinary()
+	_, err := compliance.GetPrometheusBinary()
 	require.NoError(t, err)
 	sender.RunTests(t, prometheus{}, sender.ComplianceTests())
 }
@@ -32,7 +32,7 @@ func TestCompliance(t *testing.T) {
 // TestStatelessCompliance runs all stateless mode compliance tests in this suite against prometheus{}.
 func TestStatelessCompliance(t *testing.T) {
 	t.Parallel()
-	_, err := common.GetPrometheusBinary()
+	_, err := compliance.GetPrometheusBinary()
 	require.NoError(t, err)
 	sender.RunTests(t, prometheus{}, sender.StatelessComplianceTests())
 }
@@ -40,7 +40,7 @@ func TestStatelessCompliance(t *testing.T) {
 // TestStatelessSTCompliance runs all stateless-st mode compliance tests in this suite against prometheus{}.
 func TestStatelessSTCompliance(t *testing.T) {
 	t.Parallel()
-	_, err := common.GetPrometheusBinary()
+	_, err := compliance.GetPrometheusBinary()
 	require.NoError(t, err)
 	sender.RunTests(t, prometheus{}, sender.StatelessSTComplianceTests())
 }
