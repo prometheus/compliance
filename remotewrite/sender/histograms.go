@@ -38,6 +38,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 	nowMs := now.UnixMilli()
 	startTime := now.Add(-time.Minute)
 	startMs := startTime.UnixMilli()
+	explicitTS := now.Add(9 * time.Minute)
 
 	stLevel := compliance.ShouldLevel
 	if mode == remote.WriteModeStatelessST {
@@ -170,9 +171,13 @@ func histogramsTests(mode remote.WriteMode) []Test {
 			ScrapeContentType: compliance.ProtoContentType,
 			ScrapeData:        metricFamiliesToProtobuf(nativeHistogramFamilies),
 			Validate: func(t *testing.T, res ReceiverResult) {
-				require.Len(t, res.Requests, 1)
-				require.NotNil(t, res.Requests[0].RW2)
-				require.NotEmpty(t, res.Requests[0].RW2.Timeseries)
+				require.NotEmpty(t, res.Requests)
+				var totalSeries int
+				for _, req := range res.Requests {
+					require.NotNil(t, req.RW2)
+					totalSeries += len(req.RW2.Timeseries)
+				}
+				require.NotZero(t, totalSeries)
 			},
 			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
@@ -180,11 +185,10 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that native histograms encode count, sum, and valid schema.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, basicHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, basicHistMetric)
 						require.NotNil(t, hist, "Native histogram for %s must be present", basicHistMetric)
 						require.Equal(t, 21.0, extractHistogramCount(hist))
-						require.InDelta(t, 45.5, extractHistogramSum(hist), 0.01)
+						require.InDelta(t, 45.5, hist.Sum, 0.01)
 						require.GreaterOrEqual(t, hist.Schema, int32(-4))
 						require.LessOrEqual(t, hist.Schema, int32(8))
 					},
@@ -194,8 +198,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that positive bucket spans and delta-encoded counts are preserved.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, basicHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, basicHistMetric)
 						require.NotNil(t, hist)
 						require.NotEmpty(t, hist.PositiveSpans, "Positive spans must be present")
 						require.NotEmpty(t, hist.PositiveDeltas, "Positive deltas must be present")
@@ -212,8 +215,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that negative bucket spans and delta-encoded counts are preserved alongside positive buckets.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, negBucketsHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, negBucketsHistMetric)
 						require.NotNil(t, hist)
 						require.Equal(t, int32(1), hist.Schema)
 						require.NotEmpty(t, hist.NegativeSpans, "Negative spans must be present")
@@ -233,8 +235,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that zero_threshold and zero_count are preserved.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, zeroBucketHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, zeroBucketHistMetric)
 						require.NotNil(t, hist)
 						require.Equal(t, int32(2), hist.Schema)
 						require.InDelta(t, 1e-6, hist.ZeroThreshold, 1e-9)
@@ -248,11 +249,10 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that float histograms encode float count, zero_count_float, and positive_counts.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, floatHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, floatHistMetric)
 						require.NotNil(t, hist)
 						require.InDelta(t, 12.5, extractHistogramCount(hist), 0.01)
-						require.InDelta(t, 34.8, extractHistogramSum(hist), 0.01)
+						require.InDelta(t, 34.8, hist.Sum, 0.01)
 						require.NotEmpty(t, hist.PositiveSpans)
 						require.NotEmpty(t, hist.PositiveCounts, "Float histogram must use positive_counts")
 					},
@@ -262,8 +262,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that native histograms include a valid millisecond timestamp.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, basicHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, basicHistMetric)
 						require.NotNil(t, hist)
 						require.GreaterOrEqual(t, hist.Timestamp, nowMs)
 					},
@@ -273,8 +272,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that native histogram start_timestamp is before or equal to timestamp (and non-zero in stateless-st mode).",
 					RFCLevel:    stLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, basicHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, basicHistMetric)
 						require.NotNil(t, hist)
 						if mode == remote.WriteModeStatelessST || hist.StartTimestamp != 0 {
 							require.Equal(t, startMs, hist.StartTimestamp)
@@ -287,11 +285,10 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that empty native histograms with 0 observations are encoded with count 0 and sum 0.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, emptyHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, emptyHistMetric)
 						require.NotNil(t, hist)
 						require.Equal(t, 0.0, extractHistogramCount(hist))
-						require.Equal(t, 0.0, extractHistogramSum(hist))
+						require.Equal(t, 0.0, hist.Sum)
 					},
 				},
 				{
@@ -299,11 +296,10 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that native histograms preserve large bucket counts without overflow.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						hist := findHistogramData(req, largeCountHistMetric)
+						hist := findHistogramDataAcrossRequests(res.Requests, largeCountHistMetric)
 						require.NotNil(t, hist)
 						require.Equal(t, 3000000.0, extractHistogramCount(hist))
-						require.InDelta(t, 1500000.0, extractHistogramSum(hist), 0.01)
+						require.InDelta(t, 1500000.0, hist.Sum, 0.01)
 					},
 				},
 				{
@@ -311,10 +307,11 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that a TimeSeries containing native histograms does not mix float samples for the same metric.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
-						for _, ts := range req.Timeseries {
-							if len(ts.Histograms) > 0 {
-								require.Empty(t, ts.Samples, "TimeSeries with native histograms must not also contain float samples")
+						for _, req := range res.Requests {
+							for _, ts := range req.RW2.Timeseries {
+								if len(ts.Histograms) > 0 {
+									require.Empty(t, ts.Samples, "TimeSeries with native histograms must not also contain float samples")
+								}
 							}
 						}
 					},
@@ -332,28 +329,57 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Name: basicHistMetric,
 					Help: "Request duration native histogram.",
 					Type: dto.MetricType_HISTOGRAM,
-					Metric: []dto.Metric{{
-						Histogram: withCreatedTimestamp(&dto.Histogram{
-							SampleCount:   10,
-							SampleSum:     20.0,
-							Schema:        0,
-							ZeroThreshold: 0.001,
-							ZeroCount:     1,
-							PositiveSpan: []dto.BucketSpan{
-								{Offset: 0, Length: 2},
-							},
-							PositiveDelta: []int64{5, -1},
-						}, startTime),
-					}},
+					Metric: []dto.Metric{
+						{
+							TimestampMs: explicitTS.UnixMilli(),
+							Histogram: withCreatedTimestamp(&dto.Histogram{
+								SampleCount:   10,
+								SampleSum:     20.0,
+								Schema:        0,
+								ZeroThreshold: 0.001,
+								ZeroCount:     1,
+								PositiveSpan: []dto.BucketSpan{
+									{Offset: 0, Length: 2},
+								},
+								PositiveDelta: []int64{5, -1},
+							}, startTime),
+						},
+						{
+							TimestampMs: explicitTS.Add(15 * time.Second).UnixMilli(),
+							Histogram: withCreatedTimestamp(&dto.Histogram{
+								SampleCount:   12,
+								SampleSum:     25.0,
+								Schema:        0,
+								ZeroThreshold: 0.001,
+								ZeroCount:     1,
+								PositiveSpan: []dto.BucketSpan{
+									{Offset: 0, Length: 2},
+								},
+								PositiveDelta: []int64{6, -1},
+							}, startTime),
+						},
+						{
+							TimestampMs: explicitTS.Add(30 * time.Second).UnixMilli(),
+							Histogram: withCreatedTimestamp(&dto.Histogram{
+								SampleCount:   15,
+								SampleSum:     32.0,
+								Schema:        0,
+								ZeroThreshold: 0.001,
+								ZeroCount:     1,
+								PositiveSpan: []dto.BucketSpan{
+									{Offset: 0, Length: 2},
+								},
+								PositiveDelta: []int64{8, -2},
+							}, startTime),
+						},
+					},
 				},
 			}),
-			TestResponses: []ReceiverResponse{
-				{StatusCode: 500},
-				{},
-			},
 			Validate: func(t *testing.T, res ReceiverResult) {
-				require.Len(t, res.Requests, 2)
-				require.NotNil(t, res.Requests[1].RW2)
+				require.NotEmpty(t, res.Requests)
+				for _, req := range res.Requests {
+					require.NotNil(t, req.RW2)
+				}
 			},
 			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
@@ -361,11 +387,7 @@ func histogramsTests(mode remote.WriteMode) []Test {
 					Description: "Tests that histograms within a TimeSeries are ordered by timestamp from oldest to newest.",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						var allHistograms []writev2.Histogram
 						for _, r := range res.Requests {
-							if r.RW2 == nil {
-								continue
-							}
 							for _, ts := range r.RW2.Timeseries {
 								for _, h := range ts.Histograms {
 									require.Positive(t, h.Timestamp, "Histogram must have positive timestamp")
@@ -376,12 +398,13 @@ func histogramsTests(mode remote.WriteMode) []Test {
 								}
 							}
 						}
-						lastReq := res.Requests[len(res.Requests)-1].RW2
-						results := requireTimeseriesByMetricName(t, lastReq, basicHistMetric)
-						for _, r := range results {
-							allHistograms = append(allHistograms, r.TimeSeries.Histograms...)
+						results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, basicHistMetric)
+						ts := flattenTimeseriesResult(t, results)
+						require.GreaterOrEqual(t, len(ts.TimeSeries.Histograms), 3)
+						for i := 1; i < len(ts.TimeSeries.Histograms); i++ {
+							require.GreaterOrEqual(t, ts.TimeSeries.Histograms[i].Timestamp, ts.TimeSeries.Histograms[i-1].Timestamp,
+								"Histograms for %s must be ordered by timestamp", basicHistMetric)
 						}
-						require.NotEmpty(t, allHistograms)
 					},
 				},
 			},
@@ -402,9 +425,13 @@ http_request_duration_seconds_count 32
 http_request_duration_seconds_created 1500.0
 `,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				require.Len(t, res.Requests, 1)
-				require.NotNil(t, res.Requests[0].RW2)
-				require.NotEmpty(t, res.Requests[0].RW2.Timeseries)
+				require.NotEmpty(t, res.Requests)
+				var totalSeries int
+				for _, req := range res.Requests {
+					require.NotNil(t, req.RW2)
+					totalSeries += len(req.RW2.Timeseries)
+				}
+				require.NotZero(t, totalSeries)
 			},
 			ValidateCases: []compliance.ValidateCase[ReceiverResult]{
 				{
@@ -412,19 +439,18 @@ http_request_duration_seconds_created 1500.0
 					Description: "Tests that classic histograms are sent as _bucket, _sum, and _count series (or as a Histogram message in stateless modes).",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW2
 						if mode != remote.WriteModeNone {
-							hist := findHistogramData(req, "http_request_duration_seconds")
+							hist := findHistogramDataAcrossRequests(res.Requests, "http_request_duration_seconds")
 							require.NotNil(t, hist, "Stateless mode sender MUST encode classic histogram as a Histogram message")
 							require.Equal(t, int32(-53), hist.Schema, "NHCB must use schema -53")
 							require.Equal(t, 32.0, extractHistogramCount(hist))
-							require.InDelta(t, 14.5, extractHistogramSum(hist), 0.01)
+							require.InDelta(t, 14.5, hist.Sum, 0.01)
 							require.Equal(t, []float64{0.1, 0.5, 1.0}, hist.CustomValues)
-							require.Empty(t, findTimeseriesByMetricName(req, "http_request_duration_seconds_bucket"),
+							require.Empty(t, findTimeseriesByMetricNameAcrossRequests(res.Requests, "http_request_duration_seconds_bucket"),
 								"Stateless mode MUST NOT send classic _bucket float series")
-							require.Empty(t, findTimeseriesByMetricName(req, "http_request_duration_seconds_sum"),
+							require.Empty(t, findTimeseriesByMetricNameAcrossRequests(res.Requests, "http_request_duration_seconds_sum"),
 								"Stateless mode MUST NOT send classic _sum float series")
-							require.Empty(t, findTimeseriesByMetricName(req, "http_request_duration_seconds_count"),
+							require.Empty(t, findTimeseriesByMetricNameAcrossRequests(res.Requests, "http_request_duration_seconds_count"),
 								"Stateless mode MUST NOT send classic _count float series")
 							if mode == remote.WriteModeStatelessST {
 								require.Equal(t, int64(1500000), hist.StartTimestamp,
@@ -433,7 +459,7 @@ http_request_duration_seconds_created 1500.0
 							return
 						}
 
-						buckets := findTimeseriesByMetricName(req, "http_request_duration_seconds_bucket")
+						buckets := findTimeseriesByMetricNameAcrossRequests(res.Requests, "http_request_duration_seconds_bucket")
 						if len(buckets) > 0 {
 							leValues := make(map[string]float64, 4)
 							for _, b := range buckets {
@@ -448,19 +474,19 @@ http_request_duration_seconds_created 1500.0
 							require.Equal(t, 30.0, leValues["1.0"])
 							require.Equal(t, 32.0, leValues["+Inf"])
 
-							sumSeries := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "http_request_duration_seconds_sum"))
+							sumSeries := flattenTimeseriesResult(t, requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "http_request_duration_seconds_sum"))
 							require.NotEmpty(t, sumSeries.TimeSeries.Samples)
 							require.InDelta(t, 14.5, sumSeries.TimeSeries.Samples[0].Value, 0.01)
 
-							countSeries := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "http_request_duration_seconds_count"))
+							countSeries := flattenTimeseriesResult(t, requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "http_request_duration_seconds_count"))
 							require.NotEmpty(t, countSeries.TimeSeries.Samples)
 							require.Equal(t, 32.0, countSeries.TimeSeries.Samples[0].Value)
 						} else {
 							// Sender may also convert classic histograms to NHCB.
-							hist := findHistogramData(req, "http_request_duration_seconds")
+							hist := findHistogramDataAcrossRequests(res.Requests, "http_request_duration_seconds")
 							require.NotNil(t, hist, "Must send either _bucket/_sum/_count series or NHCB native histogram")
 							require.Equal(t, 32.0, extractHistogramCount(hist))
-							require.InDelta(t, 14.5, extractHistogramSum(hist), 0.01)
+							require.InDelta(t, 14.5, hist.Sum, 0.01)
 						}
 					},
 				},

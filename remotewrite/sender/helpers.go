@@ -78,6 +78,7 @@ func isSortedRW1(labels []writev1.Label) bool {
 type timeseriesResult struct {
 	TimeSeries *writev2.TimeSeries
 	Labels     map[string]string
+	Symbols    []string
 }
 
 func flattenTimeseriesResult(t testing.TB, results []timeseriesResult) (ret timeseriesResult) {
@@ -97,6 +98,7 @@ func flattenTimeseriesResult(t testing.TB, results []timeseriesResult) (ret time
 			cp.Exemplars = append([]writev2.Exemplar(nil), r.TimeSeries.Exemplars...)
 			ret.TimeSeries = &cp
 			ret.Labels = r.Labels
+			ret.Symbols = r.Symbols
 		} else {
 			ret.TimeSeries.Samples = append(ret.TimeSeries.Samples, r.TimeSeries.Samples...)
 			ret.TimeSeries.Histograms = append(ret.TimeSeries.Histograms, r.TimeSeries.Histograms...)
@@ -113,7 +115,7 @@ func findTimeseriesByMetricName(req *writev2.Request, metricName string) []times
 		ts := &req.Timeseries[i]
 		labels := extractLabels(ts, req.Symbols)
 		if labels["__name__"] == metricName {
-			results = append(results, timeseriesResult{TimeSeries: ts, Labels: labels})
+			results = append(results, timeseriesResult{TimeSeries: ts, Labels: labels, Symbols: req.Symbols})
 		}
 	}
 	return results
@@ -127,9 +129,8 @@ func requireTimeseriesByMetricName(t *testing.T, req *writev2.Request, metricNam
 	return results
 }
 
-// requireTimeseriesByMetricNameAcrossRequests finds a timeseries by metric name across all captured requests and fails the test if not found.
-func requireTimeseriesByMetricNameAcrossRequests(t *testing.T, reqs []ReceiverRequest, metricName string) []timeseriesResult {
-	t.Helper()
+// findTimeseriesByMetricNameAcrossRequests finds timeseries by metric name across all captured requests.
+func findTimeseriesByMetricNameAcrossRequests(reqs []ReceiverRequest, metricName string) []timeseriesResult {
 	var results []timeseriesResult
 	for _, req := range reqs {
 		if req.RW2 == nil {
@@ -137,6 +138,13 @@ func requireTimeseriesByMetricNameAcrossRequests(t *testing.T, reqs []ReceiverRe
 		}
 		results = append(results, findTimeseriesByMetricName(req.RW2, metricName)...)
 	}
+	return results
+}
+
+// requireTimeseriesByMetricNameAcrossRequests finds a timeseries by metric name across all captured requests and fails the test if not found.
+func requireTimeseriesByMetricNameAcrossRequests(t *testing.T, reqs []ReceiverRequest, metricName string) []timeseriesResult {
+	t.Helper()
+	results := findTimeseriesByMetricNameAcrossRequests(reqs, metricName)
 	require.NotEmpty(t, results, "Timeseries with metric name %q must be present", metricName)
 	return results
 }
@@ -152,6 +160,19 @@ func findHistogramData(req *writev2.Request, metricName string) *writev2.Histogr
 	return nil
 }
 
+// findHistogramDataAcrossRequests finds the first native histogram for a metric name across all captured requests.
+func findHistogramDataAcrossRequests(reqs []ReceiverRequest, metricName string) *writev2.Histogram {
+	for _, req := range reqs {
+		if req.RW2 == nil {
+			continue
+		}
+		if h := findHistogramData(req.RW2, metricName); h != nil {
+			return h
+		}
+	}
+	return nil
+}
+
 // extractHistogramCount extracts the total observation count from a native histogram.
 func extractHistogramCount(h *writev2.Histogram) float64 {
 	switch c := h.Count.(type) {
@@ -162,11 +183,6 @@ func extractHistogramCount(h *writev2.Histogram) float64 {
 	default:
 		return 0
 	}
-}
-
-// extractHistogramSum extracts the sum of observations from a native histogram.
-func extractHistogramSum(h *writev2.Histogram) float64 {
-	return h.Sum
 }
 
 // metricFamiliesToProtobuf serializes MetricFamily proto messages using length-delimited encoding
