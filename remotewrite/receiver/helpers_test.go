@@ -15,7 +15,10 @@ package receiver
 
 import (
 	"io"
+	"slices"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/snappy"
 	"github.com/prometheus/prometheus/config"
@@ -143,5 +146,30 @@ remote_write:
 
 	_, err = NewRemoteWriteConfigReceiver(nil)
 	require.Error(t, err)
+}
+
+func TestNextRequestTimeConcurrent(t *testing.T) {
+	const workers = 6
+	var (
+		wg    sync.WaitGroup
+		mu    sync.Mutex
+		times = make([]time.Time, 0, workers)
+	)
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			ts := nextRequestTime()
+			mu.Lock()
+			times = append(times, ts)
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	slices.SortFunc(times, func(a, b time.Time) int { return a.Compare(b) })
+	for i := 1; i < len(times); i++ {
+		require.Greater(t, times[i].UnixMilli(), times[i-1].UnixMilli(), "concurrent calls must produce strictly increasing millisecond timestamps")
+	}
 }
 

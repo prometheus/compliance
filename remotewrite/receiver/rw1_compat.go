@@ -20,15 +20,13 @@ import (
 	"maps"
 	"net/http"
 	"slices"
-	"time"
 
 	"github.com/golang/snappy"
 	"github.com/prometheus/prometheus/prompb"
 )
 
 func generateRW1Request(samples []SampleWithLabels, externalLabels map[string]string) (*http.Request, error) {
-	<-ticker.C
-	now := time.Now()
+	now := nextRequestTime()
 
 	var timeseries []prompb.TimeSeries
 	for _, s := range samples {

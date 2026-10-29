@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -64,8 +65,28 @@ func symbolizeSortedRawLabels(symbols *writev2.SymbolsTable, lbls map[string]str
 	return refs
 }
 
-// ticker paces request generation so sequential test cases receive distinct millisecond timestamps.
-var ticker = time.NewTicker(10 * time.Millisecond)
+var (
+	requestTimeMu   sync.Mutex
+	lastRequestTime time.Time
+)
+
+// nextRequestTime returns a timestamp guaranteed to be at least 10ms after any previous call.
+// Synchronizing under a mutex avoids background ticker goroutines and prevents concurrent callers
+// from racing and producing duplicate or out-of-order millisecond timestamps.
+func nextRequestTime() time.Time {
+	requestTimeMu.Lock()
+	defer requestTimeMu.Unlock()
+
+	if wait := time.Until(lastRequestTime.Add(10 * time.Millisecond)); wait > 0 {
+		time.Sleep(wait)
+	}
+	now := time.Now()
+	if !now.After(lastRequestTime) {
+		now = lastRequestTime.Add(10 * time.Millisecond)
+	}
+	lastRequestTime = now
+	return now
+}
 
 func labelsMatch(metric model.Metric, labels map[string]string) bool {
 	if len(metric) != len(labels) {
@@ -200,8 +221,7 @@ func validateResponse(t *testing.T, params requestParams, resp ResponseResult) {
 }
 
 func generateRequest(opts RequestOpts, externalLabels map[string]string) (*http.Request, error) {
-	<-ticker.C
-	now := time.Now()
+	now := nextRequestTime()
 
 	if !opts.UnsafeRequest {
 		if len(opts.Samples) > 0 && len(opts.Histograms) > 0 {
