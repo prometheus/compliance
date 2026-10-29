@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,13 +31,13 @@ func samplesTests(v Version) []Test {
 		{
 			Name:        "counters",
 			Description: fmt.Sprintf("Exporters MUST emit valid non-negative counter samples and start timestamps in OpenMetrics %s", v),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "counter_values_non_negative",
 					Description: "Counter values MUST be non-NaN and non-negative (>= 0)",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						counters := familiesByType(res, dto.MetricType_COUNTER)
@@ -59,7 +60,7 @@ func samplesTests(v Version) []Test {
 				{
 					Name:        "counter_start_timestamp",
 					Description: "Counter series SHOULD include a valid start/created timestamp (_created line in OM 1.0, inline st@ in OM 2.0)",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						reqCounter := requireFamily(t, res, "http_requests_total", "http_requests")
@@ -88,13 +89,13 @@ func samplesTests(v Version) []Test {
 		{
 			Name:        "gauges",
 			Description: fmt.Sprintf("Exporters MUST emit valid gauge samples in OpenMetrics %s", v),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "gauge_values_valid",
 					Description: "Gauge metric families MUST contain valid float sample values and expected label sets",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						gauges := familiesByType(res, dto.MetricType_GAUGE)
@@ -116,13 +117,13 @@ func samplesTests(v Version) []Test {
 		{
 			Name:        "summaries",
 			Description: fmt.Sprintf("Exporters MUST emit valid summary metrics in OpenMetrics %s", v),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "summary_count_and_sum_non_negative",
 					Description: "Summary sample_count and sample_sum MUST be non-negative and not NaN",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "rpc_latency_seconds")
@@ -140,7 +141,7 @@ func samplesTests(v Version) []Test {
 				{
 					Name:        "summary_quantiles_valid_and_sorted",
 					Description: "Summary quantiles MUST be in [0.0, 1.0], sorted in strictly increasing order, with non-negative values",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "rpc_latency_seconds")
@@ -166,7 +167,7 @@ func samplesTests(v Version) []Test {
 				{
 					Name:        "summary_wire_representation",
 					Description: "Summaries MUST use multi-line representation in OM 1.0 and single-line composite values in OM 2.0",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "rpc_latency_seconds")

@@ -18,26 +18,27 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
 func metadataTests(v Version) []Test {
-	unitSuffixLevel := MustLevel
+	unitSuffixLevel := compliance.MustLevel
 	if v == Version2_0_0 || v == Version2_0_0RC {
-		unitSuffixLevel = ShouldLevel
+		unitSuffixLevel = compliance.ShouldLevel
 	}
 
 	return []Test{
 		{
 			Name:        "metadata",
 			Description: fmt.Sprintf("Exporters MUST emit valid # TYPE, # HELP, and # UNIT descriptors before samples in OpenMetrics %s", v),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "descriptors_before_samples_and_unique",
 					Description: "Descriptor lines (# TYPE, # HELP, # UNIT) MUST appear before any samples for a metric family and at most once per family",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr, "ABNF and descriptor ordering validation MUST succeed")
 						require.NotEmpty(t, res.OrderedFamilies)
@@ -72,7 +73,7 @@ func metadataTests(v Version) []Test {
 				{
 					Name:        "type_descriptor_present",
 					Description: "Metric families SHOULD include a # TYPE descriptor",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						require.NotEmpty(t, res.OrderedFamilies)
@@ -95,7 +96,7 @@ func metadataTests(v Version) []Test {
 				{
 					Name:        "help_descriptor_present",
 					Description: "Metric families SHOULD include a non-empty # HELP descriptor",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						require.NotEmpty(t, res.OrderedFamilies)
@@ -107,7 +108,7 @@ func metadataTests(v Version) []Test {
 				{
 					Name:        "unit_descriptor_present",
 					Description: "Metric families with units SHOULD include a # UNIT descriptor",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						require.NotEmpty(t, res.OrderedFamilies)

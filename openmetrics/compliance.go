@@ -21,10 +21,7 @@ import (
 	"fmt"
 	"io"
 	"mime"
-	"net"
 	"net/http"
-	"os"
-	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
@@ -32,6 +29,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,24 +70,6 @@ func complianceTestsForVersion(v Version) []Test {
 		}
 	}
 	return ret
-}
-
-// RFCLevel represents the specification requirement level of a test case.
-type RFCLevel string
-
-const (
-	MustLevel        RFCLevel = "MUST"
-	ShouldLevel      RFCLevel = "SHOULD"
-	MayLevel         RFCLevel = "MAY"
-	RecommendedLevel RFCLevel = "RECOMMENDED"
-)
-
-func (r RFCLevel) annotate(t *testing.T) {
-	t.Attr("rfcLevel", string(r))
-}
-
-func descAnnotate(t *testing.T, desc string) {
-	t.Attr("description", desc)
 }
 
 // ScrapeRequest configures the HTTP request sent to the target's metrics endpoint.
@@ -137,9 +117,6 @@ type ScrapeResult struct {
 	ParseErr error
 }
 
-// ValidateFunc validates a ScrapeResult for a test case.
-type ValidateFunc func(t *testing.T, res ScrapeResult)
-
 // Test defines a compliance test scenario to run against a Target.
 type Test struct {
 	// Name is a unique name for the test case.
@@ -147,27 +124,15 @@ type Test struct {
 	// Description describes the specification requirement being tested.
 	Description string
 	// RFCLevel is the requirement level for the test to pass.
-	RFCLevel RFCLevel
+	RFCLevel compliance.RFCLevel
 	// Version is the OpenMetrics specification version to test.
 	Version Version
 	// Request configures the HTTP scrape request headers.
 	Request ScrapeRequest
 	// Validate validates the scrape result in the setup stage.
-	Validate ValidateFunc
+	Validate compliance.ValidateFunc[ScrapeResult]
 	// ValidateCases configures sub-cases sharing the same scrape result.
-	ValidateCases []ValidateCase
-}
-
-// ValidateCase defines an individual validation sub-case within a Test.
-type ValidateCase struct {
-	// Name is a unique name for the validation sub-case.
-	Name string
-	// Description describes the requirement validated by this sub-case.
-	Description string
-	// RFCLevel is the requirement level for this sub-case.
-	RFCLevel RFCLevel
-	// Validate validates the captured ScrapeResult.
-	Validate ValidateFunc
+	ValidateCases []compliance.ValidateCase[ScrapeResult]
 }
 
 // RunTests starts target once, waits for its metrics endpoint to become ready,
@@ -178,7 +143,7 @@ func RunTests(t *testing.T, target Target, tcs []Test) {
 	require.NotNil(t, target)
 	require.NotEmpty(t, tcs)
 
-	hostPort := freeLocalHostPort(t)
+	hostPort := compliance.FreeLocalHostPort(t)
 	const metricsPath = "/metrics"
 	endpointURL := fmt.Sprintf("http://%s%s", hostPort, metricsPath)
 
@@ -207,10 +172,10 @@ func RunTests(t *testing.T, target Target, tcs []Test) {
 		Timeout: 10 * time.Second,
 	}
 
-	readyOk := safeRun(t, fmt.Sprintf("%s/_ready", target.Name()), target.Name(), "Wait for target metrics endpoint to become reachable", MustLevel, func(t *testing.T) {
+	readyOk := compliance.SafeRun(t, fmt.Sprintf("%s/_ready", target.Name()), target.Name(), "Wait for target metrics endpoint to become reachable", compliance.MustLevel, func(t *testing.T) {
 		waitCtx, waitCancel := context.WithTimeout(ctx, 30*time.Second)
 		defer waitCancel()
-		if err := waitForEndpoint(waitCtx, client, endpointURL, errCh, target.Name()); err != nil {
+		if err := compliance.WaitForHTTPReady(waitCtx, endpointURL, errCh, target.Name()); err != nil {
 			t.Fatalf("target %q failed to become ready at %s: %v", target.Name(), endpointURL, err)
 		}
 	})
@@ -222,7 +187,7 @@ func RunTests(t *testing.T, target Target, tcs []Test) {
 			t.Attr("version", versionShort)
 
 			var res ScrapeResult
-			setupOk := safeRun(t, "_setup", target.Name(), tc.Description, tc.RFCLevel, func(t *testing.T) {
+			setupOk := compliance.SafeRun(t, "_setup", target.Name(), tc.Description, tc.RFCLevel, func(t *testing.T) {
 				if !readyOk {
 					t.Fatal("target readiness failed")
 				}
@@ -235,71 +200,8 @@ func RunTests(t *testing.T, target Target, tcs []Test) {
 				}
 			})
 
-			for _, vc := range tc.ValidateCases {
-				safeRun(t, vc.Name, target.Name(), vc.Description, vc.RFCLevel, func(t *testing.T) {
-					if !setupOk {
-						t.Fatal("setup failed")
-					}
-					vc.Validate(t, res)
-				})
-			}
+			compliance.RunValidateCases(t, target.Name(), setupOk, res, tc.ValidateCases)
 		})
-	}
-}
-
-func safeRun(t *testing.T, name, target, desc string, rfc RFCLevel, f func(t *testing.T)) bool {
-	return t.Run(name, func(t *testing.T) {
-		t.Attr("rw", target)
-		rfc.annotate(t)
-		descAnnotate(t, desc)
-
-		if os.Getenv("DEBUG") == "" {
-			defer func() {
-				if val := recover(); val != nil {
-					t.Fatalf("test panicked: %v\n%s", val, debug.Stack())
-				}
-			}()
-		}
-		f(t)
-	})
-}
-
-func freeLocalHostPort(t *testing.T) string {
-	t.Helper()
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to allocate local port: %v", err)
-	}
-	addr := l.Addr().String()
-	_ = l.Close()
-	return addr
-}
-
-func waitForEndpoint(ctx context.Context, client *http.Client, endpointURL string, errCh <-chan error, name string) error {
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
-		if err != nil {
-			return err
-		}
-		resp, err := client.Do(req)
-		if err == nil {
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return nil
-			}
-		}
-
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for %s at %s (last err: %v): %w", name, endpointURL, err, ctx.Err())
-		case targetErr := <-errCh:
-			return fmt.Errorf("target %s exited prematurely: %w", name, targetErr)
-		case <-ticker.C:
-		}
 	}
 }
 

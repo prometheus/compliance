@@ -20,6 +20,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,13 +29,13 @@ func syntaxTests(v Version) []Test {
 		{
 			Name:        "syntax",
 			Description: fmt.Sprintf("Exporters MUST emit valid UTF-8, LF-delimited OpenMetrics %s text conforming to the ABNF grammar", v),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "non_empty_exposition",
 					Description: "Exposition payload MUST NOT be empty and MUST at least contain # EOF",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NotEmpty(t, res.Body, "Exposition payload MUST NOT be empty")
 					},
@@ -42,7 +43,7 @@ func syntaxTests(v Version) []Test {
 				{
 					Name:        "valid_utf8",
 					Description: "Exposition payload MUST be valid UTF-8",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.True(t, utf8.Valid(res.Body), "Exposition payload MUST be valid UTF-8")
 					},
@@ -50,7 +51,7 @@ func syntaxTests(v Version) []Test {
 				{
 					Name:        "line_endings_lf_only",
 					Description: "Lines MUST use LF (\\n) line endings and MUST NOT use CRLF (\\r\\n)",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.False(t, bytes.Contains(res.Body, []byte("\r\n")), "Exposition MUST NOT contain CRLF (\\r\\n) line endings")
 					},
@@ -58,7 +59,7 @@ func syntaxTests(v Version) []Test {
 				{
 					Name:        "no_blank_lines",
 					Description: "Exposition MUST NOT contain empty lines",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						trimmed := strings.TrimSuffix(string(res.Body), "\n")
 						for i, line := range strings.Split(trimmed, "\n") {
@@ -69,7 +70,7 @@ func syntaxTests(v Version) []Test {
 				{
 					Name:        "ends_with_eof",
 					Description: "Exposition MUST end with # EOF and MUST NOT have trailing data after # EOF",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						trimmed := strings.TrimSuffix(string(res.Body), "\n")
 						require.True(t, trimmed == "# EOF" || strings.HasSuffix(trimmed, "\n# EOF"),
@@ -84,7 +85,7 @@ func syntaxTests(v Version) []Test {
 				{
 					Name:        "abnf_grammar_and_semantics",
 					Description: fmt.Sprintf("Exposition MUST conform to the OpenMetrics %s ABNF grammar and semantic rules", v),
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr, "Exposition MUST parse without ABNF or semantic errors")
 						require.NotEmpty(t, res.OrderedFamilies, "Exposition SHOULD contain at least one decoded MetricFamily")

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,13 +33,13 @@ func protocolTests(v Version) []Test {
 		{
 			Name:        "content_negotiation",
 			Description: fmt.Sprintf("Exporters MUST negotiate OpenMetrics %s when requested via the Accept header", v),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "http_status_ok",
 					Description: "Exporters MUST respond with HTTP 200 OK to a valid scrape request",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.Equal(t, http.StatusOK, res.StatusCode, "HTTP status code MUST be 200 OK")
 					},
@@ -46,7 +47,7 @@ func protocolTests(v Version) []Test {
 				{
 					Name:        "content_type_media_type",
 					Description: "Exporters MUST respond with Content-Type media type application/openmetrics-text",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NotEmpty(t, res.ContentType, "Content-Type header MUST be present")
 						require.NoError(t, res.MediaParseErr, "Content-Type header MUST be a valid MIME media type")
@@ -56,7 +57,7 @@ func protocolTests(v Version) []Test {
 				{
 					Name:        "content_type_version_param",
 					Description: fmt.Sprintf("Exporters MUST include version=%s in the Content-Type header", v),
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.MediaParseErr)
 						require.Equal(t, string(v), res.MediaParams["version"], "Content-Type version parameter MUST be %q", v)
@@ -65,7 +66,7 @@ func protocolTests(v Version) []Test {
 				{
 					Name:        "content_type_charset_utf8",
 					Description: "Exporters MUST include charset=utf-8 in the Content-Type header",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.MediaParseErr)
 						require.Equal(t, "utf-8", strings.ToLower(res.MediaParams["charset"]), "Content-Type charset parameter MUST be utf-8")
@@ -76,16 +77,16 @@ func protocolTests(v Version) []Test {
 		{
 			Name:        "negotiation_quality_priority",
 			Description: "Exporters MUST honor Accept quality values (q=) when selecting the exposition format",
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
 			Request: ScrapeRequest{
 				Accept: fmt.Sprintf("text/plain;version=0.0.4;q=0.4, application/openmetrics-text;version=%s;q=0.9, */*;q=0.1", v),
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "selects_highest_q_openmetrics_version",
 					Description: fmt.Sprintf("Exporters MUST select OpenMetrics %s when it has a higher q= priority than text/plain", v),
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.Equal(t, http.StatusOK, res.StatusCode)
 						require.NoError(t, res.MediaParseErr)
@@ -96,7 +97,7 @@ func protocolTests(v Version) []Test {
 				{
 					Name:        "payload_valid_abnf",
 					Description: "Negotiated response MUST decode without ABNF syntax or semantic errors",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						require.NotEmpty(t, res.OrderedFamilies)
@@ -107,16 +108,16 @@ func protocolTests(v Version) []Test {
 		{
 			Name:        "compression_gzip",
 			Description: "Exporters SHOULD support gzip compression when Accept-Encoding: gzip is sent",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Version:     v,
 			Request: ScrapeRequest{
 				AcceptEncoding: "gzip",
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "content_encoding_gzip",
 					Description: "Exporters SHOULD return Content-Encoding: gzip and a valid gzip stream when requested",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.Equal(t, http.StatusOK, res.StatusCode)
 						require.Equal(t, "gzip", res.Headers.Get("Content-Encoding"), "Content-Encoding header SHOULD be gzip")
@@ -127,7 +128,7 @@ func protocolTests(v Version) []Test {
 				{
 					Name:        "decompressed_payload_valid",
 					Description: "Decompressed gzip payload MUST be valid OpenMetrics exposition",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.DecompressErr)
 						require.NoError(t, res.ParseErr)
@@ -142,16 +143,16 @@ func protocolTests(v Version) []Test {
 		tests = append(tests, Test{
 			Name:        "negotiation_rc_version",
 			Description: "OpenMetrics 2.0 exporters SHOULD also accept version=2.0.0-rc during the release candidate transition",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Version:     v,
 			Request: ScrapeRequest{
 				Accept: "application/openmetrics-text; version=2.0.0-rc; escaping=allow-utf-8",
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "negotiates_2_0_0_rc",
 					Description: "Exporters SHOULD negotiate version=2.0.0-rc when explicitly requested",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.Equal(t, http.StatusOK, res.StatusCode)
 						require.NoError(t, res.MediaParseErr)

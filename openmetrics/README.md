@@ -4,6 +4,8 @@ This package provides a programmatic Go compliance test suite for metric produce
 
 Each compliance check is tagged with its RFC 2119 requirement level (`MUST`, `SHOULD`, `MAY`, `RECOMMENDED`) and scrapes an HTTP `/metrics` endpoint with controlled `Accept` and `Accept-Encoding` headers, verifying HTTP negotiation, framing, ABNF syntax, metric metadata, label escaping, sample types, classic and native histograms, and exemplars.
 
+The test suite shares [`../index.html`](../index.html) to view compliance test results in the browser after a test run completes.
+
 ## Running Tests
 
 To run the compliance suite against the in-process `prometheus/client_golang` reference target:

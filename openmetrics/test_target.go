@@ -20,18 +20,12 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/prometheus/compliance/common"
+	"github.com/prometheus/compliance"
 )
 
 // Target represents an OpenMetrics metric producer (SDK test application or exporter) under test.
 // Target must expose an HTTP metrics endpoint at http://<Options.MetricsHostPort><Options.MetricsPath>.
-type Target interface {
-	// Name returns a unique target name.
-	Name() string
-	// Run starts the test target until the context is done.
-	// Premature stops are assumed to be failures.
-	Run(ctx context.Context, opts Options) error
-}
+type Target = compliance.Target[Options]
 
 // Options represents the target configuration for an OpenMetrics compliance test run.
 type Options struct {
@@ -80,7 +74,7 @@ func (v Version) AcceptHeader(escaping string) string {
 //
 // This is useful when starting process-based OpenMetrics exporter or SDK targets.
 func RunCommand(ctx context.Context, dir string, extraEnvVars []string, prog string, args ...string) error {
-	return common.RunCommand(ctx, dir, extraEnvVars, prog, args...)
+	return compliance.RunCommand(ctx, dir, extraEnvVars, prog, args...)
 }
 
 type handlerTarget struct {

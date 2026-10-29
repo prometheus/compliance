@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,9 +29,9 @@ var (
 )
 
 func escapingTests(v Version) []Test {
-	utf8Level := ShouldLevel
+	utf8Level := compliance.ShouldLevel
 	if v == Version2_0_0 || v == Version2_0_0RC {
-		utf8Level = MustLevel
+		utf8Level = compliance.MustLevel
 	}
 
 	tests := []Test{
@@ -42,11 +43,11 @@ func escapingTests(v Version) []Test {
 			Request: ScrapeRequest{
 				Escaping: model.AllowUTF8,
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "content_type_escaping_param",
 					Description: "Content-Type SHOULD echo escaping=allow-utf-8 when negotiated",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.MediaParseErr)
 						require.Equal(t, model.AllowUTF8, res.MediaParams[model.EscapingKey])
@@ -70,16 +71,16 @@ func escapingTests(v Version) []Test {
 		{
 			Name:        "escaping_underscores",
 			Description: "Exporters SHOULD support escaping=underscores and replace non-legacy characters with underscores",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Version:     v,
 			Request: ScrapeRequest{
 				Escaping: model.EscapeUnderscores,
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "content_type_escaping_param",
 					Description: "Content-Type SHOULD include escaping=underscores when negotiated",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.MediaParseErr)
 						require.Equal(t, model.EscapeUnderscores, res.MediaParams[model.EscapingKey])
@@ -88,7 +89,7 @@ func escapingTests(v Version) []Test {
 				{
 					Name:        "all_names_conform_to_legacy_charset",
 					Description: "Under escaping=underscores, all metric and label names MUST conform to the legacy ASCII character set",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						for _, mf := range res.OrderedFamilies {
@@ -106,7 +107,7 @@ func escapingTests(v Version) []Test {
 				{
 					Name:        "dotted_names_translated_to_underscores",
 					Description: "Dotted metric and label names SHOULD be translated to underscores (http_server_active_requests, service_name)",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						mf := requireFamily(t, res, "http_server_active_requests")
 						m := findMetricWithLabels(mf, map[string]string{"service_name": "demo-api"})
@@ -118,16 +119,16 @@ func escapingTests(v Version) []Test {
 		{
 			Name:        "escaping_dots",
 			Description: "Exporters SHOULD support escaping=dots and encode dots as _dot_",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Version:     v,
 			Request: ScrapeRequest{
 				Escaping: model.EscapeDots,
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "content_type_escaping_param",
 					Description: "Content-Type SHOULD include escaping=dots when negotiated",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.MediaParseErr)
 						require.Equal(t, model.EscapeDots, res.MediaParams[model.EscapingKey])
@@ -136,7 +137,7 @@ func escapingTests(v Version) []Test {
 				{
 					Name:        "dotted_names_escaped_as_dot",
 					Description: "Dotted metric and label names SHOULD be escaped as _dot_ with underscores doubled (http_dot_server_dot_active__requests, service_dot_name)",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "http_dot_server_dot_active__requests")
@@ -149,16 +150,16 @@ func escapingTests(v Version) []Test {
 		{
 			Name:        "escaping_values",
 			Description: "Exporters SHOULD support escaping=values and hex-encode non-legacy characters with U__ prefix",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Version:     v,
 			Request: ScrapeRequest{
 				Escaping: model.EscapeValues,
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "content_type_escaping_param",
 					Description: "Content-Type SHOULD include escaping=values when negotiated",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.MediaParseErr)
 						require.Equal(t, model.EscapeValues, res.MediaParams[model.EscapingKey])
@@ -167,7 +168,7 @@ func escapingTests(v Version) []Test {
 				{
 					Name:        "dotted_names_hex_encoded",
 					Description: "Dotted metric and label names SHOULD be hex-encoded with U__ prefix and underscores doubled (U__http_2e_server_2e_active__requests, U__service_2e_name)",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "U__http_2e_server_2e_active__requests")
@@ -183,16 +184,16 @@ func escapingTests(v Version) []Test {
 		tests = append(tests, Test{
 			Name:        "escaping_default_allow_utf8",
 			Description: fmt.Sprintf("OpenMetrics %s MUST default to allow-utf-8 when no escaping parameter is specified in Accept", v),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
 			Request: ScrapeRequest{
 				Accept: fmt.Sprintf("application/openmetrics-text; version=%s", v),
 			},
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "preserves_utf8_names_by_default",
 					Description: "Without an explicit escaping parameter in Accept, OpenMetrics 2.0 MUST preserve UTF-8 metric and label names",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "http.server.active_requests")

@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,13 +30,13 @@ func histogramsTests(v Version) []Test {
 		{
 			Name:        "histograms",
 			Description: fmt.Sprintf("Exporters MUST emit valid classic/composite histograms in OpenMetrics %s", v),
-			RFCLevel:    MustLevel,
+			RFCLevel:    compliance.MustLevel,
 			Version:     v,
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "cumulative_buckets_monotonic_and_inf_matches_count",
 					Description: "Histogram classic buckets MUST have strictly increasing upper bounds, monotonically non-decreasing cumulative counts, and +Inf matching sample_count",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "http_request_duration_seconds")
@@ -68,7 +69,7 @@ func histogramsTests(v Version) []Test {
 				{
 					Name:        "histogram_start_timestamp",
 					Description: "Histogram series SHOULD include a valid start/created timestamp (_created line in OM 1.0, inline st@ in OM 2.0)",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "http_request_duration_seconds")
@@ -90,7 +91,7 @@ func histogramsTests(v Version) []Test {
 				{
 					Name:        "histogram_wire_representation",
 					Description: "Histograms MUST use multi-line _bucket/_sum/_count in OM 1.0 and single-line composite values in OM 2.0",
-					RFCLevel:    MustLevel,
+					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "http_request_duration_seconds")
@@ -119,13 +120,13 @@ func histogramsTests(v Version) []Test {
 		tests = append(tests, Test{
 			Name:        "native_histograms",
 			Description: "OpenMetrics 2.0 exporters SHOULD support native histogram spans and bucket deltas in composite histogram values",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Version:     v,
-			ValidateCases: []ValidateCase{
+			ValidateCases: []compliance.ValidateCase[ScrapeResult]{
 				{
 					Name:        "native_schema_and_spans_valid",
 					Description: "Native histograms MUST have schema in [-4, 8], non-negative zero_threshold, and span bucket totals matching sample_count",
-					RFCLevel:    ShouldLevel,
+					RFCLevel:    compliance.ShouldLevel,
 					Validate: func(t *testing.T, res ScrapeResult) {
 						require.NoError(t, res.ParseErr)
 						mf := requireFamily(t, res, "http_request_duration_seconds")

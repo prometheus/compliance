@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/compliance"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,11 +27,11 @@ const om1ExemplarMaxRunes = 128
 func exemplarsTests(v Version) []Test {
 	isOM2 := v == Version2_0_0 || v == Version2_0_0RC
 
-	validateCases := []ValidateCase{
+	validateCases := []compliance.ValidateCase[ScrapeResult]{
 		{
 			Name:        "counter_exemplar_present",
 			Description: "Counters observed with exemplars SHOULD include a valid exemplar with trace_id label, value, and timestamp",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ScrapeResult) {
 				require.NoError(t, res.ParseErr)
 				mf := requireFamily(t, res, "http_requests_total", "http_requests")
@@ -49,7 +50,7 @@ func exemplarsTests(v Version) []Test {
 		{
 			Name:        "histogram_exemplar_present",
 			Description: "Histograms observed with exemplars SHOULD include a valid exemplar on a bucket (OM 1.0) or composite sample (OM 2.0)",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ScrapeResult) {
 				require.NoError(t, res.ParseErr)
 				mf := requireFamily(t, res, "http_request_duration_seconds")
@@ -79,10 +80,10 @@ func exemplarsTests(v Version) []Test {
 	}
 
 	if isOM2 {
-		validateCases = append(validateCases, ValidateCase{
+		validateCases = append(validateCases, compliance.ValidateCase[ScrapeResult]{
 			Name:        "exemplar_extended_labels_over_128_runes",
 			Description: "OpenMetrics 2.0 exporters SHOULD preserve exemplar label sets exceeding 128 runes",
-			RFCLevel:    ShouldLevel,
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ScrapeResult) {
 				require.NoError(t, res.ParseErr)
 				sizeCounter := requireFamily(t, res, "http_request_size_bytes_total", "http_request_size_bytes")
@@ -97,10 +98,10 @@ func exemplarsTests(v Version) []Test {
 		})
 	} else {
 		validateCases = append(validateCases,
-			ValidateCase{
+			compliance.ValidateCase[ScrapeResult]{
 				Name:        "exemplar_label_runes_within_spec_limit",
 				Description: "Exemplar label sets MUST NOT exceed 128 UTF-8 runes in OpenMetrics 1.0",
-				RFCLevel:    MustLevel,
+				RFCLevel:    compliance.MustLevel,
 				Validate: func(t *testing.T, res ScrapeResult) {
 					require.NoError(t, res.ParseErr)
 					for _, mf := range res.OrderedFamilies {
@@ -119,10 +120,10 @@ func exemplarsTests(v Version) []Test {
 					}
 				},
 			},
-			ValidateCase{
+			compliance.ValidateCase[ScrapeResult]{
 				Name:        "exemplar_truncated_retains_trace_id",
 				Description: "OpenMetrics 1.0 exporters SHOULD truncate oversized non-trace exemplar labels to stay within 128 runes while retaining trace_id",
-				RFCLevel:    ShouldLevel,
+				RFCLevel:    compliance.ShouldLevel,
 				Validate: func(t *testing.T, res ScrapeResult) {
 					require.NoError(t, res.ParseErr)
 					sizeCounter := requireFamily(t, res, "http_request_size_bytes_total", "http_request_size_bytes")
@@ -142,7 +143,7 @@ func exemplarsTests(v Version) []Test {
 		{
 			Name:          "exemplars",
 			Description:   fmt.Sprintf("Exporters MUST emit valid exemplars conforming to OpenMetrics %s rune limits and timestamp rules", v),
-			RFCLevel:      MustLevel,
+			RFCLevel:      compliance.MustLevel,
 			Version:       v,
 			ValidateCases: validateCases,
 		},
