@@ -16,6 +16,7 @@ package sender
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/exp/api/remote"
 	"github.com/prometheus/compliance"
@@ -77,8 +78,8 @@ retry_5xx_metric 100
 					Validate: func(t *testing.T, res ReceiverResult) {
 						delay1 := res.Requests[1].Received.Sub(res.Requests[0].Received)
 						delay2 := res.Requests[2].Received.Sub(res.Requests[1].Received)
-						require.Positive(t, delay1, "First retry must occur after a positive backoff delay")
-						require.Positive(t, delay2, "Second retry must occur after a positive backoff delay")
+						require.GreaterOrEqual(t, delay1, 10*time.Millisecond, "First retry must occur after a backoff delay")
+						require.GreaterOrEqual(t, delay2, delay1, "Second retry backoff delay must be greater than or equal to first retry delay")
 					},
 				},
 			},

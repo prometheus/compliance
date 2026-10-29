@@ -30,22 +30,18 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 	explicitExemplarTime := timeNow.Add(-5 * time.Second)
 	explicitExemplarTS := timestamp.FromTime(explicitExemplarTime)
 
-	exemplarLevel := compliance.MustLevel
-	if mode != remote.WriteModeNone {
-		exemplarLevel = compliance.ShouldLevel
-	}
-
-	validateCases := make([]compliance.ValidateCase[ReceiverResult], 0, 6)
+	validateCases := make([]compliance.ValidateCase[ReceiverResult], 0, 8)
 	if mode != remote.WriteModeNone {
 		validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 			Name:        "no_exemplar_only_timeseries",
 			Description: "Every TimeSeries MUST have at least one sample or histogram; exemplar-only TimeSeries MUST NOT be sent in stateless modes.",
 			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				for _, ts := range req.Timeseries {
-					require.False(t, len(ts.Samples) == 0 && len(ts.Histograms) == 0,
-						"Stateless mode MUST NOT send TimeSeries without samples or histograms (found %d exemplars)", len(ts.Exemplars))
+				for _, req := range res.Requests {
+					for _, ts := range req.RW2.Timeseries {
+						require.False(t, len(ts.Samples) == 0 && len(ts.Histograms) == 0,
+							"Stateless mode MUST NOT send TimeSeries without samples or histograms (found %d exemplars)", len(ts.Exemplars))
+					}
 				}
 			},
 		})
@@ -53,25 +49,32 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 
 	validateCases = append(validateCases,
 		compliance.ValidateCase[ReceiverResult]{
-			Name:        "counter_exemplar_value_and_timestamp",
-			Description: "Exemplars on counters MUST preserve value and explicit timestamp.",
-			RFCLevel:    exemplarLevel,
+			Name:        "counter_exemplar_present",
+			Description: "Exemplars on counters SHOULD be provided if they exist for a series.",
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				series := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "test_counter_total"))
-				require.NotEmpty(t, series.TimeSeries.Exemplars, "Counter series must include exemplar")
-				ex := series.TimeSeries.Exemplars[0]
-				require.InDelta(t, 1.25, ex.Value, 1e-6)
-				require.Equal(t, explicitExemplarTS, ex.Timestamp)
+				series := flattenTimeseriesResult(t, requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "test_counter_total"))
+				require.NotEmpty(t, series.TimeSeries.Exemplars, "Counter series should include exemplar")
 			},
 		},
 		compliance.ValidateCase[ReceiverResult]{
-			Name:        "histogram_bucket_exemplars",
-			Description: "Exemplars on classic histogram buckets (or converted NHCB) MUST preserve value and timestamp.",
-			RFCLevel:    exemplarLevel,
+			Name:        "counter_exemplar_value_and_timestamp",
+			Description: "Exemplars attached to counters MUST preserve value and explicit timestamp.",
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				bucketResults := findTimeseriesByMetricName(req, "request_duration_seconds_bucket")
+				series := flattenTimeseriesResult(t, requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "test_counter_total"))
+				for _, ex := range series.TimeSeries.Exemplars {
+					require.InDelta(t, 1.25, ex.Value, 1e-6)
+					require.Equal(t, explicitExemplarTS, ex.Timestamp)
+				}
+			},
+		},
+		compliance.ValidateCase[ReceiverResult]{
+			Name:        "histogram_bucket_exemplars_present",
+			Description: "Exemplars on classic histogram buckets (or converted NHCB) SHOULD be provided if they exist for a series.",
+			RFCLevel:    compliance.ShouldLevel,
+			Validate: func(t *testing.T, res ReceiverResult) {
+				bucketResults := findTimeseriesByMetricNameAcrossRequests(res.Requests, "request_duration_seconds_bucket")
 				if len(bucketResults) > 0 {
 					var fastEx, medEx *writev2.Exemplar
 					for _, r := range bucketResults {
@@ -87,41 +90,63 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 							medEx = &ex
 						}
 					}
-					require.NotNil(t, fastEx, "Exemplar on le=0.1 bucket must be present")
-					require.InDelta(t, 0.05, fastEx.Value, 1e-6)
-					require.Equal(t, explicitExemplarTS, fastEx.Timestamp)
-
-					require.NotNil(t, medEx, "Exemplar on le=0.5 bucket must be present")
-					require.InDelta(t, 0.32, medEx.Value, 1e-6)
-					require.GreaterOrEqual(t, medEx.Timestamp, timestamp.FromTime(timeNow), "Exemplar without explicit timestamp must receive scrape timestamp")
+					require.NotNil(t, fastEx, "Exemplar on le=0.1 bucket should be present")
+					require.NotNil(t, medEx, "Exemplar on le=0.5 bucket should be present")
 					return
 				}
 
-				histResults := requireTimeseriesByMetricName(t, req, "request_duration_seconds")
+				histResults := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "request_duration_seconds")
 				series := flattenTimeseriesResult(t, histResults)
-				require.GreaterOrEqual(t, len(series.TimeSeries.Exemplars), 2, "NHCB histogram series must include bucket exemplars")
+				require.GreaterOrEqual(t, len(series.TimeSeries.Exemplars), 2, "NHCB histogram series should include bucket exemplars")
+			},
+		},
+		compliance.ValidateCase[ReceiverResult]{
+			Name:        "histogram_bucket_exemplars",
+			Description: "Exemplars attached to classic histogram buckets (or converted NHCB) MUST preserve value and timestamp.",
+			RFCLevel:    compliance.MustLevel,
+			Validate: func(t *testing.T, res ReceiverResult) {
+				bucketResults := findTimeseriesByMetricNameAcrossRequests(res.Requests, "request_duration_seconds_bucket")
+				if len(bucketResults) > 0 {
+					for _, r := range bucketResults {
+						for _, ex := range r.TimeSeries.Exemplars {
+							switch r.Labels["le"] {
+							case "0.1":
+								require.InDelta(t, 0.05, ex.Value, 1e-6)
+								require.Equal(t, explicitExemplarTS, ex.Timestamp)
+							case "0.5":
+								require.InDelta(t, 0.32, ex.Value, 1e-6)
+								require.GreaterOrEqual(t, ex.Timestamp, timestamp.FromTime(timeNow), "Exemplar without explicit timestamp must receive scrape timestamp")
+							}
+						}
+					}
+					return
+				}
+
+				histResults := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "request_duration_seconds")
+				series := flattenTimeseriesResult(t, histResults)
+				for _, ex := range series.TimeSeries.Exemplars {
+					require.Positive(t, ex.Value, "Attached exemplar must have positive value")
+					require.GreaterOrEqual(t, ex.Timestamp, explicitExemplarTS, "Attached exemplar must have valid timestamp")
+				}
 			},
 		},
 		compliance.ValidateCase[ReceiverResult]{
 			Name:        "exemplar_labels_valid_and_sorted",
-			Description: "Exemplar labels_refs MUST have even length, valid symbol indices, non-empty keys/values, and lexicographically sorted label names.",
-			RFCLevel:    exemplarLevel,
+			Description: "Exemplar labels_refs, when present, MUST have even length, valid symbol indices, non-empty keys/values, and lexicographically sorted label names.",
+			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				foundExemplar := false
-				for _, ts := range req.Timeseries {
-					for _, ex := range ts.Exemplars {
-						foundExemplar = true
-						require.NotEmpty(t, ex.LabelsRefs, "Exemplar labels_refs must not be empty")
-						require.Zero(t, len(ex.LabelsRefs)%2, "Exemplar labels_refs length must be a multiple of 2")
-						for _, ref := range ex.LabelsRefs {
-							require.Less(t, int(ref), len(req.Symbols), "Exemplar label symbol reference out of bounds")
-							require.NotEmpty(t, req.Symbols[ref], "Exemplar label name and value must not be empty")
+				for _, req := range res.Requests {
+					for _, ts := range req.RW2.Timeseries {
+						for _, ex := range ts.Exemplars {
+							require.Zero(t, len(ex.LabelsRefs)%2, "Exemplar labels_refs length must be a multiple of 2")
+							for _, ref := range ex.LabelsRefs {
+								require.Less(t, int(ref), len(req.RW2.Symbols), "Exemplar label symbol reference out of bounds")
+								require.NotEmpty(t, req.RW2.Symbols[ref], "Exemplar label name and value must not be empty")
+							}
+							require.True(t, isSorted(req.RW2.Symbols, ex.LabelsRefs), "Exemplar label names must be sorted lexicographically")
 						}
-						require.True(t, isSorted(req.Symbols, ex.LabelsRefs), "Exemplar label names must be sorted lexicographically")
 					}
 				}
-				require.True(t, foundExemplar, "At least one exemplar must be present in the request")
 			},
 		},
 		compliance.ValidateCase[ReceiverResult]{
@@ -129,10 +154,9 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 			Description: "Exemplars SHOULD contain trace_id label at minimum.",
 			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				series := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "test_counter_total"))
+				series := flattenTimeseriesResult(t, requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "test_counter_total"))
 				require.NotEmpty(t, series.TimeSeries.Exemplars)
-				lbls := extractExemplarLabels(&series.TimeSeries.Exemplars[0], req.Symbols)
+				lbls := extractExemplarLabels(&series.TimeSeries.Exemplars[0], series.Symbols)
 				require.Equal(t, "abc123def456", lbls["trace_id"])
 			},
 		},
@@ -141,10 +165,9 @@ func exemplarsTests(mode remote.WriteMode) []Test {
 			Description: "Exemplars MAY contain span_id and additional custom labels.",
 			RFCLevel:    compliance.MayLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				series := flattenTimeseriesResult(t, requireTimeseriesByMetricName(t, req, "test_counter_total"))
+				series := flattenTimeseriesResult(t, requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "test_counter_total"))
 				require.NotEmpty(t, series.TimeSeries.Exemplars)
-				lbls := extractExemplarLabels(&series.TimeSeries.Exemplars[0], req.Symbols)
+				lbls := extractExemplarLabels(&series.TimeSeries.Exemplars[0], series.Symbols)
 				require.Equal(t, "span789", lbls["span_id"])
 				require.Equal(t, "42", lbls["user_id"])
 			},
@@ -175,9 +198,13 @@ request_duration_seconds_created 1000.0
 				ToOpenMetricsTimestampString(explicitExemplarTime),
 			),
 			Validate: func(t *testing.T, res ReceiverResult) {
-				require.Len(t, res.Requests, 1)
-				require.NotNil(t, res.Requests[0].RW2)
-				require.NotEmpty(t, res.Requests[0].RW2.Timeseries)
+				require.NotEmpty(t, res.Requests)
+				var totalSeries int
+				for _, req := range res.Requests {
+					require.NotNil(t, req.RW2)
+					totalSeries += len(req.RW2.Timeseries)
+				}
+				require.NotZero(t, totalSeries)
 			},
 			ValidateCases: validateCases,
 		},

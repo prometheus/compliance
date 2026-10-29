@@ -97,14 +97,14 @@ func protocolTests(mode remote.WriteMode) []Test {
 		},
 		{
 			Name:        "content_type_proto_param",
-			Description: "Senders SHOULD include proto=io.prometheus.write.v2.Request in Content-Type",
+			Description: fmt.Sprintf("Senders %s include proto=io.prometheus.write.v2.Request in Content-Type", protoParamLevel),
 			RFCLevel:    protoParamLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
 				for _, req := range res.Requests {
 					_, params, err := mime.ParseMediaType(req.Headers.Get("Content-Type"))
 					require.NoError(t, err)
 					require.Equal(t, string(remote.WriteV2MessageType), params["proto"],
-						"Content-Type SHOULD include proto=io.prometheus.write.v2.Request")
+						"Content-Type %s include proto=io.prometheus.write.v2.Request", protoParamLevel)
 				}
 			},
 		},
@@ -218,11 +218,12 @@ func protocolTests(mode remote.WriteMode) []Test {
 					Description: "When talking to 1.x Receivers, Senders MUST encode valid prometheus.WriteRequest with sorted labels",
 					RFCLevel:    compliance.MustLevel,
 					Validate: func(t *testing.T, res ReceiverResult) {
-						req := res.Requests[0].RW1
-						require.NotNil(t, req, "RW 1.0 request must be decoded")
-						require.NotEmpty(t, req.Timeseries, "RW 1.0 request must contain timeseries")
-						for _, ts := range req.Timeseries {
-							require.True(t, isSortedRW1(ts.Labels), "RW 1.0 labels must be sorted lexicographically")
+						for _, req := range res.Requests {
+							require.NotNil(t, req.RW1, "RW 1.0 request must be decoded")
+							require.NotEmpty(t, req.RW1.Timeseries, "RW 1.0 request must contain timeseries")
+							for _, ts := range req.RW1.Timeseries {
+								require.True(t, isSortedRW1(ts.Labels), "RW 1.0 labels must be sorted lexicographically")
+							}
 						}
 					},
 				},

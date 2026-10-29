@@ -177,7 +177,7 @@ func BuildPrometheusBinary(gitRef string) (string, error) {
 		shortRef = shortRef[:12]
 	}
 	filename := filepath.Join(binDir, fmt.Sprintf("prometheus-%s", shortRef))
-	if _, err := os.Stat(filename); !os.IsNotExist(err) {
+	if _, err := os.Stat(filename); err == nil {
 		return filename, nil
 	}
 
@@ -252,7 +252,7 @@ func downloadBinaryUnlocked(urlPattern, filenameInArchivePattern string) (string
 		filename = strings.TrimSuffix(filename, ".zip")
 	}
 
-	if _, err := os.Stat(filename); !os.IsNotExist(err) {
+	if _, err := os.Stat(filename); err == nil {
 		return filename, nil
 	}
 

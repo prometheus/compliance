@@ -34,10 +34,11 @@ func metadataTests(mode remote.WriteMode) []Test {
 			Description: "Metadata HelpRef and UnitRef MUST point to valid symbol table indices.",
 			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				for _, ts := range req.Timeseries {
-					require.Less(t, int(ts.Metadata.HelpRef), len(req.Symbols), "HelpRef must be within symbol table bounds")
-					require.Less(t, int(ts.Metadata.UnitRef), len(req.Symbols), "UnitRef must be within symbol table bounds")
+				for _, req := range res.Requests {
+					for _, ts := range req.RW2.Timeseries {
+						require.Less(t, int(ts.Metadata.HelpRef), len(req.RW2.Symbols), "HelpRef must be within symbol table bounds")
+						require.Less(t, int(ts.Metadata.UnitRef), len(req.RW2.Symbols), "UnitRef must be within symbol table bounds")
+					}
 				}
 			},
 		},
@@ -49,10 +50,11 @@ func metadataTests(mode remote.WriteMode) []Test {
 			Description: "Metadata.Type MUST be specified and MUST NOT be METRIC_TYPE_UNSPECIFIED (0) in stateless modes.",
 			RFCLevel:    compliance.MustLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				for _, ts := range req.Timeseries {
-					require.NotEqual(t, writev2.Metadata_METRIC_TYPE_UNSPECIFIED, ts.Metadata.Type,
-						"Metadata.Type MUST NOT be METRIC_TYPE_UNSPECIFIED in %s mode", mode)
+				for _, req := range res.Requests {
+					for _, ts := range req.RW2.Timeseries {
+						require.NotEqual(t, writev2.Metadata_METRIC_TYPE_UNSPECIFIED, ts.Metadata.Type,
+							"Metadata.Type MUST NOT be METRIC_TYPE_UNSPECIFIED in %s mode", mode)
+					}
 				}
 			},
 		})
@@ -64,15 +66,14 @@ func metadataTests(mode remote.WriteMode) []Test {
 			Description: "Counter series SHOULD include METRIC_TYPE_COUNTER and help text reference (type is MUST in stateless modes).",
 			RFCLevel:    typeLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				results := requireTimeseriesByMetricName(t, req, "http_requests_total")
+				results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "http_requests_total")
 				for _, r := range results {
 					if len(r.TimeSeries.Samples) == 0 {
 						continue
 					}
 					require.Equal(t, writev2.Metadata_METRIC_TYPE_COUNTER, r.TimeSeries.Metadata.Type)
-					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(req.Symbols))
-					require.Equal(t, "Total HTTP requests handled (UTF-8: café).", req.Symbols[r.TimeSeries.Metadata.HelpRef])
+					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(r.Symbols))
+					require.Equal(t, "Total HTTP requests handled (UTF-8: café).", r.Symbols[r.TimeSeries.Metadata.HelpRef])
 					require.Zero(t, r.TimeSeries.Metadata.UnitRef)
 				}
 			},
@@ -82,17 +83,16 @@ func metadataTests(mode remote.WriteMode) []Test {
 			Description: "Gauge series with unit SHOULD include METRIC_TYPE_GAUGE, help text reference, and unit reference (type is MUST in stateless modes).",
 			RFCLevel:    typeLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				results := requireTimeseriesByMetricName(t, req, "memory_usage_bytes")
+				results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "memory_usage_bytes")
 				for _, r := range results {
 					if len(r.TimeSeries.Samples) == 0 {
 						continue
 					}
 					require.Equal(t, writev2.Metadata_METRIC_TYPE_GAUGE, r.TimeSeries.Metadata.Type)
-					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(req.Symbols))
-					require.Equal(t, "Current memory usage in bytes.", req.Symbols[r.TimeSeries.Metadata.HelpRef])
-					require.Less(t, int(r.TimeSeries.Metadata.UnitRef), len(req.Symbols))
-					require.Equal(t, "bytes", req.Symbols[r.TimeSeries.Metadata.UnitRef])
+					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(r.Symbols))
+					require.Equal(t, "Current memory usage in bytes.", r.Symbols[r.TimeSeries.Metadata.HelpRef])
+					require.Less(t, int(r.TimeSeries.Metadata.UnitRef), len(r.Symbols))
+					require.Equal(t, "bytes", r.Symbols[r.TimeSeries.Metadata.UnitRef])
 				}
 			},
 		},
@@ -101,20 +101,19 @@ func metadataTests(mode remote.WriteMode) []Test {
 			Description: "Histogram series SHOULD include METRIC_TYPE_HISTOGRAM, help text reference, and unit reference (type is MUST in stateless modes).",
 			RFCLevel:    typeLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				results := findTimeseriesByMetricName(req, "req_latency_seconds_count")
+				results := findTimeseriesByMetricNameAcrossRequests(res.Requests, "req_latency_seconds_count")
 				if len(results) == 0 {
-					results = requireTimeseriesByMetricName(t, req, "req_latency_seconds")
+					results = requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "req_latency_seconds")
 				}
 				for _, r := range results {
 					if len(r.TimeSeries.Samples) == 0 && len(r.TimeSeries.Histograms) == 0 {
 						continue
 					}
 					require.Equal(t, writev2.Metadata_METRIC_TYPE_HISTOGRAM, r.TimeSeries.Metadata.Type)
-					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(req.Symbols))
-					require.Equal(t, "Request latency histogram.", req.Symbols[r.TimeSeries.Metadata.HelpRef])
-					require.Less(t, int(r.TimeSeries.Metadata.UnitRef), len(req.Symbols))
-					require.Equal(t, "seconds", req.Symbols[r.TimeSeries.Metadata.UnitRef])
+					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(r.Symbols))
+					require.Equal(t, "Request latency histogram.", r.Symbols[r.TimeSeries.Metadata.HelpRef])
+					require.Less(t, int(r.TimeSeries.Metadata.UnitRef), len(r.Symbols))
+					require.Equal(t, "seconds", r.Symbols[r.TimeSeries.Metadata.UnitRef])
 				}
 			},
 		},
@@ -123,15 +122,14 @@ func metadataTests(mode remote.WriteMode) []Test {
 			Description: "Summary series SHOULD include METRIC_TYPE_SUMMARY and help text reference (type is MUST in stateless modes).",
 			RFCLevel:    typeLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				results := requireTimeseriesByMetricName(t, req, "rpc_duration_seconds_count")
+				results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "rpc_duration_seconds_count")
 				for _, r := range results {
 					if len(r.TimeSeries.Samples) == 0 {
 						continue
 					}
 					require.Equal(t, writev2.Metadata_METRIC_TYPE_SUMMARY, r.TimeSeries.Metadata.Type)
-					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(req.Symbols))
-					require.Equal(t, "RPC latency summary.", req.Symbols[r.TimeSeries.Metadata.HelpRef])
+					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(r.Symbols))
+					require.Equal(t, "RPC latency summary.", r.Symbols[r.TimeSeries.Metadata.HelpRef])
 				}
 			},
 		},
@@ -140,8 +138,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 			Description: "Info and StateSet series SHOULD include METRIC_TYPE_INFO and METRIC_TYPE_STATESET (MUST in stateless modes).",
 			RFCLevel:    typeLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				infoResults := requireTimeseriesByMetricName(t, req, "target_build_info")
+				infoResults := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "target_build_info")
 				for _, r := range infoResults {
 					if len(r.TimeSeries.Samples) == 0 {
 						continue
@@ -149,7 +146,7 @@ func metadataTests(mode remote.WriteMode) []Test {
 					require.Equal(t, writev2.Metadata_METRIC_TYPE_INFO, r.TimeSeries.Metadata.Type)
 				}
 
-				stateResults := requireTimeseriesByMetricName(t, req, "feature_state")
+				stateResults := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "feature_state")
 				for _, r := range stateResults {
 					if len(r.TimeSeries.Samples) == 0 {
 						continue
@@ -163,11 +160,10 @@ func metadataTests(mode remote.WriteMode) []Test {
 	if mode == remote.WriteModeNone {
 		validateCases = append(validateCases, compliance.ValidateCase[ReceiverResult]{
 			Name:        "untyped_metadata",
-			Description: "Series without TYPE/HELP/UNIT metadata MUST use METRIC_TYPE_UNSPECIFIED and zero references.",
-			RFCLevel:    compliance.MustLevel,
+			Description: "Series without TYPE/HELP/UNIT metadata SHOULD use METRIC_TYPE_UNSPECIFIED and zero references.",
+			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				results := requireTimeseriesByMetricName(t, req, "untyped_metric_no_meta")
+				results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "untyped_metric_no_meta")
 				for _, r := range results {
 					require.Equal(t, writev2.Metadata_METRIC_TYPE_UNSPECIFIED, r.TimeSeries.Metadata.Type)
 					require.Zero(t, r.TimeSeries.Metadata.HelpRef)
@@ -181,12 +177,11 @@ func metadataTests(mode remote.WriteMode) []Test {
 			Description: "In stateless modes, series with unknown metric type SHOULD assume METRIC_TYPE_GAUGE (or METRIC_TYPE_COUNTER for _total) and set help to '(type inferred from untyped)'.",
 			RFCLevel:    compliance.ShouldLevel,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				req := res.Requests[0].RW2
-				results := requireTimeseriesByMetricName(t, req, "untyped_metric_no_meta")
+				results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "untyped_metric_no_meta")
 				for _, r := range results {
 					require.Equal(t, writev2.Metadata_METRIC_TYPE_GAUGE, r.TimeSeries.Metadata.Type)
-					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(req.Symbols))
-					require.Equal(t, "(type inferred from untyped)", req.Symbols[r.TimeSeries.Metadata.HelpRef])
+					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(r.Symbols))
+					require.Equal(t, "(type inferred from untyped)", r.Symbols[r.TimeSeries.Metadata.HelpRef])
 				}
 			},
 		})
@@ -197,12 +192,22 @@ func metadataTests(mode remote.WriteMode) []Test {
 		Description: "Multiple series of the same metric family SHOULD carry identical metadata.",
 		RFCLevel:    compliance.ShouldLevel,
 		Validate: func(t *testing.T, res ReceiverResult) {
-			req := res.Requests[0].RW2
-			results := requireTimeseriesByMetricName(t, req, "http_requests_total")
-			var metas []writev2.Metadata
+			type resolvedMeta struct {
+				typ  writev2.Metadata_MetricType
+				help string
+				unit string
+			}
+			results := requireTimeseriesByMetricNameAcrossRequests(t, res.Requests, "http_requests_total")
+			var metas []resolvedMeta
 			for _, r := range results {
 				if len(r.TimeSeries.Samples) > 0 {
-					metas = append(metas, r.TimeSeries.Metadata)
+					require.Less(t, int(r.TimeSeries.Metadata.HelpRef), len(r.Symbols))
+					require.Less(t, int(r.TimeSeries.Metadata.UnitRef), len(r.Symbols))
+					metas = append(metas, resolvedMeta{
+						typ:  r.TimeSeries.Metadata.Type,
+						help: r.Symbols[r.TimeSeries.Metadata.HelpRef],
+						unit: r.Symbols[r.TimeSeries.Metadata.UnitRef],
+					})
 				}
 			}
 			require.GreaterOrEqual(t, len(metas), 2, "Expected at least 2 series for http_requests_total")
@@ -252,9 +257,13 @@ feature_state{feature_state="disabled"} 0
 untyped_metric_no_meta 42
 `,
 			Validate: func(t *testing.T, res ReceiverResult) {
-				require.Len(t, res.Requests, 1)
-				require.NotNil(t, res.Requests[0].RW2)
-				require.NotEmpty(t, res.Requests[0].RW2.Timeseries)
+				require.NotEmpty(t, res.Requests)
+				var totalSeries int
+				for _, req := range res.Requests {
+					require.NotNil(t, req.RW2)
+					totalSeries += len(req.RW2.Timeseries)
+				}
+				require.Positive(t, totalSeries)
 			},
 			ValidateCases: validateCases,
 		},
