@@ -33,8 +33,11 @@ const (
 	RecommendedLevel RFCLevel = "RECOMMENDED"
 )
 
-// Annotate records the RFC requirement level on t as the "rfcLevel" test attribute.
+// Annotate records a non-empty RFC requirement level on t as the "rfcLevel" test attribute.
 func (r RFCLevel) Annotate(t *testing.T) {
+	if r == "" {
+		return
+	}
 	t.Attr("rfcLevel", string(r))
 }
 

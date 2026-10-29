@@ -199,7 +199,7 @@ func RunTests(t *testing.T, rec Receiver, tcs []Test, opts ...RunOption) {
 			continue
 		}
 
-		t.Run(fmt.Sprintf("%s/%s", rec.Name(), tc.Name), func(t *testing.T) {
+		compliance.SafeRun(t, fmt.Sprintf("%s/%s", rec.Name(), tc.Name), rec.Name(), tc.Description, tc.RFCLevel, func(t *testing.T) {
 			var res ResponseResult
 			reqOk := setupOk
 			if reqOk {
