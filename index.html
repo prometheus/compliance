@@ -129,7 +129,7 @@ limitations under the License.
 
 <script>
     // ---------- Optional, preloaded metadata & result data ----------
-    // These variables allow preloading a suite title and results.json content (see Makefile.common)
+    // These variables allow preloading a suite title and results.json content (see Makefile.base)
     // when opening results on-demand where browser CORS blocks local file fetches.
     const PRELOADED_TITLE = ``;
     const PRELOADED_RESULT_DATA = ``;
@@ -773,7 +773,7 @@ limitations under the License.
 
         // Try auto fetch; if it fails, leave UI ready for manual load.
         // Check for injected preloaded data first.
-        // NOTE: Remember to update Makefile, when updating this flow.
+        // NOTE: Remember to update Makefile.base, when updating this flow.
         const preloaded = PRELOADED_RESULT_DATA.trim();
         if (preloaded) {
             // Case 1: Preloaded data found.

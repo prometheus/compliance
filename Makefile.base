@@ -2,7 +2,7 @@
 # Set the default target to 'help' so it runs when invoking 'make' with no arguments.
 .DEFAULT_GOAL := help
 
-COMMON_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+BASE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 TIMEOUT ?= 10m
 RESULT_FILE ?= $(ROOT_DIR)results.json
 SUITE_TITLE ?= Prometheus Compliance — Test Matrix
@@ -17,5 +17,5 @@ help: ## Show this help message
 
 .PHONY: results-web
 results-web: ## Generate HTML view with ./results.json from ../index.html and open in your browser.
-	@SUITE_TITLE="$(SUITE_TITLE)" RESULT_FILE="$(RESULT_FILE)" perl -pe 'BEGIN{local $$/; open(F,"<",$$ENV{RESULT_FILE}) or die "cannot open $$ENV{RESULT_FILE}: $$!"; $$c=<F>; close F; $$c=~s/\\/\\\\/g; $$c=~s/`/\\`/g; $$c=~s/\$$/\\\$$/g; $$t=$$ENV{SUITE_TITLE}//""; $$t=~s/\\/\\\\/g; $$t=~s/`/\\`/g; $$t=~s/\$$/\\\$$/g;} s/const PRELOADED_TITLE = ``;/const PRELOADED_TITLE = `$$t`;/; s/const PRELOADED_RESULT_DATA = ``;/const PRELOADED_RESULT_DATA = `$$c`;/' "$(COMMON_DIR)index.html" > index.preloaded.html
+	@SUITE_TITLE="$(SUITE_TITLE)" RESULT_FILE="$(RESULT_FILE)" perl -pe 'BEGIN{local $$/; open(F,"<",$$ENV{RESULT_FILE}) or die "cannot open $$ENV{RESULT_FILE}: $$!"; $$c=<F>; close F; $$c=~s/\\/\\\\/g; $$c=~s/`/\\`/g; $$c=~s/\$$/\\\$$/g; $$t=$$ENV{SUITE_TITLE}//""; $$t=~s/\\/\\\\/g; $$t=~s/`/\\`/g; $$t=~s/\$$/\\\$$/g;} s/const PRELOADED_TITLE = ``;/const PRELOADED_TITLE = `$$t`;/; s/const PRELOADED_RESULT_DATA = ``;/const PRELOADED_RESULT_DATA = `$$c`;/' "$(BASE_DIR)index.html" > index.preloaded.html
 	@$(OPEN_CMD) index.preloaded.html

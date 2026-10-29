@@ -5,7 +5,7 @@ PROMETHEUS_PROMQL_COMPLIANCE_TEST_RE ?= ""
 PROMETHEUS_PROMQL_COMPLIANCE_SKIP_TEST_RE ?= ""
 RUN_TEST = go test -run $(PROMETHEUS_PROMQL_COMPLIANCE_TEST_RE) -skip $(PROMETHEUS_PROMQL_COMPLIANCE_SKIP_TEST_RE)
 
-include $(ROOT_DIR)../Makefile.common
+include $(ROOT_DIR)../Makefile.base
 
 .PHONY: test
 test: ## Run PromQL compliance tests suitable for humans and CI.

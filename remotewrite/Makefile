@@ -5,7 +5,7 @@ PROMETHEUS_RW_COMPLIANCE_TEST_RE ?= ""
 PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE ?= ""
 RUN_TEST = go test -run $(PROMETHEUS_RW_COMPLIANCE_TEST_RE) -skip $(PROMETHEUS_RW_COMPLIANCE_SKIP_TEST_RE)
 
-include $(ROOT_DIR)../Makefile.common
+include $(ROOT_DIR)../Makefile.base
 
 .PHONY: sender
 sender: ## Run sender compliance tests for a given senders suitable for humans and CI.
