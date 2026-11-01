@@ -21,7 +21,7 @@ require (
 	github.com/prometheus/prometheus v0.307.4-0.20251119130332-1174b0ce4f1f
 	github.com/prometheus/sigv4 v0.3.0
 	github.com/stretchr/testify v1.12.1
-	go.uber.org/atomic v1.11.0
+	go.uber.org/atomic v1.12.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
